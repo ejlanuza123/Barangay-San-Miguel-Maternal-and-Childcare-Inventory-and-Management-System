@@ -1,70 +1,120 @@
-# Getting Started with Create React App
+# Barangay San Miguel - Maternal and Childcare Inventory System
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+A **web application** designed to improve **prenatal care** and **resource management** for the **Barangay San Miguel Health Center**. This centralized system allows healthcare workers and patients to manage maternal and child health records, monitor medical inventory, and streamline communication.
 
-## Available Scripts
+---
 
-In the project directory, you can run:
+## 🚀 Features
 
-### `npm start`
+- **🔐 Role-Based Access Control**
+  - Secure login system with dashboards for:
+    - Admin
+    - BHW (Barangay Health Worker)
+    - BNS (Barangay Nutrition Scholar)
+    - User (Mother/Guardian)
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+- **👩‍⚕️ Patient Management**
+  - Authorized users can **add**, **view**, and **update** patient health records.
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+- **📦 Inventory Monitoring**
+  - Tracks stock levels of essential medical supplies like prenatal vitamins and vaccines.
 
-### `npm test`
+- **📅 Appointment Scheduling**
+  - Users (Mothers/Guardians) can book appointments with healthcare personnel.
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+- **📝 Secure Registration**
+  - Public registration with **scrollable Terms & Conditions** (based on the **Data Privacy Act of 2012**).
+  - Hidden `/registerVIP` route for admin to create internal (Admin, BHW, BNS) accounts.
 
-### `npm run build`
+---
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+## ⚙️ How the System Works
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+- **Frontend**: Built with **React** as a **Single Page Application (SPA)**.
+- **Backend**: Powered by **Supabase** (PostgreSQL, Auth, API).
+- **Routing**: Managed via `react-router-dom`.
+- **Database Security**: **Row Level Security (RLS)** ensures users only access permitted data.
+- **Styling**: Handled with **Tailwind CSS**.
+- **Animation**: Smooth UI transitions using **Framer Motion**.
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+---
 
-### `npm run eject`
+## 🛠️ Getting Started
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+### ✅ Prerequisites
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+- [Node.js & npm](https://nodejs.org/) (make sure they are installed)
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+---
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+### 📦 Step 1: Supabase Setup
 
-## Learn More
+1. Create an account and a project at [Supabase](https://supabase.com).
+2. Go to your project's **SQL Editor**.
+3. Copy the contents of `schema.sql` from this project and **run it** to create necessary tables (e.g., `profiles`, `patients`, etc.).
+4. Go to **Project Settings > API** and **note down**:
+   - Project URL
+   - `anon` Public Key
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+---
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+### 💻 Step 2: React Application Setup
 
-### Code Splitting
+1. Clone this repository or download the ZIP.
+2. Open your terminal and navigate to the project folder.
+3. Install dependencies:
+   ```bash
+   npm install
+````
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+4. Set up Supabase credentials:
 
-### Analyzing the Bundle Size
+   * Open `src/services/supabase.js`
+   * Replace:
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+     ```js
+     const supabase = createClient('YOUR_SUPABASE_URL', 'YOUR_SUPABASE_ANON_KEY');
+     ```
 
-### Making a Progressive Web App
+     with your **actual** Supabase project URL and anon key.
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+---
 
-### Advanced Configuration
+### ▶️ Step 3: Run the App
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+Start the development server:
 
-### Deployment
+```bash
+npm start
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+* The app will launch at: [http://localhost:3000](http://localhost:3000)
+* You’ll be greeted with the **Role Selection** screen.
 
-### `npm run build` fails to minify
+---
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+## 📁 Tech Stack
+
+* **Frontend**: React, Tailwind CSS, Framer Motion
+* **Backend**: Supabase (PostgreSQL, Auth, Realtime)
+* **Routing**: React Router
+* **State/Data**: Supabase JS Client (`@supabase/supabase-js`)
+
+---
+
+## 🔐 Notes on Security
+
+* **Terms and Conditions** are enforced before public registration.
+* **Admin Registration** is restricted to a hidden route: `/registerVIP`.
+* **RLS (Row Level Security)** in Supabase restricts data access based on user roles.
+
+---
+
+## 📬 Contact
+
+For feedback or inquiries, feel free to contact the project maintainers or the development team behind the Barangay San Miguel Health Center System.
+
+---
+
+> Developed for the **Barangay San Miguel Health Center** – empowering local health services with digital transformation.
+
