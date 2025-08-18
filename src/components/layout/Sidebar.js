@@ -3,90 +3,98 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import logo from '../../assets/logo.jpg';
 
-// --- Icon Components ---
-const DashboardIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>;
-const MaternityIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>;
-const AppointmentIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>;
-const InventoryIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"></path></svg>;
-const ReportsIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>;
-const LogOutIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H3"></path></svg>;
-const UsersIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm6-6a3 3 0 100-6 3 3 0 000 6z"></path></svg>;
-
+// --- UPDATED: Smaller Icon Components ---
+const DashboardIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>;
+const MaternityIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>;
+const AppointmentIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>;
+const InventoryIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"></path></svg>;
+const ReportsIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>;
+const LogOutIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H3"></path></svg>;
+const UsersIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm6-6a3 3 0 100-6 3 3 0 000 6z"></path></svg>;
 
 export default function Sidebar({ role }) {
-  const { signOut } = useAuth();
-  const navigate = useNavigate();
+    const { signOut, profile } = useAuth();
+    const navigate = useNavigate();
 
-  const handleLogout = async () => {
-    await signOut();
-    navigate('/role-selection', { replace: true });
-  };
+    const handleLogout = async () => {
+        await signOut();
+        navigate('/role-selection', { replace: true });
+    };
 
-  const getNavItems = () => {
-    switch (role) {
-      case 'Admin':
-        return [
-          { name: 'Dashboard', path: '/admin/dashboard', icon: <DashboardIcon /> },
-          { name: 'Manage Users', path: '/admin/manage-users', icon: <UsersIcon /> },
-          { name: 'Reports', path: '/admin/reports', icon: <ReportsIcon /> },
-        ];
-      case 'BHW':
-        return [
-          { name: 'Dashboard', path: '/bhw/dashboard', icon: <DashboardIcon /> },
-          { name: 'Maternity Management', path: '/bhw/records', icon: <MaternityIcon /> },
-          { name: 'Appointment', path: '/bhw/appointment', icon: <AppointmentIcon /> },
-          { name: 'Inventory', path: '/bhw/inventory', icon: <InventoryIcon /> },
-          { name: 'Reports', path: '/bhw/reports', icon: <ReportsIcon /> },
-        ];
-      case 'BNS':
-        return [
-          { name: 'Dashboard', path: '/bns/dashboard', icon: <DashboardIcon /> },
-          { name: 'Child Nutrition', path: '/bns/records', icon: <MaternityIcon /> },
-          { name: 'Inventory', path: '/bns/inventory', icon: <InventoryIcon /> },
-          { name: 'Reports', path: '/bns/reports', icon: <ReportsIcon /> },
-        ];
-      case 'USER/MOTHER/GUARDIAN':
-         return [
-          { name: 'Dashboard', path: '/user/dashboard', icon: <DashboardIcon /> },
-          { name: 'My Records', path: '/user/records', icon: <MaternityIcon /> },
-          { name: 'Schedule Appointment', path: '/user/appointment', icon: <AppointmentIcon /> },
-        ];
-      default:
-        return [];
-    }
-  };
+    const getNavItems = () => {
+        switch (role) {
+            case 'Admin':
+                return [
+                    { name: 'Dashboard', path: '/admin/dashboard', icon: <DashboardIcon /> },
+                    { name: 'Manage Users', path: '/admin/manage-users', icon: <UsersIcon /> },
+                    { name: 'Reports', path: '/admin/reports', icon: <ReportsIcon /> },
+                ];
+            case 'BHW':
+                return [
+                    { name: 'Dashboard', path: '/bhw/dashboard', icon: <DashboardIcon /> },
+                    { name: 'Maternity Management', path: '/bhw/maternity-management', icon: <MaternityIcon /> },
+                    { name: 'Appointment', path: '/bhw/appointment', icon: <AppointmentIcon /> },
+                    { name: 'Inventory', path: '/bhw/inventory', icon: <InventoryIcon /> },
+                    { name: 'Reports', path: '/bhw/reports', icon: <ReportsIcon /> },
+                ];
+            case 'BNS':
+                return [
+                    { name: 'Dashboard', path: '/bns/dashboard', icon: <DashboardIcon /> },
+                    { name: 'Child Health Records', path: '/bns/child-records', icon: <MaternityIcon /> },
+                    { name: 'Inventory', path: '/bns/inventory', icon: <InventoryIcon /> },
+                    { name: 'Reports', path: '/bns/reports', icon: <ReportsIcon /> },
+                ];
+            case 'USER/MOTHER/GUARDIAN':
+                return [
+                    { name: 'Dashboard', path: '/user/dashboard', icon: <DashboardIcon /> },
+                    { name: 'My Records', path: '/user/records', icon: <MaternityIcon /> },
+                    { name: 'Schedule Appointment', path: '/user/appointment', icon: <AppointmentIcon /> },
+                ];
+            default:
+                return [];
+        }
+    };
 
-  const navItems = getNavItems();
-  const activeLinkStyle = { backgroundColor: '#EBF4FF', color: '#2563EB', fontWeight: 'bold' };
+    const navItems = getNavItems();
+    const activeLinkStyle = { backgroundColor: '#EFF6FF', color: '#2563EB', fontWeight: '600' };
 
-  return (
-    <div className="w-64 bg-white border-r flex flex-col">
-      <div className="p-4 border-b flex items-center space-x-3">
-        <img src={logo} alt="Logo" className="w-12 h-12 rounded-lg" />
-        <div>
-          <h2 className="font-bold text-gray-800">Barangay San Miguel</h2>
-          <p className="text-sm font-bold text-gray-800">Health Center</p>
+    return (
+        // --- UPDATED: Reduced width from w-72 to w-64 ---
+        <div className="w-64 bg-white border-r flex flex-col h-screen">
+            {/* --- UPDATED: Reduced padding, logo size, and font size --- */}
+            <div className="p-3 border-b flex items-center space-x-2">
+                <img src={logo} alt="Logo" className="w-10 h-10 rounded-md" />
+                <div>
+                    <h2 className="font-bold text-sm text-gray-800">Barangay San Miguel</h2>
+                    <p className="text-xs font-semibold text-gray-600">Health Center</p>
+                </div>
+            </div>
+            
+
+
+            {/* --- UPDATED: Reduced padding and spacing for a tighter look --- */}
+            <nav className="flex-1 px-3 py-4 space-y-1">
+                {navItems.map(item => (
+                    <NavLink
+                        key={item.name}
+                        to={item.path}
+                        style={({ isActive }) => (isActive ? activeLinkStyle : undefined)}
+                        // --- UPDATED: Smaller padding, font size, and icon spacing ---
+                        className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-md transition-colors duration-200 text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                    >
+                        {item.icon}
+                        <span className="text-sm font-semibold">{item.name}</span>
+                    </NavLink>
+                ))}
+            </nav>
+
+            {/* --- UPDATED: Reduced padding --- */}
+            <div className="p-3 border-t">
+                <button onClick={handleLogout} className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-800">
+                    <LogOutIcon />
+                    <span className="text-sm font-semibold">Log Out</span>
+                </button>
+            </div>
         </div>
-      </div>
-      <nav className="flex-1 px-4 py-6 space-y-2">
-        {navItems.map(item => (
-          <NavLink
-            key={item.name}
-            to={item.path}
-            style={({ isActive }) => (isActive ? activeLinkStyle : undefined)}
-            className="w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg transition-colors duration-200 text-gray-600 hover:bg-gray-100"
-          >
-            {item.icon}
-            <span className="font-medium">{item.name}</span>
-          </NavLink>
-        ))}
-      </nav>
-      <div className="p-4 border-t">
-        <button onClick={handleLogout} className="w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg text-gray-600 hover:bg-gray-100">
-          <LogOutIcon />
-          <span className="font-medium">Log Out</span>
-        </button>
-      </div>
-    </div>
-  );
+    );
 }
