@@ -2,46 +2,71 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../../services/supabase';
 
-// --- WIDGETS & SUB-COMPONENTS (WITH ADJUSTED SIZES) ---
+// --- WIDGETS & SUB-COMPONENTS ---
 
-const StatCard = ({ title, value, change }) => (
-    // UPDATED: Reduced padding and font sizes for a smaller card
-    <div className="bg-white p-3 rounded-lg shadow border">
-        <p className="text-xs text-gray-500">{title}</p>
-        <p className="text-2xl font-bold text-gray-800">{value}</p>
-        {change && <p className="text-xs text-green-500">{change}</p>}
-    </div>
-);
+// --- NEW: Real-time Calendar Component ---
+const Calendar = () => {
+    const [currentDate, setCurrentDate] = useState(new Date());
 
-const PregnancyProgressChart = () => (
-    // UPDATED: Reduced padding, title size, and height
-    <div className="bg-white p-4 rounded-lg shadow border h-56">
-        <h3 className="font-bold text-gray-700 text-base mb-2">Pregnancy Progress Overview</h3>
-        <div className="flex items-center justify-center h-full text-gray-400 text-sm">
-            <p>Bar Chart Placeholder</p>
+    const daysOfWeek = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+    
+    const changeMonth = (amount) => {
+        setCurrentDate(prevDate => {
+            const newDate = new Date(prevDate);
+            newDate.setMonth(newDate.getMonth() + amount);
+            return newDate;
+        });
+    };
+
+    const generateDates = () => {
+        const year = currentDate.getFullYear();
+        const month = currentDate.getMonth();
+        
+        const firstDayOfMonth = new Date(year, month, 1).getDay();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        
+        const dates = [];
+        // Add padding for days from the previous month
+        for (let i = 0; i < firstDayOfMonth; i++) {
+            dates.push(<div key={`pad-start-${i}`} className="p-2"></div>);
+        }
+        // Add days of the current month
+        for (let i = 1; i <= daysInMonth; i++) {
+            const date = new Date(year, month, i);
+            const isToday = date.toDateString() === new Date().toDateString();
+            dates.push(
+                <div key={i} className={`p-2 rounded-full text-center text-sm cursor-pointer ${isToday ? 'bg-blue-500 text-white font-bold' : 'hover:bg-gray-100'}`}>
+                    {i}
+                </div>
+            );
+        }
+        return dates;
+    };
+
+    return (
+        <div className="bg-white p-4 rounded-lg shadow border h-full">
+            <div className="flex justify-between items-center mb-3">
+                <button onClick={() => changeMonth(-1)} className="p-1 rounded-full hover:bg-gray-100">&lt;</button>
+                <h3 className="font-bold text-gray-700 text-base">
+                    {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
+                </h3>
+                <button onClick={() => changeMonth(1)} className="p-1 rounded-full hover:bg-gray-100">&gt;</button>
+            </div>
+            <div className="grid grid-cols-7 gap-1 text-center text-xs text-gray-500 font-semibold">
+                {daysOfWeek.map(day => <div key={day}>{day}</div>)}
+            </div>
+            <div className="grid grid-cols-7 gap-1 mt-2">
+                {generateDates()}
+            </div>
         </div>
-    </div>
-);
-
-const InventoryStatusChart = () => (
-    // UPDATED: Reduced padding, title size, and height
-    <div className="bg-white p-4 rounded-lg shadow border h-56">
-        <h3 className="font-bold text-gray-700 text-base mb-2">Inventory Status</h3>
-        <div className="flex items-center justify-center h-full text-gray-400 text-sm">
-            <p>Doughnut Chart Placeholder</p>
-        </div>
-    </div>
-);
+    );
+};
 
 const QuickAccess = () => (
-    // UPDATED: Reduced padding, spacing, and button sizes
-    <div className="bg-white p-4 rounded-lg shadow border flex flex-col space-y-3">
-        <h3 className="font-bold text-gray-700 text-base text-center">Quick Access</h3>
+    <div className="bg-white p-4 rounded-lg shadow border flex flex-col space-y-3 h-full justify-center">
+        <h3 className="font-bold text-gray-700 text-base text-center mb-2">Quick Access</h3>
         <Link to="/bhw/maternity-management" className="w-full text-center bg-blue-600 text-white font-semibold py-2 px-3 rounded-md shadow-sm hover:bg-blue-700 text-sm">
             + Add New Patient
-        </Link>
-        <Link to="/bhw/appointment" className="w-full text-center bg-green-500 text-white font-semibold py-2 px-3 rounded-md shadow-sm hover:bg-green-600 text-sm">
-            Scheduled Check-up
         </Link>
         <Link to="/bhw/reports" className="w-full text-center bg-orange-400 text-white font-semibold py-2 px-3 rounded-md shadow-sm hover:bg-orange-500 text-sm">
             Generate Reports
@@ -49,43 +74,40 @@ const QuickAccess = () => (
     </div>
 );
 
-const RecentActivity = ({ activities }) => {
-    return (
-        // UPDATED: Reduced padding, title size, and text sizes
-        <div className="bg-white p-4 rounded-lg shadow border">
-            <div className="flex justify-between items-center mb-3">
-                <h3 className="font-bold text-gray-700 text-base">Recent Activity</h3>
-                <a href="#" className="text-xs font-semibold text-blue-600">View All &gt;</a>
-            </div>
-            <div className="space-y-3">
-                {activities.length > 0 ? activities.map((item) => (
-                    <div key={item.id} className="flex items-start space-x-2">
-                        <div className={`w-1.5 h-1.5 rounded-full mt-1.5 bg-blue-500`}></div>
-                        <div>
-                            <p className="font-semibold text-gray-700 text-sm">{item.action}</p>
-                            <p className="text-xs text-gray-500">{item.details}</p>
-                            <p className="text-xs text-gray-400 mt-0.5">{new Date(item.created_at).toLocaleString()}</p>
-                        </div>
-                    </div>
-                )) : <p className="text-sm text-gray-500">No recent activity.</p>}
-            </div>
+const RecentActivity = ({ activities }) => (
+    <div className="bg-white p-4 rounded-lg shadow border h-full">
+        <div className="flex justify-between items-center mb-3">
+            <h3 className="font-bold text-gray-700 text-base">Recent Activity</h3>
+            <a href="#" className="text-xs font-semibold text-blue-600">View All &gt;</a>
         </div>
-    );
-};
+        <div className="space-y-3">
+            {activities.length > 0 ? activities.slice(0, 4).map((item) => ( // Show only top 4
+                <div key={item.id} className="flex items-start space-x-2">
+                    <div className="w-1.5 h-1.5 rounded-full mt-1.5 bg-blue-500"></div>
+                    <div>
+                        <p className="font-semibold text-gray-700 text-sm">{item.action}</p>
+                        <p className="text-xs text-gray-500">{item.details}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">{new Date(item.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+                    </div>
+                </div>
+            )) : <p className="text-sm text-gray-500">No recent activity.</p>}
+        </div>
+    </div>
+);
 
 const UpcomingAppointments = ({ appointments }) => {
     const getStatusClass = (status) => {
-        switch(status) {
-            case "Completed": return "bg-green-100 text-green-700";
-            case "Scheduled": return "bg-yellow-100 text-yellow-700";
-            default: return "bg-gray-100 text-gray-700";
-        }
+        return status === "Completed" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700";
     };
 
     return (
-        // UPDATED: Reduced padding, title size, and table cell sizes
-        <div className="bg-white p-4 rounded-lg shadow border col-span-1 lg:col-span-3">
-            <h3 className="font-bold text-gray-700 text-base mb-3">Upcoming Appointments</h3>
+        <div className="bg-white p-4 rounded-lg shadow border">
+            <div className="flex justify-between items-center mb-3">
+                <h3 className="font-bold text-gray-700 text-base">Upcoming Appointments</h3>
+                <Link to="/bhw/appointment" className="bg-green-500 text-white font-semibold py-2 px-3 rounded-md shadow-sm hover:bg-green-600 text-sm">
+                    Scheduled Check-up
+                </Link>
+            </div>
             <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                     <thead>
@@ -94,26 +116,26 @@ const UpcomingAppointments = ({ appointments }) => {
                             <th className="px-2 py-2 font-semibold">Date</th>
                             <th className="px-2 py-2 font-semibold">Time</th>
                             <th className="px-2 py-2 font-semibold">Reason</th>
+                            <th className="px-2 py-2 font-semibold">BNS</th>
                             <th className="px-2 py-2 font-semibold">Status</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y">
-                        {appointments.length > 0 ? appointments.map((app) => (
+                        {appointments.length > 0 ? appointments.slice(0, 3).map((app) => ( // show top 3
                             <tr key={app.id} className="text-gray-600">
                                 <td className="px-2 py-2 font-semibold text-gray-700">{app.patient_name}</td>
                                 <td className="px-2 py-2">{new Date(app.date).toLocaleDateString()}</td>
                                 <td className="px-2 py-2">{app.time}</td>
                                 <td className="px-2 py-2">{app.reason}</td>
+                                <td className="px-2 py-2">{app.assigned_to}</td>
                                 <td className="px-2 py-2">
-                                    <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${getStatusClass(app.status)}`}>
+                                    <span className={`px-2 py-0.5 font-bold rounded-full ${getStatusClass(app.status)}`}>
                                         {app.status}
                                     </span>
                                 </td>
                             </tr>
                         )) : (
-                            <tr>
-                                <td colSpan="5" className="p-4 text-center text-gray-500">No upcoming appointments.</td>
-                            </tr>
+                            <tr><td colSpan="6" className="p-4 text-center text-gray-500">No upcoming appointments.</td></tr>
                         )}
                     </tbody>
                 </table>
@@ -125,7 +147,6 @@ const UpcomingAppointments = ({ appointments }) => {
 
 // --- Main BHW Dashboard Component ---
 export default function BhwDashboard() {
-    const [stats, setStats] = useState({ totalPatients: 0, activePregnancies: 0, todayVisits: 0 });
     const [upcomingAppointments, setUpcomingAppointments] = useState([]);
     const [recentActivities, setRecentActivities] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -133,15 +154,11 @@ export default function BhwDashboard() {
     useEffect(() => {
         const fetchDashboardData = async () => {
             setLoading(true);
-            const { count: patientCount } = await supabase.from('patients').select('*', { count: 'exact', head: true });
-            const { data: appointmentsData, error: appointmentsError } = await supabase.from('appointments').select('*').order('date', { ascending: true }).limit(5);
-            const { data: activityData, error: activityError } = await supabase.from('activity_log').select('*').order('created_at', { ascending: false }).limit(4);
+            const { data: appointmentsData } = await supabase.from('appointments').select('*').order('date', { ascending: true }).limit(5);
+            const { data: activityData } = await supabase.from('activity_log').select('*').order('created_at', { ascending: false }).limit(4);
 
-            setStats(prev => ({ ...prev, totalPatients: patientCount || 0 }));
             setUpcomingAppointments(appointmentsData || []);
             setRecentActivities(activityData || []);
-            
-            if (appointmentsError || activityError) console.error("Error fetching dashboard data:", appointmentsError || activityError);
             setLoading(false);
         };
 
@@ -153,35 +170,27 @@ export default function BhwDashboard() {
     }
 
     return (
-        // UPDATED: Reduced main vertical spacing
         <div className="space-y-4">
-            {/* UPDATED: Reduced gap between stat cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard title="Total Patients" value={stats.totalPatients} change="+5 this month" />
-                <StatCard title="Active Pregnancies" value="42" />
-                <StatCard title="Today's Visits" value="8" />
-                <StatCard title="Pending Reports" value="3" />
-            </div>
-
+            {/* --- UPDATED: New layout to match the image --- */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                <div className="lg:col-span-2">
-                    <PregnancyProgressChart />
-                </div>
+                {/* Recent Activity */}
                 <div className="lg:col-span-1">
-                    <InventoryStatusChart />
-                </div>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                <div className="lg:col-span-2">
                     <RecentActivity activities={recentActivities} />
                 </div>
+                {/* Calendar */}
+                <div className="lg:col-span-1">
+                    <Calendar />
+                </div>
+                {/* Quick Access */}
                 <div className="lg:col-span-1">
                     <QuickAccess />
                 </div>
             </div>
-
-            <UpcomingAppointments appointments={upcomingAppointments} />
+            
+            {/* Upcoming Appointments Table */}
+            <div>
+                <UpcomingAppointments appointments={upcomingAppointments} />
+            </div>
         </div>
     );
 }
