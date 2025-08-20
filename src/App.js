@@ -14,6 +14,7 @@ import ManageUsers from './pages/admin/ManageUsers';
 // --- UPDATED IMPORTS ---
 import BhwDashboard from './pages/bhw/BhwDashboard';
 import MaternityManagement from './pages/bhw/MaternityManagement';
+import AppointmentPage from './pages/bhw/AppointmentPage';
 // You will create these BNS files next
 // import BnsDashboard from './pages/bns/BnsDashboard';
 // import ChildHealthRecords from './pages/bns/ChildHealthRecords';
@@ -48,6 +49,8 @@ export default function App() {
           {/* --- UPDATED BHW ROUTES --- */}
           <Route path="bhw/dashboard" element={<BhwDashboard />} />
           <Route path="bhw/maternity-management" element={<MaternityManagement />} />
+          {/* --- ADD THIS NEW ROUTE --- */}
+          <Route path="bhw/appointment" element={<AppointmentPage />} />
 
           {/* --- BNS Routes (You will create these files) --- */}
           {/* <Route path="bns/dashboard" element={<BnsDashboard />} />  */}
