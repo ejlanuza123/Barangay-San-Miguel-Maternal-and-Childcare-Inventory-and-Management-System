@@ -97,20 +97,26 @@ const RecentActivity = ({ activities }) => (
 
 const UpcomingAppointments = ({ appointments }) => {
     const getStatusClass = (status) => {
-        return status === "Completed" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700";
+        const styles = {
+            Scheduled: 'bg-blue-100 text-blue-700',
+            Completed: 'bg-green-100 text-green-700',
+            Cancelled: 'bg-gray-100 text-gray-500', // Changed to gray
+        };
+        return styles[status] || styles.Cancelled;
     };
-
     return (
-        <div className="bg-white p-4 rounded-lg shadow border">
+        <div className="bg-white p-4 rounded-lg shadow border flex flex-col">
             <div className="flex justify-between items-center mb-3">
                 <h3 className="font-bold text-gray-700 text-base">Upcoming Appointments</h3>
                 <Link to="/bhw/appointment" className="bg-green-500 text-white font-semibold py-2 px-3 rounded-md shadow-sm hover:bg-green-600 text-sm">
                     Scheduled Check-up
                 </Link>
             </div>
-            <div className="overflow-x-auto">
+            
+            {/* --- UPDATED: Added a container with fixed height and scrolling --- */}
+            <div className="overflow-y-auto h-48"> {/* You can adjust the h-48 (192px) to your preferred height */}
                 <table className="w-full text-xs">
-                    <thead>
+                    <thead className="sticky top-0 bg-white">
                         <tr className="text-left text-gray-500">
                             <th className="px-2 py-2 font-semibold">Patient Name</th>
                             <th className="px-2 py-2 font-semibold">Date</th>
@@ -121,7 +127,8 @@ const UpcomingAppointments = ({ appointments }) => {
                         </tr>
                     </thead>
                     <tbody className="divide-y">
-                        {appointments.length > 0 ? appointments.slice(0, 3).map((app) => ( // show top 3
+                        {/* --- UPDATED: Removed .slice(0, 3) to show all appointments --- */}
+                        {appointments.length > 0 ? appointments.map((app) => (
                             <tr key={app.id} className="text-gray-600">
                                 <td className="px-2 py-2 font-semibold text-gray-700">{app.patient_name}</td>
                                 <td className="px-2 py-2">{new Date(app.date).toLocaleDateString()}</td>
@@ -154,7 +161,8 @@ export default function BhwDashboard() {
     useEffect(() => {
         const fetchDashboardData = async () => {
             setLoading(true);
-            const { data: appointmentsData } = await supabase.from('appointments').select('*').order('date', { ascending: true }).limit(5);
+            // Fetch more appointments to demonstrate scrolling
+            const { data: appointmentsData } = await supabase.from('appointments').select('*').order('date', { ascending: true }).limit(10);
             const { data: activityData } = await supabase.from('activity_log').select('*').order('created_at', { ascending: false }).limit(4);
 
             setUpcomingAppointments(appointmentsData || []);
@@ -171,23 +179,18 @@ export default function BhwDashboard() {
 
     return (
         <div className="space-y-4">
-            {/* --- UPDATED: New layout to match the image --- */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                {/* Recent Activity */}
                 <div className="lg:col-span-1">
                     <RecentActivity activities={recentActivities} />
                 </div>
-                {/* Calendar */}
                 <div className="lg:col-span-1">
                     <Calendar />
                 </div>
-                {/* Quick Access */}
                 <div className="lg:col-span-1">
                     <QuickAccess />
                 </div>
             </div>
             
-            {/* Upcoming Appointments Table */}
             <div>
                 <UpcomingAppointments appointments={upcomingAppointments} />
             </div>

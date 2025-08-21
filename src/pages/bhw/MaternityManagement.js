@@ -1,8 +1,7 @@
-// --- FIXED: Added useCallback to the import ---
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../../services/supabase';
-// --- FIXED: Imported the AddPatientModal component ---
 import AddPatientModal from '../../pages/bhw/AddPatientModal';
+import { AnimatePresence } from 'framer-motion';
 
 // --- ICONS ---
 const SearchIcon = () => <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>;
@@ -12,7 +11,6 @@ const UpdateIcon = () => <svg className="w-5 h-5 text-gray-500" fill="none" stro
 const DeleteIcon = () => <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>;
 const CalendarIcon = () => <svg className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>;
 
-// --- REUSABLE UI COMPONENTS ---
 
 const RiskLevelBadge = ({ level }) => {
     const levelStyles = {
@@ -22,8 +20,6 @@ const RiskLevelBadge = ({ level }) => {
     };
     return <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${levelStyles[level] || 'bg-gray-100 text-gray-800'}`}>{level}</span>;
 };
-
-// --- WIDGETS ---
 
 const QuickStats = ({ stats }) => (
     <div className="bg-white p-3 rounded-lg shadow border">
@@ -70,11 +66,15 @@ const StatusLegend = () => (
 
 
 export default function MaternityManagement() {
-    const [patients, setPatients] = useState([]);
+    const [allPatients, setAllPatients] = useState([]);
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState({ total: 0, active: 0, today: 0 });
     const [upcomingAppointments, setUpcomingAppointments] = useState([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isFilterOpen, setIsFilterOpen] = useState(false);
+    
+    const [searchTerm, setSearchTerm] = useState('');
+    const [filters, setFilters] = useState({ risk_level: 'All' });
 
     const fetchPageData = useCallback(async () => {
         setLoading(true);
@@ -84,7 +84,7 @@ export default function MaternityManagement() {
             supabase.from('patients').select('*', { count: 'exact', head: true })
         ]);
 
-        if (patientResponse.data) setPatients(patientResponse.data);
+        if (patientResponse.data) setAllPatients(patientResponse.data);
         if (appointmentsResponse.data) setUpcomingAppointments(appointmentsResponse.data);
         setStats({ total: patientCountResponse.count || 0, active: 28, today: 15 });
 
@@ -95,14 +95,33 @@ export default function MaternityManagement() {
         fetchPageData();
     }, [fetchPageData]);
 
+    const filteredPatients = useMemo(() => {
+        return allPatients
+            .filter(patient => {
+                // Filter by risk level
+                if (filters.risk_level === 'All') return true;
+                return patient.risk_level === filters.risk_level;
+            })
+            .filter(patient => {
+                // Filter by search term (name or patient_id)
+                if (!searchTerm) return true;
+                const fullName = `${patient.first_name} ${patient.middle_name || ''} ${patient.last_name}`.toLowerCase();
+                return fullName.includes(searchTerm.toLowerCase()) || 
+                       patient.patient_id.toLowerCase().includes(searchTerm.toLowerCase());
+            });
+    }, [allPatients, searchTerm, filters]);
+
+
     if (loading) return <div className="p-4">Loading patient records...</div>;
 
     return (
         <>
-            {isModalOpen && <AddPatientModal 
-                onClose={() => setIsModalOpen(false)} 
-                onSave={fetchPageData}
-            />}
+            <AnimatePresence>
+                {isModalOpen && <AddPatientModal 
+                    onClose={() => setIsModalOpen(false)} 
+                    onSave={fetchPageData}
+                />}
+            </AnimatePresence>
 
             <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
                 <div className="xl:col-span-3">
@@ -110,13 +129,34 @@ export default function MaternityManagement() {
                         <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-3">
                             <h2 className="text-2xl font-bold text-gray-700">Patient List</h2>
                             <div className="flex items-center space-x-2">
-                                 <div className="relative">
+                                <div className="relative">
                                     <span className="absolute inset-y-0 left-0 flex items-center pl-2"> <SearchIcon /> </span>
-                                    <input type="text" placeholder="Search..." className="pl-8 pr-2 py-1.5 w-full sm:w-auto text-sm rounded-md border bg-gray-50 focus:bg-white" />
+                                    <input 
+                                        type="text" 
+                                        placeholder="Search by name or ID..." 
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        className="pl-8 pr-2 py-1.5 w-full sm:w-auto text-sm rounded-md border bg-gray-50 focus:bg-white" 
+                                    />
                                 </div>
-                                <button className="flex items-center space-x-2 px-3 py-1.5 text-sm border rounded-md bg-white hover:bg-gray-50">
-                                    <FilterIcon /> <span>Filter</span>
-                                </button>
+                                <div className="relative">
+                                    <button onClick={() => setIsFilterOpen(!isFilterOpen)} className="flex items-center space-x-2 px-3 py-1.5 text-sm border rounded-md bg-white hover:bg-gray-50">
+                                        <FilterIcon /> <span>Filter</span>
+                                    </button>
+                                    {isFilterOpen && (
+                                        <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 border">
+                                            <div className="p-2 text-sm font-semibold border-b">Filter by Risk Level</div>
+                                            <div className="p-2">
+                                                {['All', 'NORMAL', 'MID RISK', 'HIGH RISK'].map(level => (
+                                                     <label key={level} className="flex items-center space-x-2 text-sm">
+                                                        <input type="radio" name="risk_level" value={level} checked={filters.risk_level === level} onChange={(e) => setFilters({...filters, risk_level: e.target.value})} />
+                                                        <span>{level}</span>
+                                                     </label>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
                         
@@ -130,7 +170,7 @@ export default function MaternityManagement() {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y">
-                                    {patients.map(p => (
+                                    {filteredPatients.map(p => (
                                         <tr key={p.id} className="text-gray-600">
                                             <td className="px-2 py-2 font-medium">{p.patient_id}</td>
                                             <td className="px-2 py-2">{`${p.first_name} ${p.middle_name || ''} ${p.last_name}`}</td>
