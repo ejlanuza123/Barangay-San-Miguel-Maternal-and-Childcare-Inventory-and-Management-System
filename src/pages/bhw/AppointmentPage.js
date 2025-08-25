@@ -137,9 +137,9 @@ const StatusLegend = () => (
     <div className="bg-white p-4 rounded-lg shadow-sm border">
         <h3 className="font-bold text-gray-700 text-sm mb-3">Status Legend</h3>
         <div className="space-y-2 text-sm">
-            <div className="flex items-center"><div className="w-4 h-4 rounded bg-blue-200 mr-2 border border-blue-300"></div><span>Scheduled</span></div>
-            <div className="flex items-center"><div className="w-4 h-4 rounded bg-green-200 mr-2 border border-green-300"></div><span>Completed</span></div>
-            <div className="flex items-center"><div className="w-4 h-4 rounded bg-gray-200 mr-2 border border-gray-300"></div><span>Cancelled</span></div>
+            <div className="flex items-center"><div className="w-4 h-4 rounded bg-blue-300 mr-2 border border-blue-400"></div><span>Scheduled</span></div>
+            <div className="flex items-center"><div className="w-4 h-4 rounded bg-green-300 mr-2 border border-green-400"></div><span>Completed</span></div>
+            <div className="flex items-center"><div className="w-4 h-4 rounded bg-gray-300 mr-2 border border-gray-400"></div><span>Cancelled</span></div>
         </div>
     </div>
 );
