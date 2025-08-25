@@ -117,7 +117,7 @@ export default function InventoryPage() {
                                     </div>
                                 )}
                             </div>
-                            <button className="flex items-center gap-2 px-3 py-2 text-sm border rounded-lg bg-white hover:bg-gray-50"><ExportIcon /> Export</button>
+                            
                         </div>
                     </div>
 

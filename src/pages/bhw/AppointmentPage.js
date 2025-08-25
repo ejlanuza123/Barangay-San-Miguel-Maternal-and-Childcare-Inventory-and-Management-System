@@ -214,9 +214,7 @@ export default function AppointmentPage() {
                                 </button>
                             ))}
                         </div>
-                        <button className="flex items-center space-x-2 px-3 py-2 text-sm border rounded-lg bg-white hover:bg-gray-50 whitespace-nowrap">
-                            <ExportIcon /> <span>Export</span>
-                        </button>
+
                     </div>
 
                     <div className="relative mb-4">
