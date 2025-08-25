@@ -4,8 +4,8 @@ import AddPatientModal from '../../pages/bhw/AddPatientModal';
 import { AnimatePresence, motion } from 'framer-motion';
 
 // --- ICONS ---
-const SearchIcon = () => <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>;
-const FilterIcon = () => <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L12 14.414V19a1 1 0 01-1.447.894L7 18.5V14.414L3.293 6.707A1 1 0 013 6V4z"></path></svg>;
+const SearchIcon = () => <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>;
+const FilterIcon = () => <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L12 14.414V19a1 1 0 01-1.447.894L7 18.5V14.414L3.293 6.707A1 1 0 013 6V4z"></path></svg>;
 const ViewIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>;
 const UpdateIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>;
 const DeleteIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>;
@@ -64,6 +64,7 @@ const StatusLegend = () => (
     </div>
 );
 
+// --- NEW/UPDATED MODALS ---
 const DeleteConfirmationModal = ({ patientName, onConfirm, onCancel }) => (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
         <motion.div
@@ -82,31 +83,210 @@ const DeleteConfirmationModal = ({ patientName, onConfirm, onCancel }) => (
     </div>
 );
 
+// --- UPDATED ViewPatientModal Component ---
 const ViewPatientModal = ({ patient, onClose }) => {
     const history = patient.medical_history || {};
+    
+    // Helper function to render section headers
+    const SectionHeader = ({ title }) => (
+        <div className="bg-gray-100 p-2 rounded-md mb-3">
+            <h3 className="font-bold text-gray-800 text-sm">{title}</h3>
+        </div>
+    );
+
+    // Helper function to render field rows
+    const FieldRow = ({ label, value, cols = 2 }) => (
+        <div className={`grid grid-cols-1 md:grid-cols-${cols} gap-4 mb-3`}>
+            <div className="font-semibold text-gray-700 text-sm">{label}:</div>
+            <div className="text-gray-600 text-sm">{value || 'N/A'}</div>
+        </div>
+    );
+
+    // Helper function to render checkbox fields
+    const CheckboxField = ({ label, checked }) => (
+        <div className="flex items-center mb-2">
+            <div className={`w-4 h-4 border rounded mr-2 ${checked ? 'bg-blue-500 border-blue-500' : 'bg-white border-gray-300'}`}>
+                {checked && (
+                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                )}
+            </div>
+            <span className="text-sm text-gray-600">{label}</span>
+        </div>
+    );
+
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
             <motion.div
-                className="bg-white rounded-lg shadow-2xl w-full max-w-2xl p-6"
+                className="bg-white rounded-lg shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden"
                 initial={{ opacity: 0, y: -30 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 30 }}
             >
-                <h2 className="text-xl font-bold text-gray-800 mb-4">Patient Treatment Record</h2>
-                <div className="text-sm space-y-2 max-h-[70vh] overflow-y-auto pr-2">
-                    <p><span className="font-semibold">Patient ID:</span> {patient.patient_id}</p>
-                    <p><span className="font-semibold">Name:</span> {`${history.first_name || ''} ${history.middle_name || ''} ${history.last_name || ''}`}</p>
-                    <p><span className="font-semibold">Age:</span> {history.age}</p>
-                    <p><span className="font-semibold">Contact:</span> {history.contact_no}</p>
-                    <p><span className="font-semibold">Address:</span> {`${history.purok || ''}, ${history.street || ''}`}</p>
-                    <div className="border-t my-2"></div>
-                    <h3 className="font-bold mt-2">Full Record Details:</h3>
-                    <pre className="bg-gray-100 p-3 rounded-md text-xs whitespace-pre-wrap">
-                        {JSON.stringify(history, null, 2)}
-                    </pre>
+                {/* Header */}
+                <div className="bg-blue-600 text-white p-4">
+                    <div className="flex justify-between items-center">
+                        <h2 className="text-xl font-bold">PATIENT TREATMENT RECORD</h2>
+                        <button onClick={onClose} className="text-white hover:text-gray-200">
+                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                        <div><span className="font-semibold">Patient ID:</span> {patient.patient_id}</div>
+                        <div><span className="font-semibold">Name:</span> {`${patient.first_name || ''} ${patient.middle_name || ''} ${patient.last_name || ''}`}</div>
+                        <div><span className="font-semibold">Age:</span> {patient.age}</div>
+                        <div><span className="font-semibold">Contact:</span> {patient.contact_no || 'N/A'}</div>
+                    </div>
                 </div>
-                <div className="flex justify-end mt-4">
-                    <button onClick={onClose} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-semibold text-sm">Close</button>
+
+                {/* Content */}
+                <div className="p-6 overflow-y-auto max-h-[70vh]">
+                    {/* Personal Information */}
+                    <SectionHeader title="PERSONAL INFORMATION" />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        <FieldRow label="Patient ID" value={patient.patient_id} />
+                        <FieldRow label="Last Name" value={patient.last_name} />
+                        <FieldRow label="First Name" value={patient.first_name} />
+                        <FieldRow label="Middle Name" value={patient.middle_name} />
+                        <FieldRow label="Age" value={patient.age} />
+                        <FieldRow label="Contact No." value={patient.contact_no} />
+                        <FieldRow label="Weeks of Pregnancy" value={patient.weeks} />
+                        <FieldRow label="Last Visit" value={patient.last_visit} />
+                        <FieldRow label="Risk Level" value={patient.risk_level} />
+                        <FieldRow label="Date of Birth" value={history.dob} />
+                        <FieldRow label="Blood Type" value={history.blood_type} />
+                        <FieldRow label="NHTS No." value={history.nhts_no} />
+                        <FieldRow label="PhilHealth No." value={history.philhealth_no} />
+                        <FieldRow label="Family Folder No." value={history.family_folder_no} />
+                        <FieldRow label="Purok" value={history.purok} />
+                        <FieldRow label="Street" value={history.street} />
+                    </div>
+
+                    {/* Obstetrical Score */}
+                    <SectionHeader title="OBSTETRICAL SCORE" />
+                    <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
+                        <FieldRow label="G" value={history.g_score} cols={1} />
+                        <FieldRow label="P" value={history.p_score} cols={1} />
+                        <FieldRow label="Term" value={history.term} cols={1} />
+                        <FieldRow label="Preterm" value={history.preterm} cols={1} />
+                        <FieldRow label="Abortion" value={history.abortion} cols={1} />
+                        <FieldRow label="Living Children" value={history.living_children} cols={1} />
+                    </div>
+
+                    {/* Pregnancy History */}
+                    <SectionHeader title="PREGNANCY HISTORY" />
+                    <div className="overflow-x-auto mb-6">
+                        <table className="w-full text-sm border">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    {['Gravida', 'Outcome', 'Sex', 'NSD/CS', 'Delivered At'].map(h => 
+                                        <th key={h} className="p-2 border font-medium text-xs">{h}</th>
+                                    )}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {Array.from({ length: 10 }, (_, i) => i + 1).map(g => (
+                                    <tr key={g}>
+                                        <td className="p-2 border text-center font-semibold text-gray-600">G{g}</td>
+                                        <td className="p-2 border">{history[`g${g}_outcome`] || '-'}</td>
+                                        <td className="p-2 border">{history[`g${g}_sex`] || '-'}</td>
+                                        <td className="p-2 border">{history[`g${g}_delivery_type`] || '-'}</td>
+                                        <td className="p-2 border">{history[`g${g}_delivered_at`] || '-'}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* Menstrual Period & OB History */}
+                    <SectionHeader title="MENSTRUAL PERIOD & OB HISTORY" />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        <FieldRow label="Last Menstrual Period (LMP)" value={history.lmp} />
+                        <FieldRow label="Risk Code" value={history.risk_code} />
+                        <FieldRow label="Expected Date of Confinement (EDC)" value={history.edc} />
+                        <FieldRow label="Age of First Period" value={history.age_first_period} />
+                        <FieldRow label="Age of Menarche" value={history.age_of_menarche} />
+                        <FieldRow label="Amount of Bleeding" value={history.bleeding_amount} />
+                        <FieldRow label="Duration of Menstruation (days)" value={history.menstruation_duration} />
+                    </div>
+
+                    {/* Vaccination Record */}
+                    <SectionHeader title="VACCINATION RECORD" />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        {['TT1', 'TT2', 'TT3', 'TT4', 'TT5', 'FIM'].map(vaccine => (
+                            <FieldRow 
+                                key={vaccine} 
+                                label={`${vaccine} Date`} 
+                                value={history[`vaccine_${vaccine.toLowerCase()}`]} 
+                            />
+                        ))}
+                    </div>
+
+                    {/* Medical History */}
+                    <SectionHeader title="MEDICAL HISTORY" />
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                        {/* Personal History */}
+                        <div>
+                            <h4 className="font-semibold text-gray-700 mb-3 text-sm">Personal History</h4>
+                            {['Diabetes Mellitus (DM)', 'Asthma', 'Cardiovascular Disease (CVD)', 'Heart Disease', 'Goiter'].map(condition => (
+                                <CheckboxField 
+                                    key={condition}
+                                    label={condition} 
+                                    checked={history[`ph_${condition}`]} 
+                                />
+                            ))}
+                        </div>
+
+                        {/* Hereditary Disease History */}
+                        <div>
+                            <h4 className="font-semibold text-gray-700 mb-3 text-sm">Hereditary Disease History</h4>
+                            {['Hypertension (HPN)', 'Asthma', 'Heart Disease', 'Diabetes Mellitus', 'Goiter'].map(condition => (
+                                <CheckboxField 
+                                    key={condition}
+                                    label={condition} 
+                                    checked={history[`hdh_${condition}`]} 
+                                />
+                            ))}
+                        </div>
+
+                        {/* Social History */}
+                        <div>
+                            <h4 className="font-semibold text-gray-700 mb-3 text-sm">Social History</h4>
+                            {['Smoker', 'Ex-smoker', 'Second-hand Smoker', 'Alcohol Drinker', 'Substance Abuse'].map(habit => (
+                                <CheckboxField 
+                                    key={habit}
+                                    label={habit} 
+                                    checked={history[`sh_${habit}`]} 
+                                />
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Allergy and Family Planning History */}
+                    <SectionHeader title="ADDITIONAL INFORMATION" />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                        <div>
+                            <h4 className="font-semibold text-gray-700 mb-2 text-sm">History of Allergy and Drugs</h4>
+                            <div className="bg-gray-50 p-3 rounded-md text-sm text-gray-600 min-h-[80px]">
+                                {history.allergy_history || 'No allergies recorded'}
+                            </div>
+                        </div>
+                        <div>
+                            <h4 className="font-semibold text-gray-700 mb-2 text-sm">Family Planning History</h4>
+                            <div className="bg-gray-50 p-3 rounded-md text-sm text-gray-600 min-h-[80px]">
+                                {history.family_planning_history || 'No family planning history recorded'}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Footer */}
+                <div className="bg-gray-100 p-4 border-t">
+                    <div className="flex justify-end">
+                    </div>
                 </div>
             </motion.div>
         </div>
@@ -121,16 +301,16 @@ export default function MaternityManagement() {
     const [upcomingAppointments, setUpcomingAppointments] = useState([]);
     const [isFilterOpen, setIsFilterOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
-    const [filters, setFilters] = useState({ risk_level: 'All' });
+    const [filters, setFilters] = useState({ risk_level: 'All', search_type: 'name' });
+
 
     const [modalMode, setModalMode] = useState(null);
     const [selectedPatient, setSelectedPatient] = useState(null);
     const [patientToDelete, setPatientToDelete] = useState(null);
 
     const fetchPageData = useCallback(async () => {
-        setLoading(true);
         const [patientResponse, appointmentsResponse, patientCountResponse] = await Promise.all([
-            supabase.from('patients').select('*').order('created_at', { ascending: false }),
+            supabase.from('patients').select('*').order('patient_id', { ascending: true }),
             supabase.from('appointments').select('*').order('date', { ascending: true }).limit(3),
             supabase.from('patients').select('*', { count: 'exact', head: true })
         ]);
@@ -141,7 +321,9 @@ export default function MaternityManagement() {
         setLoading(false);
     }, []);
 
+
     useEffect(() => {
+        setLoading(true);
         fetchPageData();
     }, [fetchPageData]);
     
@@ -171,21 +353,40 @@ export default function MaternityManagement() {
     };
     
     const filteredPatients = useMemo(() => {
-        return allPatients
+        let patients = allPatients
             .filter(patient => {
                 if (filters.risk_level === 'All') return true;
                 return patient.risk_level === filters.risk_level;
             })
             .filter(patient => {
                 if (!searchTerm) return true;
-                const fullName = `${patient.first_name || ''} ${patient.middle_name || ''} ${patient.last_name || ''}`.toLowerCase();
-                return fullName.includes(searchTerm.toLowerCase()) || 
-                       (patient.patient_id && patient.patient_id.toLowerCase().includes(searchTerm.toLowerCase()));
+                const term = searchTerm.toLowerCase();
+
+                if (filters.search_type === 'id') {
+                    return patient.patient_id?.toLowerCase().includes(term);
+                } else {
+                    const fullName = `${patient.first_name || ''} ${patient.middle_name || ''} ${patient.last_name || ''}`.toLowerCase();
+                    return fullName.includes(term);
+                }
             });
+
+        // --- Sorting ---
+        if (filters.search_type === 'id') {
+            patients.sort((a, b) => (a.patient_id || '').localeCompare(b.patient_id || ''));
+        } else {
+            patients.sort((a, b) => {
+                const nameA = `${a.first_name || ''} ${a.middle_name || ''} ${a.last_name || ''}`.toLowerCase();
+                const nameB = `${b.first_name || ''} ${b.middle_name || ''} ${b.last_name || ''}`.toLowerCase();
+                return nameA.localeCompare(nameB);
+            });
+        }
+
+        return patients;
     }, [allPatients, searchTerm, filters]);
 
 
-    if (loading && allPatients.length === 0) return <div className="p-4">Loading patient records...</div>;
+
+    if (loading) return <div className="p-4">Loading patient records...</div>;
 
     return (
         <>
@@ -195,7 +396,10 @@ export default function MaternityManagement() {
                         mode={modalMode}
                         initialData={selectedPatient}
                         onClose={() => setModalMode(null)} 
-                        onSave={fetchPageData}
+                        onSave={() => {
+                            setModalMode(null);
+                            fetchPageData();
+                        }}
                     />
                 )}
                 {patientToDelete && (
@@ -228,18 +432,51 @@ export default function MaternityManagement() {
                                         <FilterIcon /> <span>Filter</span>
                                     </button>
                                     {isFilterOpen && (
-                                        <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 border">
-                                            <div className="p-2 text-sm font-semibold border-b">Filter by Risk Level</div>
-                                            <div className="p-2">
-                                                {['All', 'NORMAL', 'MID RISK', 'HIGH RISK'].map(level => (
-                                                     <label key={level} className="flex items-center space-x-2 text-sm">
-                                                        <input type="radio" name="risk_level" value={level} checked={filters.risk_level === level} onChange={(e) => { setFilters({...filters, risk_level: e.target.value}); setIsFilterOpen(false); }} />
-                                                        <span>{level}</span>
-                                                     </label>
-                                                ))}
-                                            </div>
+                                    <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-2xl z-20 border border-gray-200 overflow-hidden">
+                                        <div className="px-4 py-2 text-sm font-semibold text-gray-600 border-b bg-gray-50">Filter by Risk Level</div>
+                                        <div className="p-3 space-y-2">
+                                        {['All', 'NORMAL', 'MID RISK', 'HIGH RISK'].map(level => (
+                                            <label key={level} className="flex items-center space-x-2 cursor-pointer hover:bg-blue-50 px-2 py-1 rounded-md">
+                                            <input
+                                                type="radio"
+                                                name="risk_level"
+                                                value={level}
+                                                checked={filters.risk_level === level}
+                                                onChange={(e) => {
+                                                setFilters({ ...filters, risk_level: e.target.value });
+                                                setIsFilterOpen(false);
+                                                }}
+                                            />
+                                            <span className="text-sm">{level}</span>
+                                            </label>
+                                        ))}
                                         </div>
+
+                                        <div className="px-4 py-2 text-sm font-semibold text-gray-600 border-t bg-gray-50">Search By</div>
+                                        <div className="p-3 space-y-2">
+                                        {[
+                                        { label: 'Name', value: 'name' },
+                                        { label: 'Patient ID', value: 'id' }
+                                        ].map(type => (
+                                        <label key={type.value} className="flex items-center space-x-2 cursor-pointer hover:bg-blue-50 px-2 py-1 rounded-md">
+                                            <input
+                                            type="radio"
+                                            name="search_type"
+                                            value={type.value}
+                                            checked={filters.search_type === type.value}
+                                            onChange={(e) => {
+                                                setFilters({ ...filters, search_type: e.target.value });
+                                                setIsFilterOpen(false);
+                                            }}
+                                            />
+                                            <span className="text-sm">{type.label}</span>
+                                        </label>
+                                        ))}
+
+                                        </div>
+                                    </div>
                                     )}
+
                                 </div>
                             </div>
                         </div>

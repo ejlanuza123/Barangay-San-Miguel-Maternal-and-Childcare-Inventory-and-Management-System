@@ -18,7 +18,7 @@ const Step1 = ({ formData, handleChange, newPatientId }) => (
             <div className="w-32 h-32 bg-gray-100 rounded-md border flex items-center justify-center"><ProfileIcon /></div>
             <div className="text-center mt-2">
                 <p className="font-bold text-gray-700">Patient ID: {newPatientId}</p>
-                <p className="text-xs text-gray-500">(Patient ID Auto Generated)</p>
+                {newPatientId.startsWith('P-') && <p className="text-xs text-gray-500">(Patient ID Auto Generated)</p>}
             </div>
         </div>
         <div className="md:col-span-2 space-y-4">
@@ -261,16 +261,29 @@ export default function AddPatientModal({ onClose, onSave, mode = 'add', initial
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     
-    const [formData, setFormData] = useState(
-        mode === 'edit' && initialData ? initialData.medical_history || {} : {}
-    );
-    
-    const [patientId, setPatientId] = useState(
-        mode === 'edit' && initialData ? initialData.patient_id : 'Loading...'
-    );
+    const [formData, setFormData] = useState({});
+    const [patientId, setPatientId] = useState('Loading...');
 
     useEffect(() => {
-        if (mode === 'add') {
+        if (mode === 'edit' && initialData) {
+            const formDataFromPatient = {
+                first_name: initialData.first_name || '',
+                middle_name: initialData.middle_name || '',
+                last_name: initialData.last_name || '',
+                age: initialData.age || '',
+                contact_no: initialData.contact_no || '',
+                risk_level: initialData.risk_level || '',
+                weeks: initialData.weeks || '',
+                last_visit: initialData.last_visit || '',
+                patient_id: initialData.patient_id || '',
+                purok: initialData.purok || '',
+                street: initialData.street || '',
+                ...(initialData.medical_history || {})
+            };
+            
+            setFormData(formDataFromPatient);
+            setPatientId(initialData.patient_id);
+        } else {
             const generateNewId = async () => {
                 const { count, error } = await supabase.from('patients').select('*', { count: 'exact', head: true });
                 if (error) {
@@ -282,11 +295,14 @@ export default function AddPatientModal({ onClose, onSave, mode = 'add', initial
             };
             generateNewId();
         }
-    }, [mode]);
+    }, [mode, initialData]);
 
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
-        setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+        setFormData(prev => ({ 
+            ...prev, 
+            [name]: type === 'checkbox' ? checked : value 
+        }));
     };
 
     const nextStep = () => setStep(prev => prev + 1);
@@ -296,39 +312,60 @@ export default function AddPatientModal({ onClose, onSave, mode = 'add', initial
         setLoading(true);
         setError('');
 
-        let result;
-        if (mode === 'edit') {
-            result = await supabase
-                .from('patients')
-                .update({ 
+        try {
+            let result;
+            
+            console.log('Saving data:', formData);
+            
+            if (mode === 'edit') {
+                result = await supabase
+                    .from('patients')
+                    .update({
+                        patient_id: patientId,
+                        first_name: formData.first_name,
+                        middle_name: formData.middle_name,
+                        last_name: formData.last_name,
+                        age: formData.age,
+                        contact_no: formData.contact_no,
+                        risk_level: formData.risk_level,
+                        weeks: formData.weeks,
+                        last_visit: formData.last_visit,
+                        purok: formData.purok,
+                        street: formData.street,
+                        medical_history: formData,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', initialData.id);
+            } else {
+                result = await supabase.from('patients').insert([{
+                    patient_id: patientId,
                     first_name: formData.first_name,
+                    middle_name: formData.middle_name,
                     last_name: formData.last_name,
                     age: formData.age,
                     contact_no: formData.contact_no,
                     risk_level: formData.risk_level,
-                    medical_history: formData 
-                })
-                .eq('id', initialData.id);
-        } else {
-            result = await supabase.from('patients').insert([{
-                patient_id: patientId,
-                first_name: formData.first_name,
-                middle_name: formData.middle_name,
-                last_name: formData.last_name,
-                age: formData.age,
-                contact_no: formData.contact_no,
-                risk_level: formData.risk_level,
-                medical_history: formData,
-            }]);
-        }
+                    weeks: formData.weeks,
+                    last_visit: formData.last_visit,
+                    purok: formData.purok,
+                    street: formData.street,
+                    medical_history: formData,
+                }]);
+            }
 
-        if (result.error) {
-            setError(result.error.message);
-        } else {
-            onSave();
-            onClose();
+            console.log('Supabase result:', result);
+            
+            if (result.error) {
+                setError(result.error.message);
+            } else {
+                onSave();
+                onClose();
+            }
+        } catch (err) {
+            setError('An error occurred while saving: ' + err.message);
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     const title = mode === 'edit' ? 'Edit Patient Record' : 'New Patient Record';
@@ -344,10 +381,20 @@ export default function AddPatientModal({ onClose, onSave, mode = 'add', initial
                 >
                     <div className="flex items-center space-x-2 mb-4">
                         <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100">
-                            <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                            <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                            </svg>
                         </button>
                         <h2 className="text-lg font-semibold text-gray-700">{title}</h2>
                     </div>
+                    
+                    {error && (
+                        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+                            <strong className="font-bold">Error: </strong>
+                            <span className="block sm:inline">{error}</span>
+                        </div>
+                    )}
+                    
                     <h2 className="text-xl font-bold text-gray-800 text-center mb-1">PARENTAL INDIVIDUAL TREATMENT RECORD</h2>
                     <p className="text-sm text-gray-500 text-center mb-4">Page {step} of 4</p>
                     
@@ -362,8 +409,16 @@ export default function AddPatientModal({ onClose, onSave, mode = 'add', initial
                         {step > 1 && <button onClick={prevStep} className="px-6 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 font-semibold">Previous</button>}
                         {step < 4 && <button onClick={nextStep} className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-semibold">Next Page</button>}
                         {step === 4 && (
-                            <button onClick={handleSave} disabled={loading} className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 font-semibold">
-                                {loading ? 'Saving...' : 'Submit'}
+                            <button onClick={handleSave} disabled={loading} className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 font-semibold flex items-center justify-center">
+                                {loading ? (
+                                    <>
+                                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        Saving...
+                                    </>
+                                ) : 'Submit'}
                             </button>
                         )}
                     </div>

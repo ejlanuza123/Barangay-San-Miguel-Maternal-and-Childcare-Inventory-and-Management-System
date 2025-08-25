@@ -26,15 +26,15 @@ const StatusLegend = () => (
         <div className="space-y-2 text-sm">
             {/* UPDATED: Changed checkbox to a colored div to match the badge styles */}
             <div className="flex items-center">
-                <div className="w-4 h-4 rounded mr-2 bg-green-100 border border-green-200"></div>
+                <div className="w-4 h-4 rounded mr-2 bg-green-300 border border-green-400"></div>
                 <span className="text-gray-600">Normal</span>
             </div>
             <div className="flex items-center">
-                <div className="w-4 h-4 rounded mr-2 bg-yellow-100 border border-yellow-200"></div>
+                <div className="w-4 h-4 rounded mr-2 bg-yellow-300 border border-yellow-400"></div>
                 <span className="text-gray-600">Low</span>
             </div>
             <div className="flex items-center">
-                <div className="w-4 h-4 rounded mr-2 bg-red-100 border border-red-200"></div>
+                <div className="w-4 h-4 rounded mr-2 bg-red-300 border border-red-400"></div>
                 <span className="text-gray-600">Critical</span>
             </div>
         </div>
