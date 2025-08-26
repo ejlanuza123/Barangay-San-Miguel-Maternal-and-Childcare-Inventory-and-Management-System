@@ -1,13 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../../services/supabase';
+import { AnimatePresence, motion } from 'framer-motion';
 
 // --- WIDGETS & SUB-COMPONENTS ---
 
-// --- NEW: Real-time Calendar Component ---
 const Calendar = () => {
     const [currentDate, setCurrentDate] = useState(new Date());
-
     const daysOfWeek = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
     
     const changeMonth = (amount) => {
@@ -21,16 +20,12 @@ const Calendar = () => {
     const generateDates = () => {
         const year = currentDate.getFullYear();
         const month = currentDate.getMonth();
-        
         const firstDayOfMonth = new Date(year, month, 1).getDay();
         const daysInMonth = new Date(year, month + 1, 0).getDate();
-        
         const dates = [];
-        // Add padding for days from the previous month
         for (let i = 0; i < firstDayOfMonth; i++) {
             dates.push(<div key={`pad-start-${i}`} className="p-2"></div>);
         }
-        // Add days of the current month
         for (let i = 1; i <= daysInMonth; i++) {
             const date = new Date(year, month, i);
             const isToday = date.toDateString() === new Date().toDateString();
@@ -74,14 +69,14 @@ const QuickAccess = () => (
     </div>
 );
 
-const RecentActivity = ({ activities }) => (
+const RecentActivity = ({ activities, onViewAll }) => (
     <div className="bg-white p-4 rounded-lg shadow border h-full">
         <div className="flex justify-between items-center mb-3">
             <h3 className="font-bold text-gray-700 text-base">Recent Activity</h3>
-            <a href="#" className="text-xs font-semibold text-blue-600">View All &gt;</a>
+            <button onClick={onViewAll} className="text-xs font-semibold text-blue-600 hover:underline">View All &gt;</button>
         </div>
         <div className="space-y-3">
-            {activities.length > 0 ? activities.slice(0, 4).map((item) => ( // Show only top 4
+            {activities.length > 0 ? activities.slice(0, 4).map((item) => (
                 <div key={item.id} className="flex items-start space-x-2">
                     <div className="w-1.5 h-1.5 rounded-full mt-1.5 bg-blue-500"></div>
                     <div>
@@ -122,7 +117,7 @@ const UpcomingAppointments = ({ appointments }) => {
                             <th className="px-2 py-2 font-semibold">Date</th>
                             <th className="px-2 py-2 font-semibold">Time</th>
                             <th className="px-2 py-2 font-semibold">Reason</th>
-                            <th className="px-2 py-2 font-semibold">BNS</th>
+                            <th className="px-2 py-2 font-semibold">BHW</th>
                             <th className="px-2 py-2 font-semibold">Status</th>
                         </tr>
                     </thead>
@@ -151,49 +146,107 @@ const UpcomingAppointments = ({ appointments }) => {
     );
 };
 
+// --- NEW: Modal to view all activities ---
+const ViewAllActivityModal = ({ activities, onClose }) => (
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4">
+        <motion.div
+            className="bg-white rounded-lg shadow-2xl w-full max-w-2xl"
+            initial={{ opacity: 0, y: -30 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 30 }}
+        >
+            <div className="p-6">
+                <h2 className="text-xl font-bold text-gray-800 mb-4">All Recent Activity</h2>
+                <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-3">
+                    {activities.length > 0 ? activities.map((item) => (
+                        <div key={item.id} className="flex items-start space-x-3 pb-3 border-b last:border-b-0">
+                            <div className="w-1.5 h-1.5 rounded-full mt-1.5 bg-blue-500 flex-shrink-0"></div>
+                            <div className="flex-grow">
+                                <p className="font-semibold text-gray-700 text-sm">{item.action}</p>
+                                <p className="text-xs text-gray-500">{item.details}</p>
+                                <p className="text-xs text-gray-400 mt-0.5">
+                                    {new Date(item.created_at).toLocaleString()}
+                                </p>
+                            </div>
+                        </div>
+                    )) : <p className="text-sm text-gray-500 text-center py-8">No activity to show.</p>}
+                </div>
+                <div className="flex justify-end mt-6">
+                    <button onClick={onClose} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 font-semibold text-sm">Close</button>
+                </div>
+            </div>
+        </motion.div>
+    </div>
+);
+
 
 // --- Main BHW Dashboard Component ---
 export default function BhwDashboard() {
+    const [stats, setStats] = useState({ total: 0, active: 0, today: 0 });
     const [upcomingAppointments, setUpcomingAppointments] = useState([]);
     const [recentActivities, setRecentActivities] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
+
+    const fetchDashboardData = useCallback(async () => {
+        setLoading(true);
+
+        const today = new Date().toISOString().split('T')[0];
+
+        const [patientCountRes, activePatientsRes, todayVisitsRes, appointmentsRes, activityRes] = await Promise.all([
+            supabase.from('patients').select('*', { count: 'exact', head: true }),
+            supabase.from('patients').select('id'),
+            supabase.from('appointments').select('*', { count: 'exact', head: true }).eq('date', today),
+            supabase.from('appointments').select('*').order('date', { ascending: true }).limit(10),
+            supabase.from('activity_log').select('*').order('created_at', { ascending: false }) // Fetch all activities
+        ]);
+
+        setStats({
+            total: patientCountRes.count || 0,
+            active: activePatientsRes.data?.length || 0,
+            today: todayVisitsRes.count || 0
+        });
+
+        setUpcomingAppointments(appointmentsRes.data || []);
+        setRecentActivities(activityRes.data || []);
+        setLoading(false);
+    }, []);
 
     useEffect(() => {
-        const fetchDashboardData = async () => {
-            setLoading(true);
-            // Fetch more appointments to demonstrate scrolling
-            const { data: appointmentsData } = await supabase.from('appointments').select('*').order('date', { ascending: true }).limit(10);
-            const { data: activityData } = await supabase.from('activity_log').select('*').order('created_at', { ascending: false }).limit(4);
-
-            setUpcomingAppointments(appointmentsData || []);
-            setRecentActivities(activityData || []);
-            setLoading(false);
-        };
-
         fetchDashboardData();
-    }, []);
+    }, [fetchDashboardData]);
 
     if (loading) {
         return <div className="flex h-full items-center justify-center">Loading Dashboard...</div>;
     }
 
     return (
-        <div className="space-y-4">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                <div className="lg:col-span-1">
-                    <RecentActivity activities={recentActivities} />
+        <>
+            <AnimatePresence>
+                {isActivityModalOpen && (
+                    <ViewAllActivityModal 
+                        activities={recentActivities}
+                        onClose={() => setIsActivityModalOpen(false)}
+                    />
+                )}
+            </AnimatePresence>
+            <div className="space-y-4">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    <div className="lg:col-span-1">
+                        <RecentActivity activities={recentActivities} onViewAll={() => setIsActivityModalOpen(true)} />
+                    </div>
+                    <div className="lg:col-span-1">
+                        <Calendar />
+                    </div>
+                    <div className="lg:col-span-1">
+                        <QuickAccess />
+                    </div>
                 </div>
-                <div className="lg:col-span-1">
-                    <Calendar />
-                </div>
-                <div className="lg:col-span-1">
-                    <QuickAccess />
+                
+                <div>
+                    <UpcomingAppointments appointments={upcomingAppointments} />
                 </div>
             </div>
-            
-            <div>
-                <UpcomingAppointments appointments={upcomingAppointments} />
-            </div>
-        </div>
+        </>
     );
 }

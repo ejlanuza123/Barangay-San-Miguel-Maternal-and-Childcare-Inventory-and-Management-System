@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../../services/supabase';
 import AddPatientModal from '../../pages/bhw/AddPatientModal';
 import { AnimatePresence, motion } from 'framer-motion';
+import { logActivity } from '../../services/activityLogger';
 
 // --- ICONS ---
 const SearchIcon = () => <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>;
@@ -339,6 +340,7 @@ export default function MaternityManagement() {
     };
 
     const handleDelete = async () => {
+        logActivity('Patient Record Deleted', `Deleted record for ${patientToDelete.first_name} ${patientToDelete.last_name}`);
         if (!patientToDelete) return;
         
         const { error } = await supabase.from('patients').delete().eq('id', patientToDelete.id);

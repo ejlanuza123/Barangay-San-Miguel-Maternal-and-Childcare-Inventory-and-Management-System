@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../../services/supabase';
 import AddAppointmentModal from './AddAppointmentModal';
-import { AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+import { logActivity } from '../../services/activityLogger';
 
 // --- ICONS ---
 const ClockIcon = () => <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>;
@@ -144,6 +145,173 @@ const StatusLegend = () => (
     </div>
 );
 
+const EditAppointmentModal = ({ appointment, onClose, onSave }) => {
+  const [formData, setFormData] = useState({
+    patient_name: appointment.patient_name,
+    appointment_type: appointment.appointment_type || "",
+    date: appointment.date,
+    time: appointment.time,
+  });
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    const { error } = await supabase
+      .from("appointments")
+      .update(formData)
+      .eq("id", appointment.id);
+
+    if (!error) {
+      // ✅ log activity when appointment is updated
+      await logActivity(
+        "Appointment Updated",
+        `Patient: ${formData.patient_name}, Type: ${formData.appointment_type}, Date: ${formData.date}, Time: ${formData.time}`
+      );
+
+      onSave();
+      onClose();
+    } else {
+      console.error("Error updating appointment:", error);
+    }
+  };
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+      >
+        <motion.div
+          className="bg-white rounded-lg shadow-xl w-full max-w-md p-6"
+          initial={{ scale: 0.9 }}
+          animate={{ scale: 1 }}
+          exit={{ scale: 0.9 }}
+        >
+          <h2 className="text-lg font-bold mb-4">Edit Appointment</h2>
+          <form onSubmit={handleSave} className="space-y-3">
+            {/* Patient Name (read-only) */}
+            <input
+              type="text"
+              value={formData.patient_name}
+              disabled
+              className="w-full p-2 border rounded bg-gray-100 cursor-not-allowed"
+            />
+
+            {/* Appointment Type Dropdown */}
+            <select
+              name="appointment_type"
+              value={formData.appointment_type}
+              onChange={handleChange}
+              className="w-full p-2 border rounded"
+            >
+              <option value="">Select Type</option>
+              <option value="Prenatal Checkup">Prenatal Checkup</option>
+              <option value="Postnatal Checkup">Postnatal Checkup</option>
+              <option value="Child Immunization">Child Immunization</option>
+              <option value="Consultation">Consultation</option>
+            </select>
+
+            {/* Date */}
+            <input
+              type="date"
+              name="date"
+              value={formData.date}
+              onChange={handleChange}
+              className="w-full p-2 border rounded"
+            />
+
+            {/* Time */}
+            <input
+              type="time"
+              name="time"
+              value={formData.time}
+              onChange={handleChange}
+              className="w-full p-2 border rounded"
+            />
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300 text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
+              >
+                Save
+              </button>
+            </div>
+          </form>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
+};
+
+
+const DeleteAppointmentModal = ({ appointment, onClose, onDelete }) => {
+  const handleDelete = async () => {
+    const { error } = await supabase
+      .from("appointments")
+      .delete()
+      .eq("id", appointment.id);
+
+    if (!error) {
+      await logActivity(
+            "Appointment Deleted",
+            `Patient: ${appointment.patient_name}, Type: ${appointment.appointment_type}, Date: ${appointment.date}, Time: ${appointment.time}`
+            );
+
+      onDelete();
+      onClose();
+    } else {
+      console.error("Error deleting appointment:", error);
+    }
+  };
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+      >
+        <motion.div
+          className="bg-white rounded-lg shadow-xl w-full max-w-sm p-6 text-center"
+          initial={{ scale: 0.8 }}
+          animate={{ scale: 1 }}
+          exit={{ scale: 0.8 }}
+        >
+          <h2 className="text-lg font-bold mb-4">Confirm Delete</h2>
+          <p className="text-sm text-gray-600 mb-6">
+            Are you sure you want to delete the appointment for{" "}
+            <span className="font-semibold">{appointment.patient_name}</span>?
+          </p>
+          <div className="flex justify-center gap-3">
+            <button onClick={onClose} className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300 text-sm">
+              Cancel
+            </button>
+            <button onClick={handleDelete} className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 text-sm">
+              Delete
+            </button>
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
+};
+
+
 
 export default function AppointmentPage() {
     const [allAppointments, setAllAppointments] = useState([]);
@@ -152,6 +320,11 @@ export default function AppointmentPage() {
     const [activeTab, setActiveTab] = useState('All Appointment');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [selectedAppointment, setSelectedAppointment] = useState(null);
+ 
+
 
     const fetchAppointments = useCallback(async () => {
         setLoading(true);
@@ -201,6 +374,20 @@ export default function AppointmentPage() {
         <>
             <AnimatePresence>
                 {isModalOpen && <AddAppointmentModal onClose={() => setIsModalOpen(false)} onSave={fetchAppointments} />}
+                {isEditModalOpen && selectedAppointment && (
+                    <EditAppointmentModal
+                    appointment={selectedAppointment}
+                    onClose={() => setIsEditModalOpen(false)}
+                    onSave={fetchAppointments}
+                    />
+                )}
+                {isDeleteModalOpen && selectedAppointment && (
+                    <DeleteAppointmentModal
+                    appointment={selectedAppointment}
+                    onClose={() => setIsDeleteModalOpen(false)}
+                    onDelete={fetchAppointments}
+                    />
+                )}
             </AnimatePresence>
 
             <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
@@ -243,8 +430,24 @@ export default function AppointmentPage() {
                                     <div className="flex justify-between items-center mt-2">
                                         <p className="text-xs text-gray-400">{new Date(app.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric'})}</p>
                                         <div className="flex space-x-3 text-xs font-semibold">
-                                            <button className="text-blue-600 hover:underline">Edit</button>
-                                            <button className="text-red-600 hover:underline">Delete</button>
+                                            <button
+                                            className="text-blue-600 hover:underline"
+                                            onClick={() => {
+                                                setSelectedAppointment(app);
+                                                setIsEditModalOpen(true);
+                                            }}
+                                            >
+                                            Edit
+                                            </button>
+                                            <button
+                                            className="text-red-600 hover:underline"
+                                            onClick={() => {
+                                                setSelectedAppointment(app);
+                                                setIsDeleteModalOpen(true);
+                                            }}
+                                            >
+                                            Delete
+                                            </button>
                                         </div>
                                     </div>
                                 </div>

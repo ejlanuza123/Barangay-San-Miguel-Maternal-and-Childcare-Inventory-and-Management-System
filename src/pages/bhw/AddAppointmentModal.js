@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../../services/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
+import { logActivity } from '../../services/activityLogger';
+
 
 export default function AddAppointmentModal({ onClose, onSave }) {
     const [formData, setFormData] = useState({
@@ -71,6 +73,7 @@ export default function AddAppointmentModal({ onClose, onSave }) {
         e.preventDefault();
         setLoading(true);
         setError('');
+        logActivity('New Appointment Scheduled', `Appointment for ${formData.patient_name} on ${formData.date}`);
 
         const { error: insertError } = await supabase.from('appointments').insert([
             {

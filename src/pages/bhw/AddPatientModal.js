@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../services/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
+import { logActivity } from '../../services/activityLogger';
 
 // --- Helper Icon for Profile Placeholder ---
 const ProfileIcon = () => (
@@ -311,6 +312,11 @@ export default function AddPatientModal({ onClose, onSave, mode = 'add', initial
     const handleSave = async () => {
         setLoading(true);
         setError('');
+        if (mode === 'edit') {
+            logActivity('Patient Record Updated', `Updated details for ${formData.first_name} ${formData.last_name}`);
+        } else {
+            logActivity('New Patient Added', `Registered ${formData.first_name} ${formData.last_name}`);
+        }
 
         try {
             let result;
