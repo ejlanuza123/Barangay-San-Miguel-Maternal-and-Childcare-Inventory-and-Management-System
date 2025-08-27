@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../../services/supabase';
 import AddInventoryModal from '../../pages/bhw/AddInventoryModal';
-import { AnimatePresence } from 'framer-motion';
+import { motion,AnimatePresence } from 'framer-motion';
+import { logActivity } from '../../services/activityLogger';
 
 // --- ICONS ---
 const FilterIcon = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L12 14.414V19a1 1 0 01-1.447.894L7 18.5V14.414L3.293 6.707A1 1 0 013 6V4z"></path></svg>;
-const ExportIcon = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v13"></path></svg>;
-const DotsIcon = () => <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path></svg>;
 const SearchIcon = () => <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>;
+const ViewIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>;
+const UpdateIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>;
+const DeleteIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>;
 
 
 // --- Helper Components ---
@@ -41,12 +43,182 @@ const StatusLegend = () => (
     </div>
 );
 
+const DeleteConfirmationModal = ({ itemName, onConfirm, onCancel }) => (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
+        <motion.div
+            className="bg-white rounded-lg shadow-2xl w-full max-w-sm p-6 text-center"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+        >
+            <h3 className="text-lg font-bold text-gray-800">Confirm Deletion</h3>
+            <p className="text-sm text-gray-600 my-4">Are you sure you want to delete <span className="font-semibold">{itemName}</span>? This action cannot be undone.</p>
+            <div className="flex justify-center gap-4">
+                <button onClick={onCancel} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 font-semibold text-sm">Cancel</button>
+                <button onClick={onConfirm} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 font-semibold text-sm">Yes, Delete</button>
+            </div>
+        </motion.div>
+    </div>
+);
+
+const ViewItemModal = ({ item, onClose }) => (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
+        <motion.div
+            className="bg-white rounded-lg shadow-2xl w-full max-w-md p-6"
+            initial={{ opacity: 0, y: -30 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 30 }}
+        >
+            <h2 className="text-xl font-bold text-gray-800 mb-4">{item.item_name}</h2>
+            <div className="space-y-2 text-sm">
+                <p><span className="font-semibold">Category:</span> {item.category}</p>
+                <p><span className="font-semibold">Stock:</span> {item.quantity} units</p>
+                <p><span className="font-semibold">Status:</span> <StatusBadge status={item.status.toLowerCase()} /></p>
+                <p><span className="font-semibold">Manufacture Date:</span> {item.manufacture_date || 'N/A'}</p>
+                <p><span className="font-semibold">Expiry Date:</span> {item.expiry_date || 'N/A'}</p>
+            </div>
+            <div className="flex justify-end mt-6">
+                <button onClick={onClose} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-semibold text-sm">Close</button>
+            </div>
+        </motion.div>
+    </div>
+);
+
+const EditInventoryModal = ({ item, onClose, onSave }) => {
+    const [formData, setFormData] = useState({
+        item_name: item.item_name,
+        category: item.category,
+        quantity: item.quantity,
+        status: item.status,
+        manufacture_date: item.manufacture_date || '',
+        expiry_date: item.expiry_date || '',
+    });
+
+    const handleChange = (e) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        const { error } = await supabase
+            .from('inventory')
+            .update({
+                item_name: formData.item_name,
+                category: formData.category,
+                quantity: formData.quantity,
+                status: formData.status,
+                manufacture_date: formData.manufacture_date,
+                expiry_date: formData.expiry_date,
+            })
+            .eq('id', item.id);
+
+        if (error) {
+            alert(`Error updating item: ${error.message}`);
+        } else {
+            await logActivity("Inventory Item Updated", `Updated item: ${formData.item_name}`);
+            await onSave();
+            onClose();
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
+            <motion.div
+                className="bg-white rounded-lg shadow-2xl w-full max-w-md p-6"
+                initial={{ opacity: 0, y: -30 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 30 }}
+            >
+                <h2 className="text-xl font-bold text-gray-800 mb-4">Edit Item</h2>
+                <form onSubmit={handleSubmit} className="space-y-3 text-sm">
+                    <div>
+                        <label className="block font-semibold">Item Name</label>
+                        <input
+                            type="text"
+                            name="item_name"
+                            value={formData.item_name}
+                            onChange={handleChange}
+                            className="w-full border rounded-md px-3 py-2"
+                            required
+                        />
+                    </div>
+                    <div>
+                        <label className="block font-semibold">Category</label>
+                        <select
+                            name="category"
+                            value={formData.category}
+                            onChange={handleChange}
+                            className="w-full border rounded-md px-3 py-2"
+                        >
+                            <option>Medicines</option>
+                            <option>Equipment</option>
+                            <option>Supplies</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block font-semibold">Quantity</label>
+                        <input
+                            type="number"
+                            name="quantity"
+                            value={formData.quantity}
+                            onChange={handleChange}
+                            className="w-full border rounded-md px-3 py-2"
+                            required
+                        />
+                    </div>
+                    <div>
+                        <label className="block font-semibold">Status</label>
+                        <select
+                            name="status"
+                            value={formData.status}
+                            onChange={handleChange}
+                            className="w-full border rounded-md px-3 py-2"
+                        >
+                            <option value="Normal">Normal</option>
+                            <option value="Low">Low</option>
+                            <option value="Critical">Critical</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block font-semibold">Manufacture Date</label>
+                        <input
+                            type="date"
+                            name="manufacture_date"
+                            value={formData.manufacture_date}
+                            onChange={handleChange}
+                            className="w-full border rounded-md px-3 py-2"
+                        />
+                    </div>
+                    <div>
+                        <label className="block font-semibold">Expiry Date</label>
+                        <input
+                            type="date"
+                            name="expiry_date"
+                            value={formData.expiry_date}
+                            onChange={handleChange}
+                            className="w-full border rounded-md px-3 py-2"
+                        />
+                    </div>
+                    <div className="flex justify-end gap-2 mt-4">
+                        <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Cancel</button>
+                        <button type="submit" className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">Save</button>
+                    </div>
+                </form>
+            </motion.div>
+        </div>
+    );
+};
+
 
 export default function InventoryPage() {
     const [allInventory, setAllInventory] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isFilterOpen, setIsFilterOpen] = useState(false);
+    const [modalMode, setModalMode] = useState(null); // null, 'add', 'edit', 'view'
+    const [selectedItem, setSelectedItem] = useState(null);
+    const [itemToDelete, setItemToDelete] = useState(null);
 
     // --- ADDED: State for search and filter ---
     const [searchTerm, setSearchTerm] = useState('');
@@ -65,6 +237,25 @@ export default function InventoryPage() {
     useEffect(() => {
         fetchInventory();
     }, [fetchInventory]);
+
+    const handleEdit = (item) => {
+        setSelectedItem(item);
+        setModalMode('edit');
+    };
+
+    const handleDelete = async () => {
+        if (!itemToDelete) return;
+        
+        const { error } = await supabase.from('inventory').delete().eq('id', itemToDelete.id);
+        
+        if (error) {
+            alert(`Error: ${error.message}`);
+        } else {
+            await logActivity('Inventory Item Deleted', `Deleted item: ${itemToDelete.item_name}`);
+            await fetchInventory();
+        }
+        setItemToDelete(null);
+    };
 
     // --- ADDED: Logic to filter inventory for display ---
     const filteredInventory = useMemo(() => {
@@ -85,6 +276,27 @@ export default function InventoryPage() {
         <>
             <AnimatePresence>
                 {isModalOpen && <AddInventoryModal onClose={() => setIsModalOpen(false)} onSave={fetchInventory} />}
+                {itemToDelete && (
+                    <DeleteConfirmationModal
+                        itemName={itemToDelete.item_name}
+                        onConfirm={handleDelete}
+                        onCancel={() => setItemToDelete(null)}
+                    />
+                )}
+                {modalMode === 'view' && (
+                    <ViewItemModal
+                        item={selectedItem}
+                        onClose={() => setModalMode(null)}
+                    />
+                )}
+                {modalMode === 'edit' && selectedItem && (
+                    <EditInventoryModal
+                        item={selectedItem}
+                        onClose={() => setModalMode(null)}
+                        onSave={fetchInventory}
+                    />
+                )}
+
             </AnimatePresence>
 
             <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
@@ -137,7 +349,13 @@ export default function InventoryPage() {
                                         <td className="p-3">{item.quantity} units</td>
                                         <td className="p-3"><StatusBadge status={item.status.toLowerCase()} /></td>
                                         <td className="p-3">{item.expiry_date || '---'}</td>
-                                        <td className="p-3"><button className="text-gray-400 hover:text-gray-600"><DotsIcon/></button></td>
+                                        <td className="p-3">
+                                            <div className="flex space-x-1">
+                                                <button onClick={() => { setSelectedItem(item); setModalMode('view'); }} className="text-gray-400 hover:text-blue-600 p-1"><ViewIcon /></button>
+                                                <button onClick={() => handleEdit(item)} className="text-gray-400 hover:text-green-600 p-1"><UpdateIcon /></button>
+                                                <button onClick={() => setItemToDelete(item)} className="text-gray-400 hover:text-red-600 p-1"><DeleteIcon /></button>
+                                            </div>
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
