@@ -1,7 +1,7 @@
-// File: src/components/bhw/AddInventoryModal.js
 import React, { useState } from 'react';
 import { supabase } from '../../services/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
+import { logActivity } from '../../services/activityLogger';
 
 const SuccessIcon = () => (
     <svg className="w-16 h-16 text-green-500" fill="currentColor" viewBox="0 0 20 20">
@@ -36,6 +36,10 @@ export default function AddInventoryModal({ onClose, onSave }) {
         if (insertError) {
             setError(insertError.message);
         } else {
+            await logActivity(
+            "Inventory Item Added",
+            `Added new item: ${formData.item_name}, Category: ${formData.category}, Quantity: ${formData.stock_units}`
+            );
             setShowSuccess(true); // Show success message instead of closing immediately
         }
         setLoading(false);
