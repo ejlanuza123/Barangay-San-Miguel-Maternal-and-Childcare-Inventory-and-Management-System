@@ -294,6 +294,42 @@ const ViewPatientModal = ({ patient, onClose }) => {
     );
 };
 
+const Pagination = ({ currentPage, totalPages, onPageChange }) => {
+    const pageNumbers = [];
+    for (let i = 1; i <= totalPages; i++) {
+        pageNumbers.push(i);
+    }
+
+    return (
+        <nav className="flex items-center justify-center space-x-1 text-xs">
+            <button 
+                onClick={() => onPageChange(currentPage - 1)} 
+                disabled={currentPage === 1}
+                className="px-2 py-1 rounded hover:bg-gray-200 disabled:opacity-50"
+            >
+                &lt;
+            </button>
+            {pageNumbers.map(number => (
+                <button 
+                    key={number}
+                    onClick={() => onPageChange(number)}
+                    className={`px-2 py-1 rounded ${currentPage === number ? 'bg-blue-500 text-white font-semibold' : 'hover:bg-gray-200'}`}
+                >
+                    {number}
+                </button>
+            ))}
+            <button 
+                onClick={() => onPageChange(currentPage + 1)} 
+                disabled={currentPage === totalPages}
+                className="px-2 py-1 rounded hover:bg-gray-200 disabled:opacity-50"
+            >
+                &gt;
+            </button>
+        </nav>
+    );
+};
+
+
 
 export default function MaternityManagement() {
     const [allPatients, setAllPatients] = useState([]);
@@ -304,27 +340,43 @@ export default function MaternityManagement() {
     const [searchTerm, setSearchTerm] = useState('');
     const [filters, setFilters] = useState({ risk_level: 'All', search_type: 'name' });
 
-
     const [modalMode, setModalMode] = useState(null);
     const [selectedPatient, setSelectedPatient] = useState(null);
     const [patientToDelete, setPatientToDelete] = useState(null);
+    
+    // --- NEW: Pagination State ---
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage] = useState(10); // Set how many patients per page
+    const [totalPatients, setTotalPatients] = useState(0);
 
     const fetchPageData = useCallback(async () => {
-        const [patientResponse, appointmentsResponse, patientCountResponse] = await Promise.all([
-            supabase.from('patients').select('*').order('patient_id', { ascending: true }),
-            supabase.from('appointments').select('*').order('date', { ascending: true }).limit(3),
-            supabase.from('patients').select('*', { count: 'exact', head: true })
-        ]);
+        setLoading(true);
 
-        if (patientResponse.data) setAllPatients(patientResponse.data);
-        if (appointmentsResponse.data) setUpcomingAppointments(appointmentsResponse.data);
-        setStats({ total: patientCountResponse.count || 0, active: patientResponse.data?.length || 0, today: 0 });
+        const from = (currentPage - 1) * itemsPerPage;
+        const to = from + itemsPerPage - 1;
+
+        // Fetch paginated patients
+        const { data: patientData, error: patientError, count: patientCount } = await supabase
+            .from('patients')
+            .select('*', { count: 'exact' })
+            .order('created_at', { ascending: false })
+            .range(from, to);
+
+        if (patientError) console.error("Error fetching patients:", patientError);
+        else {
+            setAllPatients(patientData || []);
+            setTotalPatients(patientCount || 0);
+        }
+        
+        // Fetch other data (not paginated)
+        const { data: appointmentsData } = await supabase.from('appointments').select('*').order('date', { ascending: true }).limit(3);
+        setUpcomingAppointments(appointmentsData || []);
+        setStats({ total: patientCount, active: patientCount, today: 0 });
+
         setLoading(false);
-    }, []);
-
+    }, [currentPage, itemsPerPage]);
 
     useEffect(() => {
-        setLoading(true);
         fetchPageData();
     }, [fetchPageData]);
     
@@ -342,20 +394,15 @@ export default function MaternityManagement() {
     const handleDelete = async () => {
         logActivity('Patient Record Deleted', `Deleted record for ${patientToDelete.first_name} ${patientToDelete.last_name}`);
         if (!patientToDelete) return;
-        
         const { error } = await supabase.from('patients').delete().eq('id', patientToDelete.id);
-        
-        if (error) {
-            alert(`Error: ${error.message}`);
-        } else {
-            // After deleting, refetch all data to update the list
-            await fetchPageData();
-        }
-        setPatientToDelete(null); // Close confirmation modal
+        if (error) alert(`Error: ${error.message}`);
+        else await fetchPageData();
+        setPatientToDelete(null);
     };
     
     const filteredPatients = useMemo(() => {
-        let patients = allPatients
+        // Filtering is now done on the client-side for the current page's data
+        return allPatients
             .filter(patient => {
                 if (filters.risk_level === 'All') return true;
                 return patient.risk_level === filters.risk_level;
@@ -363,7 +410,6 @@ export default function MaternityManagement() {
             .filter(patient => {
                 if (!searchTerm) return true;
                 const term = searchTerm.toLowerCase();
-
                 if (filters.search_type === 'id') {
                     return patient.patient_id?.toLowerCase().includes(term);
                 } else {
@@ -371,24 +417,9 @@ export default function MaternityManagement() {
                     return fullName.includes(term);
                 }
             });
-
-        // --- Sorting ---
-        if (filters.search_type === 'id') {
-            patients.sort((a, b) => (a.patient_id || '').localeCompare(b.patient_id || ''));
-        } else {
-            patients.sort((a, b) => {
-                const nameA = `${a.first_name || ''} ${a.middle_name || ''} ${a.last_name || ''}`.toLowerCase();
-                const nameB = `${b.first_name || ''} ${b.middle_name || ''} ${b.last_name || ''}`.toLowerCase();
-                return nameA.localeCompare(nameB);
-            });
-        }
-
-        return patients;
     }, [allPatients, searchTerm, filters]);
 
-
-
-    if (loading) return <div className="p-4">Loading patient records...</div>;
+    const totalPages = Math.ceil(totalPatients / itemsPerPage);
 
     return (
         <>
@@ -398,10 +429,7 @@ export default function MaternityManagement() {
                         mode={modalMode}
                         initialData={selectedPatient}
                         onClose={() => setModalMode(null)} 
-                        onSave={() => {
-                            setModalMode(null);
-                            fetchPageData();
-                        }}
+                        onSave={fetchPageData}
                     />
                 )}
                 {patientToDelete && (
@@ -434,51 +462,27 @@ export default function MaternityManagement() {
                                         <FilterIcon /> <span>Filter</span>
                                     </button>
                                     {isFilterOpen && (
-                                    <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-2xl z-20 border border-gray-200 overflow-hidden">
-                                        <div className="px-4 py-2 text-sm font-semibold text-gray-600 border-b bg-gray-50">Filter by Risk Level</div>
-                                        <div className="p-3 space-y-2">
-                                        {['All', 'NORMAL', 'MID RISK', 'HIGH RISK'].map(level => (
-                                            <label key={level} className="flex items-center space-x-2 cursor-pointer hover:bg-blue-50 px-2 py-1 rounded-md">
-                                            <input
-                                                type="radio"
-                                                name="risk_level"
-                                                value={level}
-                                                checked={filters.risk_level === level}
-                                                onChange={(e) => {
-                                                setFilters({ ...filters, risk_level: e.target.value });
-                                                setIsFilterOpen(false);
-                                                }}
-                                            />
-                                            <span className="text-sm">{level}</span>
-                                            </label>
-                                        ))}
+                                        <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-2xl z-20 border border-gray-200 overflow-hidden">
+                                            <div className="px-4 py-2 text-sm font-semibold text-gray-600 border-b bg-gray-50">Filter by Risk Level</div>
+                                            <div className="p-3 space-y-2">
+                                                {['All', 'NORMAL', 'MID RISK', 'HIGH RISK'].map(level => (
+                                                     <label key={level} className="flex items-center space-x-2 cursor-pointer hover:bg-blue-50 px-2 py-1 rounded-md">
+                                                        <input type="radio" name="risk_level" value={level} checked={filters.risk_level === level} onChange={(e) => { setFilters({ ...filters, risk_level: e.target.value }); setIsFilterOpen(false); }}/>
+                                                        <span className="text-sm">{level}</span>
+                                                     </label>
+                                                ))}
+                                            </div>
+                                            <div className="px-4 py-2 text-sm font-semibold text-gray-600 border-t bg-gray-50">Search By</div>
+                                            <div className="p-3 space-y-2">
+                                                {[{ label: 'Name', value: 'name' }, { label: 'Patient ID', value: 'id' }].map(type => (
+                                                     <label key={type.value} className="flex items-center space-x-2 cursor-pointer hover:bg-blue-50 px-2 py-1 rounded-md">
+                                                        <input type="radio" name="search_type" value={type.value} checked={filters.search_type === type.value} onChange={(e) => { setFilters({ ...filters, search_type: e.target.value }); setIsFilterOpen(false); }}/>
+                                                        <span className="text-sm">{type.label}</span>
+                                                     </label>
+                                                ))}
+                                            </div>
                                         </div>
-
-                                        <div className="px-4 py-2 text-sm font-semibold text-gray-600 border-t bg-gray-50">Search By</div>
-                                        <div className="p-3 space-y-2">
-                                        {[
-                                        { label: 'Name', value: 'name' },
-                                        { label: 'Patient ID', value: 'id' }
-                                        ].map(type => (
-                                        <label key={type.value} className="flex items-center space-x-2 cursor-pointer hover:bg-blue-50 px-2 py-1 rounded-md">
-                                            <input
-                                            type="radio"
-                                            name="search_type"
-                                            value={type.value}
-                                            checked={filters.search_type === type.value}
-                                            onChange={(e) => {
-                                                setFilters({ ...filters, search_type: e.target.value });
-                                                setIsFilterOpen(false);
-                                            }}
-                                            />
-                                            <span className="text-sm">{type.label}</span>
-                                        </label>
-                                        ))}
-
-                                        </div>
-                                    </div>
                                     )}
-
                                 </div>
                             </div>
                         </div>
@@ -516,15 +520,7 @@ export default function MaternityManagement() {
                         </div>
                         
                         <div className="flex justify-center mt-4">
-                             <nav className="flex items-center space-x-1 text-xs">
-                                 <button className="px-2 py-1 rounded hover:bg-gray-200">&lt;</button>
-                                 <button className="px-2 py-1 rounded bg-blue-500 text-white font-semibold">1</button>
-                                 <button className="px-2 py-1 rounded hover:bg-gray-200">2</button>
-                                 <button className="px-2 py-1 rounded hover:bg-gray-200">3</button>
-                                 <span>...</span>
-                                 <button className="px-2 py-1 rounded hover:bg-gray-200">45</button>
-                                 <button className="px-2 py-1 rounded hover:bg-gray-200">&gt;</button>
-                            </nav>
+                             <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
                         </div>
                     </div> 
                 </div>
