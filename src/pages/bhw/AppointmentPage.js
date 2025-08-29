@@ -101,7 +101,7 @@ const StatusBadge = ({ status }) => {
     const styles = {
         Scheduled: 'bg-blue-100 text-blue-700',
         Completed: 'bg-green-100 text-green-700',
-        Cancelled: 'bg-gray-100 text-gray-700',
+        Cancelled: 'bg-red-100 text-red-700',
     };
     return <span className={`px-2 py-0.5 text-xs font-bold rounded-md ${styles[status] || 'bg-gray-100'}`}>{status}</span>;
 };
@@ -128,7 +128,7 @@ const QuickStats = ({ appointments }) => {
                 </div>
                 <div className="flex justify-between items-center">
                     <span className="text-gray-600">Cancelled</span>
-                    <span className="font-bold text-white bg-gray-400 rounded-md w-6 h-6 flex items-center justify-center text-xs">{stats.cancelled}</span>
+                    <span className="font-bold text-white bg-red-400 rounded-md w-6 h-6 flex items-center justify-center text-xs">{stats.cancelled}</span>
                 </div>
             </div>
         </div>
@@ -140,7 +140,7 @@ const StatusLegend = () => (
         <div className="space-y-2 text-sm">
             <div className="flex items-center"><div className="w-4 h-4 rounded bg-blue-300 mr-2 border border-blue-400"></div><span>Scheduled</span></div>
             <div className="flex items-center"><div className="w-4 h-4 rounded bg-green-300 mr-2 border border-green-400"></div><span>Completed</span></div>
-            <div className="flex items-center"><div className="w-4 h-4 rounded bg-gray-300 mr-2 border border-gray-400"></div><span>Cancelled</span></div>
+            <div className="flex items-center"><div className="w-4 h-4 rounded bg-red-300 mr-2 border border-red-400"></div><span>Cancelled</span></div>
         </div>
     </div>
 );
@@ -155,7 +155,7 @@ const EditAppointmentModal = ({ appointment, onClose, onSave }) => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSave = async (e) => {
@@ -166,7 +166,6 @@ const EditAppointmentModal = ({ appointment, onClose, onSave }) => {
       .eq("id", appointment.id);
 
     if (!error) {
-      // ✅ log activity when appointment is updated
       await logActivity(
         "Appointment Updated",
         `Patient: ${formData.patient_name}, Type: ${formData.appointment_type}, Date: ${formData.date}, Time: ${formData.time}`
@@ -188,66 +187,84 @@ const EditAppointmentModal = ({ appointment, onClose, onSave }) => {
         exit={{ opacity: 0 }}
       >
         <motion.div
-          className="bg-white rounded-lg shadow-xl w-full max-w-md p-6"
+          className="bg-white rounded-xl shadow-lg w-full max-w-md p-6"
           initial={{ scale: 0.9 }}
           animate={{ scale: 1 }}
           exit={{ scale: 0.9 }}
         >
-          <h2 className="text-lg font-bold mb-4">Edit Appointment</h2>
-          <form onSubmit={handleSave} className="space-y-3">
+          <h2 className="text-lg font-bold mb-6 border-b pb-2">
+            ✏️ Edit Appointment
+          </h2>
+          <form onSubmit={handleSave} className="space-y-4">
             {/* Patient Name (read-only) */}
-            <input
-              type="text"
-              value={formData.patient_name}
-              disabled
-              className="w-full p-2 border rounded bg-gray-100 cursor-not-allowed"
-            />
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">
+                Patient Name
+              </label>
+              <input
+                type="text"
+                value={formData.patient_name}
+                disabled
+                className="w-full p-2 border rounded-lg bg-gray-100 cursor-not-allowed"
+              />
+            </div>
 
             {/* Appointment Type Dropdown */}
-            <select
-              name="appointment_type"
-              value={formData.appointment_type}
-              onChange={handleChange}
-              className="w-full p-2 border rounded"
-            >
-              <option value="">Select Type</option>
-              <option value="Prenatal Checkup">Prenatal Checkup</option>
-              <option value="Postnatal Checkup">Postnatal Checkup</option>
-              <option value="Child Immunization">Child Immunization</option>
-              <option value="Consultation">Consultation</option>
-            </select>
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">
+                Appointment Type
+              </label>
+              <select
+                name="appointment_type"
+                value={formData.appointment_type}
+                onChange={handleChange}
+                className="w-full p-2 border rounded-lg"
+              >
+                <option value="">Select Type</option>
+                <option value="Prenatal Checkup">Prenatal Checkup</option>
+                <option value="Postnatal Checkup">Postnatal Checkup</option>
+                <option value="Child Immunization">Child Immunization</option>
+                <option value="Consultation">Consultation</option>
+              </select>
+            </div>
 
             {/* Date */}
-            <input
-              type="date"
-              name="date"
-              value={formData.date}
-              onChange={handleChange}
-              className="w-full p-2 border rounded"
-            />
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">Date</label>
+              <input
+                type="date"
+                name="date"
+                value={formData.date}
+                onChange={handleChange}
+                className="w-full p-2 border rounded-lg"
+              />
+            </div>
 
             {/* Time */}
-            <input
-              type="time"
-              name="time"
-              value={formData.time}
-              onChange={handleChange}
-              className="w-full p-2 border rounded"
-            />
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">Time</label>
+              <input
+                type="time"
+                name="time"
+                value={formData.time}
+                onChange={handleChange}
+                className="w-full p-2 border rounded-lg"
+              />
+            </div>
 
-            <div className="flex justify-end gap-2 pt-2">
+            <div className="flex justify-end gap-3 pt-4">
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300 text-sm"
+                className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 text-sm"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
               >
-                Save
+                Save Changes
               </button>
             </div>
           </form>
@@ -256,6 +273,7 @@ const EditAppointmentModal = ({ appointment, onClose, onSave }) => {
     </AnimatePresence>
   );
 };
+
 
 
 const DeleteAppointmentModal = ({ appointment, onClose, onDelete }) => {
@@ -311,6 +329,73 @@ const DeleteAppointmentModal = ({ appointment, onClose, onDelete }) => {
   );
 };
 
+// --- inside AppointmentPage.js, add this new modal ---
+
+const UpdateStatusModal = ({ appointment, onClose, onUpdate }) => {
+  const handleStatusChange = async (newStatus) => {
+    const { error } = await supabase
+      .from("appointments")
+      .update({ status: newStatus })
+      .eq("id", appointment.id);
+
+    if (!error) {
+      await logActivity(
+        `Appointment ${newStatus}`,
+        `Patient: ${appointment.patient_name}, Type: ${appointment.appointment_type}, Date: ${appointment.date}, Time: ${appointment.time}`
+      );
+      onUpdate();
+      onClose();
+    } else {
+      console.error("Error updating status:", error);
+    }
+  };
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+      >
+        <motion.div
+          className="bg-white rounded-xl shadow-lg w-full max-w-sm p-6 text-center"
+          initial={{ scale: 0.8 }}
+          animate={{ scale: 1 }}
+          exit={{ scale: 0.8 }}
+        >
+          <h2 className="text-lg font-bold mb-4">Update Status</h2>
+          <p className="text-sm text-gray-600 mb-6">
+            Change status for{" "}
+            <span className="font-semibold">{appointment.patient_name}</span>?
+          </p>
+          <div className="flex justify-center gap-3">
+            <button
+              onClick={() => handleStatusChange("Completed")}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"
+            >
+              Mark Completed
+            </button>
+            <button
+              onClick={() => handleStatusChange("Cancelled")}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm"
+            >
+              Mark Cancelled
+            </button>
+          </div>
+          <button
+            onClick={onClose}
+            className="mt-4 text-xs text-gray-400 hover:underline"
+          >
+            Close
+          </button>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
+};
+
+
 
 
 export default function AppointmentPage() {
@@ -323,6 +408,7 @@ export default function AppointmentPage() {
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [selectedAppointment, setSelectedAppointment] = useState(null);
+    const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
  
 
 
@@ -388,6 +474,13 @@ export default function AppointmentPage() {
                     onDelete={fetchAppointments}
                     />
                 )}
+                {isStatusModalOpen && selectedAppointment && (
+                  <UpdateStatusModal
+                    appointment={selectedAppointment}
+                    onClose={() => setIsStatusModalOpen(false)}
+                    onUpdate={fetchAppointments}
+                  />
+                )}
             </AnimatePresence>
 
             <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
@@ -416,7 +509,14 @@ export default function AppointmentPage() {
                         <div className="flex-1 space-y-2 h-[450px] overflow-y-auto pr-2">
                             {loading && <div className="text-center p-8">Loading...</div>}
                             {!loading && appointmentsForDisplay.map(app => (
-                                <div key={app.id} className="p-3 rounded-lg border hover:shadow-md">
+                                <div
+                                  key={app.id}
+                                  className="p-3 rounded-lg border hover:shadow-md cursor-pointer"
+                                  onClick={() => {
+                                    setSelectedAppointment(app);
+                                    setIsStatusModalOpen(true); // NEW STATE
+                                  }}
+                                >
                                     <div className="flex justify-between items-start">
                                         <div>
                                             <p className="font-semibold text-sm text-gray-800">{app.patient_name} <span className="font-normal text-gray-500">({app.patient_display_id || 'N/A'})</span></p>
@@ -432,18 +532,20 @@ export default function AppointmentPage() {
                                         <div className="flex space-x-3 text-xs font-semibold">
                                             <button
                                             className="text-blue-600 hover:underline"
-                                            onClick={() => {
+                                            onClick={(e) => {
                                                 setSelectedAppointment(app);
                                                 setIsEditModalOpen(true);
+                                                e.stopPropagation();
                                             }}
                                             >
                                             Edit
                                             </button>
                                             <button
                                             className="text-red-600 hover:underline"
-                                            onClick={() => {
+                                            onClick={(e) => {
                                                 setSelectedAppointment(app);
                                                 setIsDeleteModalOpen(true);
+                                                e.stopPropagation();
                                             }}
                                             >
                                             Delete
