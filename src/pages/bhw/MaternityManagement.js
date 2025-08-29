@@ -359,7 +359,7 @@ export default function MaternityManagement() {
         const { data: patientData, error: patientError, count: patientCount } = await supabase
             .from('patients')
             .select('*', { count: 'exact' })
-            .order('created_at', { ascending: false })
+            .order('patient_id', { ascending: true })
             .range(from, to);
 
         if (patientError) console.error("Error fetching patients:", patientError);
