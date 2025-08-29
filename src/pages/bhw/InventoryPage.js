@@ -274,6 +274,24 @@ export default function InventoryPage() {
     const CRITICAL_THRESHOLD = 10;
     const LOW_THRESHOLD = 20;
 
+    const filteredInventory = useMemo(() => {
+        return inventory.filter(item => {
+            // Search filter
+            const matchesSearch = item.item_name.toLowerCase().includes(searchTerm.toLowerCase());
+
+            // Category filter
+            const matchesCategory = filters.category === "All" || item.category === filters.category;
+
+            return matchesSearch && matchesCategory;
+        });
+    }, [inventory, searchTerm, filters]);
+
+    // Update total items count based on filtered data
+    useEffect(() => {
+        setTotalItems(filteredInventory.length);
+    }, [filteredInventory]);
+
+
     const fetchInventory = useCallback(async () => {
         setLoading(true);
         const { data, error } = await supabase.from('inventory').select('*').order('created_at', { ascending: false });
@@ -420,24 +438,29 @@ export default function InventoryPage() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y">
-                                {loading ? ( <tr><td colSpan="6" className="text-center p-4">Loading...</td></tr> ) : (
-                                    inventory.map(item => (
-                                        <tr key={item.id} className="text-gray-700">
-                                            <td className="p-3 font-semibold">{item.item_name}</td>
-                                            <td className="p-3">{item.category}</td>
-                                            <td className="p-3">{item.quantity} units</td>
-                                            <td className="p-3"><StatusBadge status={item.status.toLowerCase()} /></td>
-                                            <td className="p-3">{item.expiry_date || '---'}</td>
-                                            <td className="p-3">
-                                                <div className="flex space-x-1">
-                                                    <button onClick={() => { setSelectedItem(item); setModalMode('view'); }} className="text-gray-400 hover:text-blue-600 p-1"><ViewIcon /></button>
-                                                    <button onClick={() => handleEdit(item)} className="text-gray-400 hover:text-green-600 p-1"><UpdateIcon /></button>
-                                                    <button onClick={() => setItemToDelete(item)} className="text-gray-400 hover:text-red-600 p-1"><DeleteIcon /></button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))
+                                {loading ? (
+                                    <tr><td colSpan="6" className="text-center p-4">Loading...</td></tr>
+                                ) : (
+                                    filteredInventory
+                                        .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage) // ✅ show only 10 items
+                                        .map(item => (
+                                            <tr key={item.id} className="text-gray-700">
+                                                <td className="p-3 font-semibold">{item.item_name}</td>
+                                                <td className="p-3">{item.category}</td>
+                                                <td className="p-3">{item.quantity} units</td>
+                                                <td className="p-3"><StatusBadge status={item.status.toLowerCase()} /></td>
+                                                <td className="p-3">{item.expiry_date || '---'}</td>
+                                                <td className="p-3">
+                                                    <div className="flex space-x-1">
+                                                        <button onClick={() => { setSelectedItem(item); setModalMode('view'); }} className="text-gray-400 hover:text-blue-600 p-1"><ViewIcon /></button>
+                                                        <button onClick={() => handleEdit(item)} className="text-gray-400 hover:text-green-600 p-1"><UpdateIcon /></button>
+                                                        <button onClick={() => setItemToDelete(item)} className="text-gray-400 hover:text-red-600 p-1"><DeleteIcon /></button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))
                                 )}
+
                             </tbody>
                         </table>
                     </div>
