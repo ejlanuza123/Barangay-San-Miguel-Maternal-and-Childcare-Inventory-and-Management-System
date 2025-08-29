@@ -210,29 +210,86 @@ const EditInventoryModal = ({ item, onClose, onSave }) => {
     );
 };
 
+// --- NEW: Pagination Component ---
+const Pagination = ({ currentPage, totalPages, onPageChange }) => {
+    const pageNumbers = [];
+    for (let i = 1; i <= totalPages; i++) {
+        pageNumbers.push(i);
+    }
+
+    return (
+        <nav className="flex items-center justify-center space-x-1 text-xs">
+            <button 
+                onClick={() => onPageChange(currentPage - 1)} 
+                disabled={currentPage === 1}
+                className="px-2 py-1 rounded hover:bg-gray-200 disabled:opacity-50"
+            >
+                &lt;
+            </button>
+            {pageNumbers.map(number => (
+                <button 
+                    key={number}
+                    onClick={() => onPageChange(number)}
+                    className={`px-2 py-1 rounded ${currentPage === number ? 'bg-blue-500 text-white font-semibold' : 'hover:bg-gray-200'}`}
+                >
+                    {number}
+                </button>
+            ))}
+            <button 
+                onClick={() => onPageChange(currentPage + 1)} 
+                disabled={currentPage === totalPages}
+                className="px-2 py-1 rounded hover:bg-gray-200 disabled:opacity-50"
+            >
+                &gt;
+            </button>
+        </nav>
+    );
+};
 
 export default function InventoryPage() {
-    const [allInventory, setAllInventory] = useState([]);
+    const [inventory, setInventory] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [isModalOpen, setIsModalOpen] = useState(false);
     const [isFilterOpen, setIsFilterOpen] = useState(false);
-    const [modalMode, setModalMode] = useState(null); // null, 'add', 'edit', 'view'
+    const [searchTerm, setSearchTerm] = useState('');
+    const [filters, setFilters] = useState({ category: 'All' });
+
+    const [modalMode, setModalMode] = useState(null);
     const [selectedItem, setSelectedItem] = useState(null);
     const [itemToDelete, setItemToDelete] = useState(null);
 
-    // --- ADDED: State for search and filter ---
-    const [searchTerm, setSearchTerm] = useState('');
-    const [filters, setFilters] = useState({
-        category: 'All',
-    });
+    // --- NEW: Pagination State ---
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage] = useState(10); // Set how many items to show per page
+    const [totalItems, setTotalItems] = useState(0);
 
     const fetchInventory = useCallback(async () => {
         setLoading(true);
-        const { data, error } = await supabase.from('inventory').select('*').order('created_at', { ascending: false });
-        if (error) console.error("Error fetching inventory:", error);
-        else setAllInventory(data || []);
+        
+        const from = (currentPage - 1) * itemsPerPage;
+        const to = from + itemsPerPage - 1;
+
+        let query = supabase.from('inventory').select('*', { count: 'exact' });
+
+        // Apply filters to the query
+        if (filters.category !== 'All') {
+            query = query.eq('category', filters.category);
+        }
+        if (searchTerm) {
+            query = query.ilike('item_name', `%${searchTerm}%`);
+        }
+
+        const { data, error, count } = await query
+            .order('created_at', { ascending: false })
+            .range(from, to);
+
+        if (error) {
+            console.error("Error fetching inventory:", error);
+        } else {
+            setInventory(data || []);
+            setTotalItems(count || 0);
+        }
         setLoading(false);
-    }, []);
+    }, [currentPage, itemsPerPage, searchTerm, filters]);
 
     useEffect(() => {
         fetchInventory();
@@ -251,31 +308,28 @@ export default function InventoryPage() {
         if (error) {
             alert(`Error: ${error.message}`);
         } else {
-            await logActivity('Inventory Item Deleted', `Deleted item: ${itemToDelete.item_name}`);
+            logActivity('Inventory Item Deleted', `Deleted item: ${itemToDelete.item_name}`);
             await fetchInventory();
         }
         setItemToDelete(null);
     };
 
-    // --- ADDED: Logic to filter inventory for display ---
-    const filteredInventory = useMemo(() => {
-        return allInventory
-            .filter(item => {
-                // Filter by category
-                if (filters.category === 'All') return true;
-                return item.category === filters.category;
-            })
-            .filter(item => {
-                // Filter by search term (case-insensitive)
-                if (!searchTerm) return true;
-                return item.item_name.toLowerCase().includes(searchTerm.toLowerCase());
-            });
-    }, [allInventory, searchTerm, filters]);
+    const totalPages = Math.ceil(totalItems / itemsPerPage);
 
     return (
         <>
             <AnimatePresence>
-                {isModalOpen && <AddInventoryModal onClose={() => setIsModalOpen(false)} onSave={fetchInventory} />}
+                {(modalMode === 'add' || modalMode === 'edit') && (
+                    <AddInventoryModal
+                        mode={modalMode}
+                        initialData={selectedItem}
+                        onClose={() => setModalMode(null)}
+                        onSave={() => {
+                            setModalMode(null);
+                            fetchInventory();
+                        }}
+                    />
+                )}
                 {itemToDelete && (
                     <DeleteConfirmationModal
                         itemName={itemToDelete.item_name}
@@ -289,14 +343,6 @@ export default function InventoryPage() {
                         onClose={() => setModalMode(null)}
                     />
                 )}
-                {modalMode === 'edit' && selectedItem && (
-                    <EditInventoryModal
-                        item={selectedItem}
-                        onClose={() => setModalMode(null)}
-                        onSave={fetchInventory}
-                    />
-                )}
-
             </AnimatePresence>
 
             <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
@@ -329,7 +375,6 @@ export default function InventoryPage() {
                                     </div>
                                 )}
                             </div>
-                            
                         </div>
                     </div>
 
@@ -341,30 +386,35 @@ export default function InventoryPage() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y">
-                                {loading && ( <tr><td colSpan="6" className="text-center p-4">Loading...</td></tr> )}
-                                {!loading && filteredInventory.map(item => (
-                                    <tr key={item.id} className="text-gray-700">
-                                        <td className="p-3 font-semibold">{item.item_name}</td>
-                                        <td className="p-3">{item.category}</td>
-                                        <td className="p-3">{item.quantity} units</td>
-                                        <td className="p-3"><StatusBadge status={item.status.toLowerCase()} /></td>
-                                        <td className="p-3">{item.expiry_date || '---'}</td>
-                                        <td className="p-3">
-                                            <div className="flex space-x-1">
-                                                <button onClick={() => { setSelectedItem(item); setModalMode('view'); }} className="text-gray-400 hover:text-blue-600 p-1"><ViewIcon /></button>
-                                                <button onClick={() => handleEdit(item)} className="text-gray-400 hover:text-green-600 p-1"><UpdateIcon /></button>
-                                                <button onClick={() => setItemToDelete(item)} className="text-gray-400 hover:text-red-600 p-1"><DeleteIcon /></button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
+                                {loading ? ( <tr><td colSpan="6" className="text-center p-4">Loading...</td></tr> ) : (
+                                    inventory.map(item => (
+                                        <tr key={item.id} className="text-gray-700">
+                                            <td className="p-3 font-semibold">{item.item_name}</td>
+                                            <td className="p-3">{item.category}</td>
+                                            <td className="p-3">{item.quantity} units</td>
+                                            <td className="p-3"><StatusBadge status={item.status.toLowerCase()} /></td>
+                                            <td className="p-3">{item.expiry_date || '---'}</td>
+                                            <td className="p-3">
+                                                <div className="flex space-x-1">
+                                                    <button onClick={() => { setSelectedItem(item); setModalMode('view'); }} className="text-gray-400 hover:text-blue-600 p-1"><ViewIcon /></button>
+                                                    <button onClick={() => handleEdit(item)} className="text-gray-400 hover:text-green-600 p-1"><UpdateIcon /></button>
+                                                    <button onClick={() => setItemToDelete(item)} className="text-gray-400 hover:text-red-600 p-1"><DeleteIcon /></button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
                             </tbody>
                         </table>
+                    </div>
+                    
+                    <div className="flex justify-center mt-4">
+                        <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
                     </div>
                 </div>
 
                 <div className="xl:col-span-1 space-y-6">
-                    <button onClick={() => setIsModalOpen(true)} className="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg shadow-md hover:bg-blue-700 text-sm">+ Add New Item</button>
+                    <button onClick={() => { setSelectedItem(null); setModalMode('add'); }} className="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg shadow-md hover:bg-blue-700 text-sm">+ Add New Item</button>
                     <StatusLegend />
                 </div>
             </div>

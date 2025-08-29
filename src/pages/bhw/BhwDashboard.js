@@ -95,7 +95,7 @@ const UpcomingAppointments = ({ appointments }) => {
         const styles = {
             Scheduled: 'bg-blue-100 text-blue-700',
             Completed: 'bg-green-100 text-green-700',
-            Cancelled: 'bg-gray-100 text-gray-500', // Changed to gray
+            Cancelled: 'bg-red-100 text-red-500', // Changed to gray
         };
         return styles[status] || styles.Cancelled;
     };
