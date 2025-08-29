@@ -168,19 +168,6 @@ const EditInventoryModal = ({ item, onClose, onSave }) => {
                         />
                     </div>
                     <div>
-                        <label className="block font-semibold">Status</label>
-                        <select
-                            name="status"
-                            value={formData.status}
-                            onChange={handleChange}
-                            className="w-full border rounded-md px-3 py-2"
-                        >
-                            <option value="Normal">Normal</option>
-                            <option value="Low">Low</option>
-                            <option value="Critical">Critical</option>
-                        </select>
-                    </div>
-                    <div>
                         <label className="block font-semibold">Manufacture Date</label>
                         <input
                             type="date"
@@ -209,6 +196,26 @@ const EditInventoryModal = ({ item, onClose, onSave }) => {
         </div>
     );
 };
+
+const Notification = ({ message, onClear }) => {
+    useEffect(() => {
+        const timer = setTimeout(onClear, 5000); // Auto-dismiss after 5 seconds
+        return () => clearTimeout(timer);
+    }, [onClear]);
+
+    return (
+        <motion.div
+            className="fixed bottom-5 right-5 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 rounded-md shadow-lg"
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, x: 100 }}
+        >
+            <p className="font-bold">Low Stock Warning</p>
+            <p>{message}</p>
+        </motion.div>
+    );
+};
+
 
 // --- NEW: Pagination Component ---
 const Pagination = ({ currentPage, totalPages, onPageChange }) => {
@@ -262,34 +269,50 @@ export default function InventoryPage() {
     const [itemsPerPage] = useState(10); // Set how many items to show per page
     const [totalItems, setTotalItems] = useState(0);
 
-    const fetchInventory = useCallback(async () => {
-        setLoading(true);
-        
-        const from = (currentPage - 1) * itemsPerPage;
-        const to = from + itemsPerPage - 1;
+    const [notifications, setNotifications] = useState([]);
 
-        let query = supabase.from('inventory').select('*', { count: 'exact' });
+    const CRITICAL_THRESHOLD = 10;
+    const LOW_THRESHOLD = 20;
 
-        // Apply filters to the query
-        if (filters.category !== 'All') {
-            query = query.eq('category', filters.category);
-        }
-        if (searchTerm) {
-            query = query.ilike('item_name', `%${searchTerm}%`);
-        }
+    const fetchInventory = useCallback(async () => {
+        setLoading(true);
+        const { data, error } = await supabase.from('inventory').select('*').order('created_at', { ascending: false });
+        
+        if (error) {
+            console.error("Error fetching inventory:", error);
+        } else if (data) {
+            const updatePromises = [];
+            const newNotifications = [];
 
-        const { data, error, count } = await query
-            .order('created_at', { ascending: false })
-            .range(from, to);
+            data.forEach(item => {
+                let newStatus = item.status;
+                if (item.quantity <= CRITICAL_THRESHOLD) {
+                    newStatus = 'Critical';
+                } else if (item.quantity <= LOW_THRESHOLD) {
+                    newStatus = 'Low';
+                } else {
+                    newStatus = 'Normal';
+                }
 
-        if (error) {
-            console.error("Error fetching inventory:", error);
-        } else {
-            setInventory(data || []);
-            setTotalItems(count || 0);
-        }
-        setLoading(false);
-    }, [currentPage, itemsPerPage, searchTerm, filters]);
+                if (item.status !== newStatus) {
+                    updatePromises.push(
+                        supabase.from('inventory').update({ status: newStatus }).eq('id', item.id)
+                    );
+                    newNotifications.push(`'${item.item_name}' stock is low (${item.quantity} units). Status updated to ${newStatus}.`);
+                    item.status = newStatus; // Update local data immediately
+                }
+            });
+
+            if (updatePromises.length > 0) {
+                await Promise.all(updatePromises);
+                setNotifications(prev => [...prev, ...newNotifications]);
+            }
+
+            setInventory(data);
+            setTotalItems(data.length); 
+        }
+        setLoading(false);
+    }, []);
 
     useEffect(() => {
         fetchInventory();
@@ -344,6 +367,17 @@ export default function InventoryPage() {
                     />
                 )}
             </AnimatePresence>
+                        {/* --- ADD THIS BLOCK --- */}
+            <div className="fixed bottom-0 right-0 p-4 space-y-2 z-50">
+                <AnimatePresence>
+                    {notifications.map((msg, index) => (
+                        <Notification key={index} message={msg} onClear={() => setNotifications(current => current.filter(m => m !== msg))} />
+                    ))}
+                </AnimatePresence>
+            </div>
+            {/* --- END OF BLOCK --- */}
+
+            <div className="grid grid-cols-1 xl:grid-cols-4 gap-6"></div>
 
             <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
                 <div className="xl:col-span-3 bg-white p-6 rounded-lg shadow-sm border">

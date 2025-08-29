@@ -21,7 +21,6 @@ export default function AddInventoryModal({ onClose, onSave, mode = 'add', initi
                 item_name: initialData.item_name || '',
                 category: initialData.category || '',
                 quantity: initialData.quantity || '',
-                status: initialData.status || 'Normal',
                 manufacture_date: initialData.manufacture_date || '',
                 expiry_date: initialData.expiry_date || '',
             });
@@ -90,7 +89,6 @@ export default function AddInventoryModal({ onClose, onSave, mode = 'add', initi
                                 <div><label className="text-sm font-semibold text-gray-600">Item Name</label><input type="text" name="item_name" value={formData.item_name || ''} placeholder="Enter item name" onChange={handleChange} className="w-full mt-1 p-2 border rounded-md text-sm" required /></div>
                                 <div><label className="text-sm font-semibold text-gray-600">Category</label><select name="category" value={formData.category || ''} onChange={handleChange} className="w-full mt-1 p-2 border rounded-md text-sm bg-gray-50"><option value="">Select category</option><option value="Medicines">Medicines</option><option value="Equipment">Equipment</option><option value="Supplies">Other Supplies</option></select></div>
                                 <div><label className="text-sm font-semibold text-gray-600">Stock Units</label><input type="number" name="quantity" value={formData.quantity || ''} placeholder="Enter stock quantity" onChange={handleChange} className="w-full mt-1 p-2 border rounded-md text-sm" required /></div>
-                                <div><label className="text-sm font-semibold text-gray-600">Status</label><select name="status" value={formData.status || ''} onChange={handleChange} className="w-full mt-1 p-2 border rounded-md text-sm bg-gray-50"><option value="Normal">Normal</option><option value="Low">Low</option><option value="Critical">Critical</option></select></div>
                                 <div><label className="text-sm font-semibold text-gray-600">Manufacture Date</label><input type="date" name="manufacture_date" value={formData.manufacture_date || ''} onChange={handleChange} className="w-full mt-1 p-2 border rounded-md text-sm" /></div>
                                 <div><label className="text-xs font-semibold text-gray-600">Expiry Date</label><input type="date" name="expiry_date" value={formData.expiry_date || ''} onChange={handleChange} className="w-full mt-1 p-2 border rounded-md text-sm" /></div>
                                 {error && <p className="text-red-500 text-xs text-center">{error}</p>}
