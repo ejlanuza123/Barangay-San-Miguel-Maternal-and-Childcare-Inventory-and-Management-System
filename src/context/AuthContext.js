@@ -54,6 +54,7 @@ export const AuthProvider = ({ children }) => {
     // The value object holds the auth state and functions to be shared
     const value = {
         user,
+        setProfile,
         profile,
         loading,
         signOut: () => supabase.auth.signOut(),
