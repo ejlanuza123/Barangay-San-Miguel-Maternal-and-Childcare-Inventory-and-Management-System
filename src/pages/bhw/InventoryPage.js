@@ -39,6 +39,10 @@ const StatusLegend = () => (
                 <div className="w-4 h-4 rounded mr-2 bg-red-300 border border-red-400"></div>
                 <span className="text-gray-600">Critical</span>
             </div>
+            <div className="border-t my-2"></div>
+            <div className="flex items-center space-x-2 text-gray-700"><ViewIcon /><span>View</span></div>
+            <div className="flex items-center space-x-2 text-gray-700"><UpdateIcon /><span>Update</span></div>
+            <div className="flex items-center space-x-2 text-gray-700"><DeleteIcon /><span>Delete</span></div>
         </div>
     </div>
 );
