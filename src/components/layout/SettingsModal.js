@@ -11,7 +11,7 @@ const HelpIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor
 const LockIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>;
 const InfoIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>;
 const ProfilePlaceholderIcon = () => <svg className="w-12 h-12 text-gray-400" viewBox="0 0 24 24" fill="currentColor"><path d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>;
-
+const CameraIcon = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>;
 // --- REUSABLE TOGGLE SWITCH ---
 const ToggleSwitch = ({ label, description, isEnabled, onToggle }) => (
     <div className="flex justify-between items-center py-2">
@@ -43,6 +43,7 @@ const MyProfile = ({ profile, onProfileUpdate }) => {
                 middle_initial: profile.middle_initial || '',
                 birth_date: profile.birth_date || '',
                 contact_no: profile.contact_no || '',
+                assigned_purok: profile.assigned_purok || '',
             });
             setAvatarUrl(profile.avatar_url);
         }
@@ -63,11 +64,10 @@ const MyProfile = ({ profile, onProfileUpdate }) => {
             let { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, file, { upsert: true });
             if (uploadError) throw uploadError;
 
-            // FIX #2: Add a unique timestamp to the URL to force the browser to refresh the image
             const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
             const newAvatarUrl = `${data.publicUrl}?t=${new Date().getTime()}`;
             
-            setAvatarUrl(newAvatarUrl); // Visually update the avatar immediately
+            setAvatarUrl(newAvatarUrl);
             await handleUpdate(null, { avatar_url: newAvatarUrl });
 
         } catch (error) {
@@ -81,10 +81,9 @@ const MyProfile = ({ profile, onProfileUpdate }) => {
         if (e) e.preventDefault();
         setMessage({ type: '', text: '' });
 
-        // FIX #1: Always include the user's role to prevent the not-null constraint error
         const updates = { 
             id: user.id,
-            role: profile.role, // <-- Add this line to include the role
+            role: profile.role,
             ...formData, 
             ...additionalData, 
             updated_at: new Date() 
@@ -99,7 +98,7 @@ const MyProfile = ({ profile, onProfileUpdate }) => {
         if (error) {
             setMessage({ type: 'error', text: error.message });
         } else {
-            onProfileUpdate(data); // This updates the global profile state in your app
+            onProfileUpdate(data);
             setMessage({ type: 'success', text: 'Profile updated successfully!' });
         }
     };
@@ -112,31 +111,61 @@ const MyProfile = ({ profile, onProfileUpdate }) => {
             <form onSubmit={handleUpdate} className="space-y-6">
                 <div>
                     <label className="text-sm font-medium text-gray-700 block mb-2">Profile Picture</label>
-                    <div className="flex items-center space-x-4">
-                        <button type="button" onClick={() => fileInputRef.current.click()} disabled={uploading} className="w-24 h-24 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden hover:bg-gray-200 transition-colors">
+                    <div className="relative w-24 h-24">
+                        <div className="w-24 h-24 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
                             {avatarUrl ? (
                                 <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
                             ) : (
                                 <ProfilePlaceholderIcon />
                             )}
+                        </div>
+                        <button 
+                            type="button" 
+                            onClick={() => fileInputRef.current.click()} 
+                            disabled={uploading} 
+                            className="absolute -bottom-2 -right-2 bg-blue-600 text-white p-2 rounded-full border-2 border-white shadow-md hover:bg-blue-700 transition-colors"
+                            aria-label="Upload new profile picture"
+                        >
+                            <CameraIcon />
                         </button>
                         <input type="file" ref={fileInputRef} onChange={uploadAvatar} disabled={uploading} style={{ display: 'none' }} accept="image/*" />
-                        {uploading && <p className="text-sm text-gray-500">Uploading...</p>}
                     </div>
+                     {uploading && <p className="text-sm text-gray-500 mt-2">Uploading...</p>}
                 </div>
                 
                 <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
-                    <div className="sm:col-span-2"><label className="text-sm font-medium text-gray-700">First Name</label><input type="text" name="first_name" value={formData.first_name} onChange={handleChange} className="w-full p-3 border bg-gray-50 rounded-md mt-1" /></div>
-                    <div className="sm:col-span-2"><label className="text-sm font-medium text-gray-700">Last Name</label><input type="text" name="last_name" value={formData.last_name} onChange={handleChange} className="w-full p-3 border bg-gray-50 rounded-md mt-1" /></div>
-                    <div className="sm:col-span-1"><label className="text-sm font-medium text-gray-700">Middle Initial</label><input type="text" name="middle_initial" maxLength="2" value={formData.middle_initial} onChange={handleChange} className="w-full p-3 border bg-gray-50 rounded-md mt-1" /></div>
+                    {/* --- FIX: Increased margin-top from mt-1 to mt-2 for consistency --- */}
+                    <div className="sm:col-span-2"><label className="text-sm font-medium text-gray-700">First Name</label><input type="text" name="first_name" value={formData.first_name} onChange={handleChange} className="w-full p-3 border bg-gray-50 rounded-md mt-2" /></div>
+                    <div className="sm:col-span-2"><label className="text-sm font-medium text-gray-700">Last Name</label><input type="text" name="last_name" value={formData.last_name} onChange={handleChange} className="w-full p-3 border bg-gray-50 rounded-md mt-2" /></div>
+                    <div className="sm:col-span-1"><label className="text-sm font-medium text-gray-700">Middle Initial</label><input type="text" name="middle_initial" maxLength="2" value={formData.middle_initial} onChange={handleChange} className="w-full p-3 border bg-gray-50 rounded-md mt-2" /></div>
                 </div>
 
-                <div><label className="text-sm font-medium text-gray-700">Birth Date</label><input type="date" name="birth_date" value={formData.birth_date} onChange={handleChange} className="w-full sm:w-1/2 p-3 border bg-gray-50 rounded-md mt-1" /></div>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div><label className="text-sm font-medium text-gray-700">Contact No.</label><input type="text" name="contact_no" value={formData.contact_no} onChange={handleChange} className="w-full p-3 border bg-gray-50 rounded-md mt-1" /></div>
-                    <div><label className="text-sm font-medium text-gray-700">Email</label><input type="email" value={profile?.email} disabled className="w-full p-3 border bg-gray-100 rounded-md mt-1 cursor-not-allowed" /></div>
+                {/* --- FIX: Increased margin-top from mt-1 to mt-2 --- */}
+                <div>
+                <label className="text-sm font-medium text-gray-700 block mb-2">
+                    Birth Date
+                </label>
+                <input
+                    type="date"
+                    name="birth_date"
+                    value={formData.birth_date}
+                    onChange={handleChange}
+                    className="w-full sm:w-1/2 p-3 border bg-gray-50 rounded-md"
+                />
                 </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* --- FIX: Increased margin-top from mt-1 to mt-2 for consistency --- */}
+                    <div><label className="text-sm font-medium text-gray-700">Contact No.</label><input type="text" name="contact_no" value={formData.contact_no} onChange={handleChange} className="w-full p-3 border bg-gray-50 rounded-md mt-2" /></div>
+                    {(profile?.role === 'BHW' || profile?.role === 'BNS') && (
+                        <div>
+                            <label className="text-sm font-medium text-gray-700">Assigned Purok</label>
+                            <input type="text" name="assigned_purok" value={formData.assigned_purok} onChange={handleChange} className="w-full p-3 border bg-gray-50 rounded-md mt-2" />
+                        </div>
+                    )}
+                </div>
+
+                <div><label className="text-sm font-medium text-gray-700">Email</label><input type="email" value={user?.email} disabled className="w-full p-3 border bg-gray-100 rounded-md mt-2 cursor-not-allowed" /></div>
                 
                 {message.text && <p className={`text-sm font-semibold ${message.type === 'error' ? 'text-red-600' : 'text-green-600'}`}>{message.text}</p>}
                 
@@ -145,7 +174,6 @@ const MyProfile = ({ profile, onProfileUpdate }) => {
         </div>
     );
 };
-
 const NotificationSettings = ({ initialPrefs, onUpdate }) => {
     const [prefs, setPrefs] = useState(initialPrefs || {
         appointment_reminders: true,
