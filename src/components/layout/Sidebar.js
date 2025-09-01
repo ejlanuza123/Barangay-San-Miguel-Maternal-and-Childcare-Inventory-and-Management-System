@@ -60,7 +60,8 @@ export default function Sidebar({ role }) {
 
     return (
         // --- UPDATED: Reduced width from w-72 to w-64 ---
-        <div className="w-64 bg-white border-r flex flex-col h-screen">
+        <div className="w-64 bg-white border-r flex flex-col h-screen pb-6">
+
             {/* --- UPDATED: Reduced padding, logo size, and font size --- */}
             <div className="p-3 border-b flex items-center space-x-2">
                 <img src={logo} alt="Logo" className="w-10 h-10 rounded-md" />

@@ -24,7 +24,7 @@ export default function Header() {
     };
 
     return (
-        <header className="bg-white p-4 flex justify-between items-center border-b">
+        <header className="bg-white px-4 py-3 flex justify-between items-center border-b">
             {/* Left Side: Role Title */}
             <h1 className="text-2xl font-bold text-gray-800">{getTitle()}</h1>
             
