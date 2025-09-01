@@ -164,14 +164,15 @@ export default function Header() {
 
           {/* Notifications */}
           <div className="relative">
-                <button onClick={handleNotifClick} className="p-2 rounded-full hover:bg-gray-100 relative">
-                    <BellIcon />
-                    {unreadCount > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs font-bold rounded-full px-1.5">
-                        {unreadCount}
+            <button onClick={handleNotifClick} className="p-2 rounded-full hover:bg-gray-100 relative">
+                <BellIcon />
+                {/* --- THIS IS THE UPDATED LINE --- */}
+                {profile?.preferences?.in_app_notifications && unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
+                        {unreadCount > 9 ? '9+' : unreadCount}
                     </span>
-                    )}
-                </button>
+                )}
+            </button>
             <AnimatePresence>
               {isNotifOpen && (
                 <motion.div
