@@ -23,14 +23,81 @@ const SettingsIcon = () => (
 );
 
 
+// Inside Header.js
 
+const ProfileDropdown = ({ profile, user}) => {
+  const { signOut } = useAuth();
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -8 }}
+      transition={{ duration: 0.15 }}
+      className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-xl border z-30"
+    >
+      <div className="p-4 border-b flex items-center space-x-4">
+        <img
+          src={
+            profile?.avatar_url ||
+            `https://ui-avatars.com/api/?name=${profile?.first_name || 'U'}&background=random`
+          }
+          alt="User Avatar"
+          className="w-16 h-16 rounded-full border-2 border-blue-200"
+        />
+        <div>
+          <h3 className="font-bold text-gray-800">{`${profile?.first_name || ''} ${
+            profile?.last_name || ''
+          }`}</h3>
+          <p className="text-sm text-gray-500">{profile?.role}</p>
+          <p className="text-xs text-gray-400 truncate" title={user?.email}>{user?.email}</p>
+        </div>
+      </div>
+
+      <div className="p-4 text-sm text-gray-700 space-y-3">
+        <div className="flex justify-between">
+          <span className="font-semibold">Assigned Purok:</span>
+          <span>{profile?.assigned_purok || 'N/A'}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="font-semibold">Birthday:</span>
+          <span>{formatDate(profile?.birth_date)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="font-semibold">Contact No:</span>
+          <span>{profile?.contact_no || 'N/A'}</span>
+        </div>
+      </div>
+
+      <div className="p-2 border-t">
+        <button
+          onClick={signOut}
+          className="w-full text-left text-sm text-gray-700 px-3 py-2 rounded-md hover:bg-gray-100"
+        >
+          Sign Out
+        </button>
+      </div>
+    </motion.div>
+  );
+};
 
 export default function Header() {
-  const { profile } = useAuth();
+  const { profile, user, signOut } = useAuth();
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [activities, setActivities] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+
 
     useEffect(() => {
     const fetchActivities = async () => {
@@ -135,14 +202,27 @@ export default function Header() {
             <SettingsIcon />
           </button>
 
-          {/* Avatar */}
-          <button className="flex items-center space-x-2">
-            <img
-              src={profile?.avatar_url || `https://ui-avatars.com/api/?name=${profile?.full_name || 'U'}&background=random`}
-              alt="User Avatar"
-              className="w-9 h-9 rounded-full border-2 border-gray-200"
-            />
-          </button>
+        {/* Avatar + Dropdown */}
+            <div className="relative">
+            <button
+                onClick={() => setIsProfileOpen(!isProfileOpen)}
+                className="flex items-center space-x-2"
+            >
+                <img
+                src={
+                    profile?.avatar_url ||
+                    `https://ui-avatars.com/api/?name=${profile?.first_name || 'U'}&background=random`
+                }
+                alt="User Avatar"
+                className="w-9 h-9 rounded-full border-2 border-gray-200 hover:border-blue-400 transition-colors"
+                />
+            </button>
+
+            <AnimatePresence>
+                {isProfileOpen && <ProfileDropdown profile={profile} user={user} signOut={signOut}/>}
+            </AnimatePresence>
+            </div>
+
         </div>
       </header>
     </>
