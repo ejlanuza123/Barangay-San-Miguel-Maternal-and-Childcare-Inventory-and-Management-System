@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../../services/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
 import { logActivity } from '../../services/activityLogger';
+import { useNotification } from '../../context/NotificationContext'; // <-- 1. IMPORT
+
 
 // --- ICONS ---
 const DownloadIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v13"></path></svg>;
@@ -189,6 +191,9 @@ export default function ReportsPage() {
     const [isGenerating, setIsGenerating] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [showNoDataPop, setShowNoDataPop] = useState(false);
+    const { addNotification } = useNotification(); // <-- 2. GET THE FUNCTION
+
+    
 
     const fetchAllData = useCallback(async () => {
         setLoading(true);
@@ -256,6 +261,7 @@ export default function ReportsPage() {
             window.saveAs(content, `${quarter.name}_${quarter.year}_Report.zip`);
             setIsGenerating(false);
             logActivity('Report Downloaded', `Generated ZIP file for ${quarter.name} ${quarter.year}`);
+            addNotification('Report has been downloaded.', 'success'); // <-- 3. SHOW NOTIFICATION
         });
     };
 

@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../../services/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
 import { logActivity } from '../../services/activityLogger';
+import { useNotification } from '../../context/NotificationContext'; // <-- 1. IMPORT THE HOOK
+
 
 // --- Helper Icon for Profile Placeholder ---
 const ProfileIcon = () => (
@@ -31,7 +33,7 @@ const Step1 = ({ formData, handleChange, newPatientId }) => (
                         <div><label className="text-xs text-gray-500">First Name</label><input type="text" name="first_name" value={formData.first_name || ''} onChange={handleChange} className="w-full p-2 border rounded-md text-sm" /></div>
                         <div><label className="text-xs text-gray-500">Middle Name</label><input type="text" name="middle_name" value={formData.middle_name || ''} onChange={handleChange} className="w-full p-2 border rounded-md text-sm" /></div>
                     </div>
-                     <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-3 gap-2">
                         <div><label className="text-xs text-gray-500">Date of Birth</label><input type="date" name="dob" value={formData.dob || ''} onChange={handleChange} className="w-full p-2 border rounded-md text-sm" /></div>
                         <div><label className="text-xs text-gray-500">Blood Type</label><select name="blood_type" value={formData.blood_type || ''} onChange={handleChange} className="w-full p-2 border rounded-md text-sm bg-gray-50"><option>Select Blood Type</option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>AB+</option><option>AB-</option><option>O+</option><option>O-</option></select></div>
                         <div><label className="text-xs text-gray-500">Age</label><input type="number" name="age" value={formData.age || ''} onChange={handleChange} className="w-full p-2 border rounded-md text-sm" /></div>
@@ -39,7 +41,7 @@ const Step1 = ({ formData, handleChange, newPatientId }) => (
                 </div>
                 <div className="border rounded-lg p-3 sm:col-span-2">
                     <h3 className="font-semibold text-gray-700 mb-2 text-sm">ID Numbers</h3>
-                     <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 gap-2">
                         <div><label className="text-xs text-gray-500">NHTS No.</label><input type="text" name="nhts_no" value={formData.nhts_no || ''} onChange={handleChange} className="w-full p-2 border rounded-md text-sm" /></div>
                         <div><label className="text-xs text-gray-500">PhilHealth No.</label><input type="text" name="philhealth_no" value={formData.philhealth_no || ''} onChange={handleChange} className="w-full p-2 border rounded-md text-sm" /></div>
                     </div>
@@ -50,6 +52,20 @@ const Step1 = ({ formData, handleChange, newPatientId }) => (
                 <div className="grid grid-cols-2 gap-2">
                     <div><label className="text-xs text-gray-500">Family Folder No.</label><input type="text" name="family_folder_no" value={formData.family_folder_no || ''} onChange={handleChange} className="w-full p-2 border rounded-md text-sm" /></div>
                     <div><label className="text-xs text-gray-500">Contact No.</label><input type="text" name="contact_no" value={formData.contact_no || ''} onChange={handleChange} className="w-full p-2 border rounded-md text-sm" /></div>
+                    {/* --- THIS IS THE CORRECTLY PLACED CHECKBOX --- */}
+                    <div className="mt-4 flex items-center">
+                        <input 
+                            type="checkbox"
+                            name="sms_notifications_enabled"
+                            checked={formData.sms_notifications_enabled ?? true}
+                            onChange={handleChange}
+                            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            id="sms-toggle"
+                        />
+                        <label htmlFor="sms-toggle" className="ml-3 block text-sm font-medium text-gray-700">
+                            Send SMS reminders for appointments.
+                        </label>
+                    </div>
                 </div>
             </div>
             <div>
@@ -261,6 +277,8 @@ export default function AddPatientModal({ onClose, onSave, mode = 'add', initial
     const [step, setStep] = useState(1);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const { addNotification } = useNotification(); 
+
     
     const [formData, setFormData] = useState({});
     const [patientId, setPatientId] = useState('Loading...');
@@ -279,7 +297,9 @@ export default function AddPatientModal({ onClose, onSave, mode = 'add', initial
                 patient_id: initialData.patient_id || '',
                 purok: initialData.purok || '',
                 street: initialData.street || '',
+                sms_notifications_enabled: initialData.sms_notifications_enabled ?? true,
                 ...(initialData.medical_history || {})
+                
             };
             
             setFormData(formDataFromPatient);
@@ -312,63 +332,49 @@ export default function AddPatientModal({ onClose, onSave, mode = 'add', initial
     const handleSave = async () => {
         setLoading(true);
         setError('');
-        if (mode === 'edit') {
-            logActivity('Patient Record Updated', `Updated details for ${formData.first_name} ${formData.last_name}`);
-        } else {
-            logActivity('New Patient Added', `Registered ${formData.first_name} ${formData.last_name}`);
-        }
-
+                // --- THIS IS THE CORRECTED DATA STRUCTURE FOR SAVING ---
+        const patientData = {
+            patient_id: patientId,
+            first_name: formData.first_name,
+            middle_name: formData.middle_name,
+            last_name: formData.last_name,
+            age: formData.age,
+            contact_no: formData.contact_no,
+            risk_level: formData.risk_level,
+            weeks: formData.weeks,
+            last_visit: formData.last_visit,
+            purok: formData.purok,
+            street: formData.street,
+            sms_notifications_enabled: formData.sms_notifications_enabled ?? true,
+            // The medical_history column will now only store the detailed history
+            medical_history: formData, 
+        };
         try {
             let result;
-            
-            console.log('Saving data:', formData);
-            
             if (mode === 'edit') {
-                result = await supabase
-                    .from('patients')
-                    .update({
-                        patient_id: patientId,
-                        first_name: formData.first_name,
-                        middle_name: formData.middle_name,
-                        last_name: formData.last_name,
-                        age: formData.age,
-                        contact_no: formData.contact_no,
-                        risk_level: formData.risk_level,
-                        weeks: formData.weeks,
-                        last_visit: formData.last_visit,
-                        purok: formData.purok,
-                        street: formData.street,
-                        medical_history: formData,
-                        updated_at: new Date().toISOString()
-                    })
-                    .eq('id', initialData.id);
+                result = await supabase.from('patients').update({ ...patientData, updated_at: new Date().toISOString() }).eq('id', initialData.id);
             } else {
-                result = await supabase.from('patients').insert([{
-                    patient_id: patientId,
-                    first_name: formData.first_name,
-                    middle_name: formData.middle_name,
-                    last_name: formData.last_name,
-                    age: formData.age,
-                    contact_no: formData.contact_no,
-                    risk_level: formData.risk_level,
-                    weeks: formData.weeks,
-                    last_visit: formData.last_visit,
-                    purok: formData.purok,
-                    street: formData.street,
-                    medical_history: formData,
-                }]);
+                result = await supabase.from('patients').insert([patientData]);
             }
-
-            console.log('Supabase result:', result);
             
             if (result.error) {
+                // Use the error property from the result
                 setError(result.error.message);
+                addNotification(`Error: ${result.error.message}`, 'error'); // <-- 3. SHOW ERROR NOTIFICATION
             } else {
+                if (mode === 'edit') {
+                    addNotification('Patient record updated successfully.', 'success'); // <-- 3. SHOW SUCCESS NOTIFICATION
+                    logActivity('Patient Record Updated', `Updated details for ${formData.first_name} ${formData.last_name}`);
+                } else {
+                    addNotification('New patient added successfully.', 'success'); // <-- 3. SHOW SUCCESS NOTIFICATION
+                    logActivity('New Patient Added', `Registered ${formData.first_name} ${formData.last_name}`);
+                }
                 onSave();
                 onClose();
             }
         } catch (err) {
             setError('An error occurred while saving: ' + err.message);
+            addNotification(`An error occurred: ${err.message}`, 'error'); // <-- 3. SHOW ERROR NOTIFICATION
         } finally {
             setLoading(false);
         }

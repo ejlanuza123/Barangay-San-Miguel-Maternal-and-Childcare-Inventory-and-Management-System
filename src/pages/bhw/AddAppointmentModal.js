@@ -2,12 +2,18 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../../services/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
 import { logActivity } from '../../services/activityLogger';
+import { useNotification } from '../../context/NotificationContext'; 
+
 
 
 export default function AddAppointmentModal({ onClose, onSave }) {
     const [formData, setFormData] = useState({
         patient_id: '',
-        patient_name: ''
+        patient_name: '',
+        reason: '', // Use 'reason' to match the database
+        date: '',
+        time: '',
+        notes: ''
     });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -15,6 +21,8 @@ export default function AddAppointmentModal({ onClose, onSave }) {
     const [allPatients, setAllPatients] = useState([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [isSearching, setIsSearching] = useState(false);
+    const { addNotification } = useNotification(); // <-- 2. GET THE FUNCTION
+
 
     useEffect(() => {
         const fetchAllPatients = async () => {
@@ -73,13 +81,18 @@ export default function AddAppointmentModal({ onClose, onSave }) {
         e.preventDefault();
         setLoading(true);
         setError('');
-        logActivity('New Appointment Scheduled', `Appointment for ${formData.patient_name} on ${formData.date}`);
+
+        if (!formData.patient_id) {
+            setError('You must select a patient from the search list before saving.');
+            setLoading(false);
+            return;
+        }
 
         const { error: insertError } = await supabase.from('appointments').insert([
             {
                 patient_display_id: formData.patient_id,
                 patient_name: formData.patient_name,
-                reason: formData.appointment_type,
+                reason: formData.reason,
                 date: formData.date,
                 time: formData.time,
                 notes: formData.notes,
@@ -89,7 +102,10 @@ export default function AddAppointmentModal({ onClose, onSave }) {
 
         if (insertError) {
             setError(insertError.message);
+            addNotification(`Error: ${insertError.message}`, 'error'); // <-- 3. USE NOTIFICATION
         } else {
+            logActivity('New Appointment Scheduled', `Appointment for ${formData.patient_name} on ${formData.date}`);
+            addNotification('New appointment scheduled successfully.', 'success'); // <-- 3. USE NOTIFICATION
             onSave();
             onClose();
         }
@@ -150,7 +166,13 @@ export default function AddAppointmentModal({ onClose, onSave }) {
                             
                             <div>
                                 <label className="text-sm font-semibold text-gray-600">Appointment Type</label>
-                                <select name="appointment_type" value={formData.appointment_type || ''} onChange={handleChange} className="w-full mt-1 p-2 border rounded-md text-sm bg-gray-50" required>
+                                <select 
+                                    name="reason" 
+                                    value={formData.reason || ''} 
+                                    onChange={handleChange} 
+                                    className="w-full mt-1 p-2 border rounded-md text-sm bg-gray-50" 
+                                    required
+                                >
                                     <option value="">Select appointment type</option>
                                     <option value="Prenatal Check-up">Prenatal Check-up</option>
                                     <option value="Vaccination">Vaccination</option>

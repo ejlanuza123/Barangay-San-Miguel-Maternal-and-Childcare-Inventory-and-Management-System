@@ -3,6 +3,8 @@ import { supabase } from '../../services/supabase';
 import AddAppointmentModal from './AddAppointmentModal';
 import { motion, AnimatePresence } from 'framer-motion';
 import { logActivity } from '../../services/activityLogger';
+import { useNotification } from '../../context/NotificationContext'; 
+
 
 // --- ICONS ---
 const ClockIcon = () => <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>;
@@ -144,10 +146,10 @@ const StatusLegend = () => (
     </div>
 );
 
-const EditAppointmentModal = ({ appointment, onClose, onSave }) => {
+const EditAppointmentModal = ({ appointment, onClose, onSave, addNotification }) => {
   const [formData, setFormData] = useState({
     patient_name: appointment.patient_name,
-    appointment_type: appointment.appointment_type || "",
+    reason: appointment.reason || "",
     date: appointment.date,
     time: appointment.time,
   });
@@ -158,23 +160,21 @@ const EditAppointmentModal = ({ appointment, onClose, onSave }) => {
   };
 
   const handleSave = async (e) => {
-    e.preventDefault();
-    const { error } = await supabase
-      .from("appointments")
-      .update(formData)
-      .eq("id", appointment.id);
+      e.preventDefault();
+      const { error } = await supabase
+          .from("appointments")
+          .update(formData)
+          .eq("id", appointment.id);
 
-    if (!error) {
-      await logActivity(
-        "Appointment Updated",
-        `Patient: ${formData.patient_name}, Type: ${formData.appointment_type}, Date: ${formData.date}, Time: ${formData.time}`
-      );
-
-      onSave();
-      onClose();
-    } else {
-      console.error("Error updating appointment:", error);
-    }
+      if (!error) {
+          await logActivity("Appointment Updated", `Patient: ${formData.patient_name}`);
+          addNotification('Appointment updated successfully.', 'success'); // <-- USE NOTIFICATION
+          onSave();
+          onClose();
+      } else {
+          console.error("Error updating appointment:", error);
+          addNotification(`Error: ${error.message}`, 'error'); // <-- USE NOTIFICATION
+      }
   };
 
   return (
@@ -214,8 +214,8 @@ const EditAppointmentModal = ({ appointment, onClose, onSave }) => {
                 Appointment Type
               </label>
               <select
-                name="appointment_type"
-                value={formData.appointment_type}
+                name="reason"
+                value={formData.reason}
                 onChange={handleChange}
                 className="w-full p-2 border rounded-lg"
               >
@@ -275,24 +275,22 @@ const EditAppointmentModal = ({ appointment, onClose, onSave }) => {
 
 
 
-const DeleteAppointmentModal = ({ appointment, onClose, onDelete }) => {
+const DeleteAppointmentModal = ({ appointment, onClose, onDelete, addNotification }) => {
   const handleDelete = async () => {
-    const { error } = await supabase
-      .from("appointments")
-      .delete()
-      .eq("id", appointment.id);
+      const { error } = await supabase
+          .from("appointments")
+          .delete()
+          .eq("id", appointment.id);
 
-    if (!error) {
-      await logActivity(
-            "Appointment Deleted",
-            `Patient: ${appointment.patient_name}, Type: ${appointment.appointment_type}, Date: ${appointment.date}, Time: ${appointment.time}`
-            );
-
-      onDelete();
-      onClose();
-    } else {
-      console.error("Error deleting appointment:", error);
-    }
+      if (!error) {
+          await logActivity("Appointment Deleted", `Patient: ${appointment.patient_name}`);
+          addNotification('Appointment deleted successfully.', 'success'); // <-- USE NOTIFICATION
+          onDelete();
+          onClose();
+      } else {
+          console.error("Error deleting appointment:", error);
+          addNotification(`Error: ${error.message}`, 'error'); // <-- USE NOTIFICATION
+      }
   };
 
   return (
@@ -330,23 +328,22 @@ const DeleteAppointmentModal = ({ appointment, onClose, onDelete }) => {
 
 // --- inside AppointmentPage.js, add this new modal ---
 
-const UpdateStatusModal = ({ appointment, onClose, onUpdate }) => {
+const UpdateStatusModal = ({ appointment, onClose, onUpdate, addNotification }) => {
   const handleStatusChange = async (newStatus) => {
-    const { error } = await supabase
-      .from("appointments")
-      .update({ status: newStatus })
-      .eq("id", appointment.id);
+      const { error } = await supabase
+          .from("appointments")
+          .update({ status: newStatus })
+          .eq("id", appointment.id);
 
-    if (!error) {
-      await logActivity(
-        `Appointment ${newStatus}`,
-        `Patient: ${appointment.patient_name}, Type: ${appointment.appointment_type}, Date: ${appointment.date}, Time: ${appointment.time}`
-      );
-      onUpdate();
-      onClose();
-    } else {
-      console.error("Error updating status:", error);
-    }
+      if (!error) {
+          await logActivity(`Appointment ${newStatus}`, `Patient: ${appointment.patient_name}`);
+          addNotification(`Appointment marked as ${newStatus}.`, 'success'); // <-- USE NOTIFICATION
+          onUpdate();
+          onClose();
+      } else {
+          console.error("Error updating status:", error);
+          addNotification(`Error: ${error.message}`, 'error'); // <-- USE NOTIFICATION
+      }
   };
 
   return (
@@ -408,6 +405,8 @@ export default function AppointmentPage() {
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [selectedAppointment, setSelectedAppointment] = useState(null);
     const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
+    const { addNotification } = useNotification(); // <-- 2. GET THE FUNCTION
+
  
 
 
@@ -458,27 +457,31 @@ export default function AppointmentPage() {
     return (
         <>
             <AnimatePresence>
+                {/* --- 3. PASS addNotification as a prop to each modal --- */}
                 {isModalOpen && <AddAppointmentModal onClose={() => setIsModalOpen(false)} onSave={fetchAppointments} />}
                 {isEditModalOpen && selectedAppointment && (
                     <EditAppointmentModal
-                    appointment={selectedAppointment}
-                    onClose={() => setIsEditModalOpen(false)}
-                    onSave={fetchAppointments}
+                        appointment={selectedAppointment}
+                        onClose={() => setIsEditModalOpen(false)}
+                        onSave={fetchAppointments}
+                        addNotification={addNotification}
                     />
                 )}
                 {isDeleteModalOpen && selectedAppointment && (
                     <DeleteAppointmentModal
-                    appointment={selectedAppointment}
-                    onClose={() => setIsDeleteModalOpen(false)}
-                    onDelete={fetchAppointments}
+                        appointment={selectedAppointment}
+                        onClose={() => setIsDeleteModalOpen(false)}
+                        onDelete={fetchAppointments}
+                        addNotification={addNotification}
                     />
                 )}
                 {isStatusModalOpen && selectedAppointment && (
-                  <UpdateStatusModal
-                    appointment={selectedAppointment}
-                    onClose={() => setIsStatusModalOpen(false)}
-                    onUpdate={fetchAppointments}
-                  />
+                    <UpdateStatusModal
+                        appointment={selectedAppointment}
+                        onClose={() => setIsStatusModalOpen(false)}
+                        onUpdate={fetchAppointments}
+                        addNotification={addNotification}
+                    />
                 )}
             </AnimatePresence>
 
