@@ -97,34 +97,77 @@ export default function Header() {
   const [activities, setActivities] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [notifications, setNotifications] = useState([]); // Renamed for clarity
 
+  
+
+
+// Inside your Header.js file
 
     useEffect(() => {
-    const fetchActivities = async () => {
-        const { data } = await supabase
-        .from('activity_log')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(5);
+        const fetchNotifications = async () => {
+            if (!user || !profile) return; // Wait for both user and profile
 
-        setActivities(data || []);
-        // count unread
-        setUnreadCount((data || []).filter(a => !a.read).length);
-    };
-    fetchActivities();
-    }, []);
+            const { data, error } = await supabase
+                .from('notifications')
+                .select('*')
+                .order('created_at', { ascending: false });
+
+            if (error) {
+                console.error("Error fetching notifications:", error);
+                return;
+            }
+            
+            // --- NEW: Filter notifications based on user preferences ---
+            const userPreferences = profile.preferences || {};
+            const filteredNotifications = (data || []).filter(n => {
+                if (n.type === 'appointment_reminder') {
+                    return userPreferences.appointment_reminders !== false; // Show if true or undefined
+                }
+                if (n.type === 'inventory_alert') {
+                    return userPreferences.inventory_alerts !== false; // Show if true or undefined
+                }
+                if (n.type === 'patient_followup') {
+                    return userPreferences.patient_followups !== false; // Show if true or undefined
+                }
+                return true; // Show any other types by default
+            });
+
+            const unread = filteredNotifications.filter(n => !n.is_read);
+            setNotifications(filteredNotifications);
+            setUnreadCount(unread.length);
+        };
+
+        fetchNotifications();
+
+        const channel = supabase.channel('notifications')
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, 
+            (payload) => { fetchNotifications(); })
+            .subscribe();
+
+        return () => { supabase.removeChannel(channel); };
+    }, [user, profile]); // Rerun when profile (and its preferences) changes
 
     const handleNotifClick = async () => {
-    setIsNotifOpen(!isNotifOpen);
-    if (!isNotifOpen) {
-        // mark as read
-        const ids = activities.map(a => a.id);
-        if (ids.length > 0) {
-        await supabase.from('activity_log').update({ read: true }).in('id', ids);
-        setUnreadCount(0);
+        setIsNotifOpen(!isNotifOpen);
+        if (!isNotifOpen && unreadCount > 0) {
+            const unreadIds = notifications.filter(n => !n.is_read).map(n => n.id);
+
+            if (unreadIds.length > 0) {
+                // --- FIX #1: Mark as read in the correct 'notifications' table ---
+                const { error } = await supabase
+                    .from('notifications')
+                    .update({ is_read: true })
+                    .in('id', unreadIds);
+
+                if (!error) {
+                    setUnreadCount(0); // Immediately set counter to 0 for a fast UI response
+                }
+            }
         }
-    }
     };
+
+
 
 
 
@@ -164,38 +207,37 @@ export default function Header() {
 
           {/* Notifications */}
           <div className="relative">
-            <button onClick={handleNotifClick} className="p-2 rounded-full hover:bg-gray-100 relative">
-                <BellIcon />
-                {/* --- THIS IS THE UPDATED LINE --- */}
-                {profile?.preferences?.in_app_notifications && unreadCount > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
-                        {unreadCount > 9 ? '9+' : unreadCount}
-                    </span>
-                )}
-            </button>
-            <AnimatePresence>
-              {isNotifOpen && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-xl border z-20"
-                >
-                  <div className="p-4 font-bold border-b">Notifications</div>
-                  <div className="p-2 max-h-96 overflow-y-auto">
-                    {activities.length > 0 ? activities.map(act => (
-                      <div key={act.id} className="p-2 border-b hover:bg-gray-50">
-                        <p className="font-semibold text-sm">{act.action}</p>
-                        <p className="text-xs text-gray-500">{act.details}</p>
-                        <p className="text-xs text-gray-400 mt-1">{new Date(act.created_at).toLocaleString()}</p>
-                      </div>
-                    )) : (
-                      <p className="text-sm text-gray-500 p-4 text-center">No new notifications.</p>
-                    )}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+              <button onClick={handleNotifClick} className="p-2 rounded-full hover:bg-gray-100 relative">
+                  <BellIcon />
+                  {profile?.preferences?.in_app_notifications && unreadCount > 0 && (
+                      // --- THIS IS THE CORRECTED LINE ---
+                      // Removed fixed width (w-5), added min-width and horizontal padding (px-1)
+                      <span className="absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 text-xs font-bold text-white">
+                          {unreadCount > 9 ? '9+' : unreadCount}
+                      </span>
+                  )}
+              </button>
+              <AnimatePresence>
+                  {isNotifOpen && (
+                      <motion.div
+                          initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
+                          className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-xl border z-20"
+                      >
+                          <div className="p-4 font-bold border-b">Notifications</div>
+                          <div className="p-2 max-h-96 overflow-y-auto">
+                              {notifications.length > 0 ? notifications.map(notif => (
+                                  <div key={notif.id} className={`p-2 border-b hover:bg-gray-50 ${!notif.is_read ? 'bg-blue-50' : ''}`}>
+                                      <p className="font-semibold text-sm text-gray-800">{notif.type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</p>
+                                      <p className="text-xs text-gray-600">{notif.message}</p>
+                                      <p className="text-xs text-gray-400 mt-1">{new Date(notif.created_at).toLocaleString()}</p>
+                                  </div>
+                              )) : (
+                                  <p className="text-sm text-gray-500 p-4 text-center">No notifications.</p>
+                              )}
+                          </div>
+                      </motion.div>
+                  )}
+              </AnimatePresence>
           </div>
 
           {/* Settings */}
