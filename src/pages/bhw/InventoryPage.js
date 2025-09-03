@@ -3,6 +3,8 @@ import { supabase } from '../../services/supabase';
 import AddInventoryModal from '../../pages/bhw/AddInventoryModal';
 import { motion,AnimatePresence } from 'framer-motion';
 import { logActivity } from '../../services/activityLogger';
+import { useNotification } from '../../context/NotificationContext'; 
+
 
 // --- ICONS ---
 const FilterIcon = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L12 14.414V19a1 1 0 01-1.447.894L7 18.5V14.414L3.293 6.707A1 1 0 013 6V4z"></path></svg>;
@@ -267,10 +269,12 @@ export default function InventoryPage() {
     const [modalMode, setModalMode] = useState(null);
     const [selectedItem, setSelectedItem] = useState(null);
     const [itemToDelete, setItemToDelete] = useState(null);
+    const { addNotification } = useNotification(); 
 
-    // --- NEW: Pagination State ---
+
+
     const [currentPage, setCurrentPage] = useState(1);
-    const [itemsPerPage] = useState(10); // Set how many items to show per page
+    const [itemsPerPage] = useState(10); 
     const [totalItems, setTotalItems] = useState(0);
 
     const [notifications, setNotifications] = useState([]);
@@ -351,8 +355,9 @@ export default function InventoryPage() {
         const { error } = await supabase.from('inventory').delete().eq('id', itemToDelete.id);
         
         if (error) {
-            alert(`Error: ${error.message}`);
+            addNotification(`Error: ${error.message}`, 'error'); // <-- SHOW ERROR NOTIFICATION
         } else {
+            addNotification('Inventory item deleted successfully.', 'success'); // <-- SHOW SUCCESS NOTIFICATION
             logActivity('Inventory Item Deleted', `Deleted item: ${itemToDelete.item_name}`);
             await fetchInventory();
         }

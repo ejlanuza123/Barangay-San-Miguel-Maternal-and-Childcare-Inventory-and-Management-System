@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../../services/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
 import { logActivity } from '../../services/activityLogger';
+import { useNotification } from '../../context/NotificationContext'; 
+
 
 const SuccessIcon = () => (
     <svg className="w-16 h-16 text-green-500" fill="currentColor" viewBox="0 0 20 20">
@@ -14,6 +16,8 @@ export default function AddInventoryModal({ onClose, onSave, mode = 'add', initi
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [showSuccess, setShowSuccess] = useState(false);
+    const { addNotification } = useNotification(); 
+
 
     useEffect(() => {
         if (mode === 'edit' && initialData) {
@@ -51,12 +55,17 @@ export default function AddInventoryModal({ onClose, onSave, mode = 'add', initi
 
         if (result.error) {
             setError(result.error.message);
+            addNotification(`Error: ${result.error.message}`, 'error'); // <-- 3. SHOW NOTIFICATION
         } else {
             if (mode === 'add') {
                 logActivity('New Item Added', `Added item: ${formData.item_name}`);
-                setShowSuccess(true);
+                // Use the new notification instead of the old success screen
+                addNotification('New item added to inventory.', 'success'); 
+                onSave();
+                onClose();
             } else {
                 logActivity('Inventory Item Updated', `Updated item: ${formData.item_name}`);
+                addNotification('Inventory item updated successfully.', 'success'); // <-- 3. SHOW NOTIFICATION
                 onSave();
                 onClose();
             }
