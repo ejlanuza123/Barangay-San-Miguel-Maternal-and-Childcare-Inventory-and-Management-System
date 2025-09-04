@@ -79,8 +79,18 @@ export default function AddAppointmentModal({ onClose, onSave }) {
 
     const handleSave = async (e) => {
         e.preventDefault();
+
+        const selectedDate = new Date(formData.date);
+        const dayOfWeek = selectedDate.getUTCDay();
+
+        if (dayOfWeek === 6 || dayOfWeek === 0) {
+            setError('Appointments cannot be scheduled on weekends. Please choose a weekday.');
+            addNotification('Appointments cannot be scheduled on weekends.', 'error');
+            return; // Stop the function from saving
+        }
         setLoading(true);
         setError('');
+        
 
         if (!formData.patient_id) {
             setError('You must select a patient from the search list before saving.');

@@ -161,6 +161,13 @@ const EditAppointmentModal = ({ appointment, onClose, onSave, addNotification })
 
   const handleSave = async (e) => {
       e.preventDefault();
+      const selectedDate = new Date(formData.date);
+      const dayOfWeek = selectedDate.getUTCDay();
+
+      if (dayOfWeek === 6 || dayOfWeek === 0) {
+          addNotification('Appointments cannot be scheduled on weekends.', 'error');
+          return; // Stop the update
+      }
       const { error } = await supabase
           .from("appointments")
           .update(formData)
