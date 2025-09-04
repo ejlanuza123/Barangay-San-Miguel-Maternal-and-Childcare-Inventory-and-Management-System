@@ -80,9 +80,12 @@ const RecentActivity = ({ activities, onViewAll }) => (
                 <div key={item.id} className="flex items-start space-x-2">
                     <div className="w-1.5 h-1.5 rounded-full mt-1.5 bg-blue-500"></div>
                     <div>
-                        <p className="font-semibold text-gray-700 text-sm">{item.action}</p>
-                        <p className="text-xs text-gray-500">{item.details}</p>
-                        <p className="text-xs text-gray-400 mt-0.5">{new Date(item.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+                            <p className="font-semibold text-gray-700 text-sm">
+                                {/* Display user's role and name if available */}
+                                <span className="font-bold">{item.profiles?.role || 'System'} {item.profiles?.last_name || ''}</span> {item.action}
+                            </p>
+                            <p className="text-xs text-gray-500">{item.details}</p>
+                            <p className="text-xs text-gray-400 mt-0.5">{new Date(item.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
                     </div>
                 </div>
             )) : <p className="text-sm text-gray-500">No recent activity.</p>}
@@ -93,11 +96,18 @@ const RecentActivity = ({ activities, onViewAll }) => (
 const UpcomingAppointments = ({ appointments }) => {
     const getStatusClass = (status) => {
         const styles = {
-            Scheduled: 'bg-blue-100 text-blue-700',
+            Scheduled: 'bg-blue-100 text-blue-800', // Changed for better visibility like the mockup
             Completed: 'bg-green-100 text-green-700',
-            Cancelled: 'bg-red-100 text-red-500', // Changed to gray
+            Cancelled: 'bg-red-100 text-red-500', 
         };
         return styles[status] || styles.Cancelled;
+    };
+    const formatSchedulerName = (profile) => {
+        if (!profile?.first_name || !profile?.last_name) {
+            return 'N/A';
+        }
+        const firstInitial = profile.first_name.charAt(0).toUpperCase();
+        return `${firstInitial}. ${profile.last_name}`;
     };
     return (
         <div className="bg-white p-4 rounded-lg shadow border flex flex-col">
@@ -129,7 +139,7 @@ const UpcomingAppointments = ({ appointments }) => {
                                 <td className="px-2 py-2">{new Date(app.date).toLocaleDateString()}</td>
                                 <td className="px-2 py-2">{app.time}</td>
                                 <td className="px-2 py-2">{app.reason}</td>
-                                <td className="px-2 py-2">{app.assigned_to}</td>
+                                <td className="px-2 py-2">{formatSchedulerName(app.profiles)}</td>
                                 <td className="px-2 py-2">
                                     <span className={`px-2 py-0.5 font-bold rounded-full ${getStatusClass(app.status)}`}>
                                         {app.status}
@@ -193,12 +203,13 @@ export default function BhwDashboard() {
 
         const today = new Date().toISOString().split('T')[0];
 
+
         const [patientCountRes, activePatientsRes, todayVisitsRes, appointmentsRes, activityRes] = await Promise.all([
             supabase.from('patients').select('*', { count: 'exact', head: true }),
             supabase.from('patients').select('id'),
             supabase.from('appointments').select('*', { count: 'exact', head: true }).eq('date', today),
-            supabase.from('appointments').select('*').order('date', { ascending: true }).limit(10),
-            supabase.from('activity_log').select('*').order('created_at', { ascending: false }) // Fetch all activities
+            supabase.from('appointments').select('*, profiles(first_name, last_name)').order('created_at', { ascending: false }).limit(10),            // Join activity_log with profiles table on the 'user_id' foreign key
+            supabase.from('activity_log').select('*, profiles(role, last_name)').order('created_at', { ascending: false })
         ]);
 
         setStats({

@@ -87,18 +87,20 @@ export default function AddAppointmentModal({ onClose, onSave }) {
             setLoading(false);
             return;
         }
+        const { data: { user } } = await supabase.auth.getUser();
 
-        const { error: insertError } = await supabase.from('appointments').insert([
-            {
-                patient_display_id: formData.patient_id,
-                patient_name: formData.patient_name,
-                reason: formData.reason,
-                date: formData.date,
-                time: formData.time,
-                notes: formData.notes,
-                status: 'Scheduled'
-            }
-        ]);
+        const { error: insertError } = await supabase.from('appointments').insert([
+            {
+                patient_display_id: formData.patient_id,
+                patient_name: formData.patient_name,
+                reason: formData.reason,
+                date: formData.date,
+                time: formData.time,
+                notes: formData.notes,
+                status: 'Scheduled',
+                created_by: user?.id // Add the user's ID here
+            }
+        ]);
 
         if (insertError) {
             setError(insertError.message);
