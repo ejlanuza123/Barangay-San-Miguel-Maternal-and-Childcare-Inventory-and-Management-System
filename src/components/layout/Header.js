@@ -102,7 +102,7 @@ export default function Header() {
   
 
 
-// Inside your Header.js file
+
 
     useEffect(() => {
         const fetchNotifications = async () => {
