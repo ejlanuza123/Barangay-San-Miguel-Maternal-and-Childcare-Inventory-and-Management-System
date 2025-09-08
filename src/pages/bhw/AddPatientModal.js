@@ -16,37 +16,129 @@ const ProfileIcon = () => (
 // --- Helper Components for Each Step of the Form ---
 
 const Step1 = ({ formData, handleChange, newPatientId }) => (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8">
-        <div className="md:col-span-1 flex flex-col items-center mb-6 md:mb-0">
-            <div className="w-32 h-32 bg-gray-100 rounded-md border flex items-center justify-center"><ProfileIcon /></div>
-            <div className="text-center mt-2">
-                <p className="font-bold text-gray-700">Patient ID: {newPatientId}</p>
-                {newPatientId.startsWith('P-') && <p className="text-xs text-gray-500">(Patient ID Auto Generated)</p>}
+  <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8">
+    {/* Left Profile Section */}
+    <div className="md:col-span-1 flex flex-col items-center mb-6 md:mb-0">
+      <div className="w-32 h-32 bg-gray-100 rounded-md border flex items-center justify-center">
+        <ProfileIcon />
+      </div>
+      <div className="text-center mt-2">
+        <p className="font-bold text-gray-700">Patient ID: {newPatientId}</p>
+        {newPatientId.startsWith("P-") && (
+          <p className="text-xs text-gray-500">(Patient ID Auto Generated)</p>
+        )}
+      </div>
+    </div>
+
+    {/* Right Side with Info + ID Numbers */}
+    <div className="md:col-span-2 space-y-4">
+      {/* Flex row: Personal Info (left) + ID Numbers (right) */}
+      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+        {/* Personal Information */}
+        <div className="flex-1">
+          <h3 className="font-semibold text-gray-700 mb-2">
+            Personal Information
+          </h3>
+          <div className="grid grid-cols-3 gap-2 mb-2">
+            <div>
+              <label className="text-xs text-gray-500">Last Name</label>
+              <input
+                type="text"
+                name="last_name"
+                value={formData.last_name || ""}
+                onChange={handleChange}
+                className="w-full p-2 border rounded-md text-sm"
+              />
             </div>
+            <div>
+              <label className="text-xs text-gray-500">First Name</label>
+              <input
+                type="text"
+                name="first_name"
+                value={formData.first_name || ""}
+                onChange={handleChange}
+                className="w-full p-2 border rounded-md text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500">Middle Name</label>
+              <input
+                type="text"
+                name="middle_name"
+                value={formData.middle_name || ""}
+                onChange={handleChange}
+                className="w-full p-2 border rounded-md text-sm"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <label className="text-xs text-gray-500">Date of Birth</label>
+              <input
+                type="date"
+                name="dob"
+                value={formData.dob || ""}
+                onChange={handleChange}
+                className="w-full p-2 border rounded-md text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500">Blood Type</label>
+              <select
+                name="blood_type"
+                value={formData.blood_type || ""}
+                onChange={handleChange}
+                className="w-full p-2 border rounded-md text-sm bg-gray-50"
+              >
+                <option>Select Blood Type</option>
+                <option>A+</option>
+                <option>A-</option>
+                <option>B+</option>
+                <option>B-</option>
+                <option>AB+</option>
+                <option>AB-</option>
+                <option>O+</option>
+                <option>O-</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500">Age</label>
+              <input
+                type="number"
+                name="age"
+                value={formData.age || ""}
+                onChange={handleChange}
+                className="w-full p-2 border rounded-md text-sm"
+              />
+            </div>
+          </div>
         </div>
-        <div className="md:col-span-2 space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="sm:col-span-2">
-                    <h3 className="font-semibold text-gray-700 mb-2">Personal Information</h3>
-                    <div className="grid grid-cols-3 gap-2 mb-2">
-                        <div><label className="text-xs text-gray-500">Last Name</label><input type="text" name="last_name" value={formData.last_name || ''} onChange={handleChange} className="w-full p-2 border rounded-md text-sm" /></div>
-                        <div><label className="text-xs text-gray-500">First Name</label><input type="text" name="first_name" value={formData.first_name || ''} onChange={handleChange} className="w-full p-2 border rounded-md text-sm" /></div>
-                        <div><label className="text-xs text-gray-500">Middle Name</label><input type="text" name="middle_name" value={formData.middle_name || ''} onChange={handleChange} className="w-full p-2 border rounded-md text-sm" /></div>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2">
-                        <div><label className="text-xs text-gray-500">Date of Birth</label><input type="date" name="dob" value={formData.dob || ''} onChange={handleChange} className="w-full p-2 border rounded-md text-sm" /></div>
-                        <div><label className="text-xs text-gray-500">Blood Type</label><select name="blood_type" value={formData.blood_type || ''} onChange={handleChange} className="w-full p-2 border rounded-md text-sm bg-gray-50"><option>Select Blood Type</option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>AB+</option><option>AB-</option><option>O+</option><option>O-</option></select></div>
-                        <div><label className="text-xs text-gray-500">Age</label><input type="number" name="age" value={formData.age || ''} onChange={handleChange} className="w-full p-2 border rounded-md text-sm" /></div>
-                    </div>
-                </div>
-                <div className="border rounded-lg p-3 sm:col-span-2">
-                    <h3 className="font-semibold text-gray-700 mb-2 text-sm">ID Numbers</h3>
-                    <div className="grid grid-cols-2 gap-2">
-                        <div><label className="text-xs text-gray-500">NHTS No.</label><input type="text" name="nhts_no" value={formData.nhts_no || ''} onChange={handleChange} className="w-full p-2 border rounded-md text-sm" /></div>
-                        <div><label className="text-xs text-gray-500">PhilHealth No.</label><input type="text" name="philhealth_no" value={formData.philhealth_no || ''} onChange={handleChange} className="w-full p-2 border rounded-md text-sm" /></div>
-                    </div>
-                </div>
-            </div>
+
+        {/* ID Numbers Box (Right Side) */}
+        <div className="w-full md:w-1/3 space-y-4 p-4 border rounded-lg bg-gray-50 shadow">
+          <h3 className="font-bold text-center">ID Numbers</h3>
+          <div>
+            <label className="text-sm">NHTS No.</label>
+            <input
+              type="text"
+              name="nhts_no"
+              value={formData.nhts_no || ""}
+              onChange={handleChange}
+              className="w-full p-2 border rounded-md"
+            />
+          </div>
+          <div>
+            <label className="text-sm">PhilHealth No.</label>
+            <input
+              type="text"
+              name="philhealth_no"
+              value={formData.philhealth_no || ""}
+              onChange={handleChange}
+              className="w-full p-2 border rounded-md"
+            />
+          </div>
+        </div>
+      </div>
             <div>
                 <h3 className="font-semibold text-gray-700 mb-2">Contact Information</h3>
                 <div className="grid grid-cols-2 gap-2">

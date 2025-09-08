@@ -96,7 +96,7 @@ const RecentActivity = ({ activities, onViewAll }) => (
 const UpcomingAppointments = ({ appointments }) => {
     const getStatusClass = (status) => {
         const styles = {
-            Scheduled: 'bg-blue-100 text-blue-800', // Changed for better visibility like the mockup
+            Scheduled: 'bg-blue-100 text-blue-800', 
             Completed: 'bg-green-100 text-green-700',
             Cancelled: 'bg-red-100 text-red-500', 
         };
