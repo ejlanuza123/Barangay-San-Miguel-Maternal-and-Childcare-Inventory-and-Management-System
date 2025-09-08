@@ -31,7 +31,7 @@ const ErrorModal = ({ message, onClose }) => (
 );
 
 export default function Login() {
-  const [email, setEmail] = useState('');
+  const [loginIdentifier, setLoginIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -50,7 +50,29 @@ export default function Login() {
     setLoading(true);
     setErrorMessage('');
 
-    const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({ email, password });
+    let emailForLogin;
+
+    if (loginIdentifier.includes('@')) {
+      emailForLogin = loginIdentifier;
+    } else {
+      // MODIFIED: Use the new database function to get the email
+      const { data, error } = await supabase.rpc('get_email_by_user_id', {
+        user_id_param: loginIdentifier
+      });
+
+      if (error || !data) {
+        setErrorMessage("Invalid User ID. Please check the ID and try again.");
+        setLoading(false);
+        return;
+      }
+      emailForLogin = data; // The function directly returns the email string
+    }
+
+    // Step 2: Attempt to sign in using the determined email
+    const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
+      email: emailForLogin,
+      password: password
+    });
 
     if (loginError) {
       setErrorMessage(loginError.message);
@@ -58,6 +80,7 @@ export default function Login() {
       return;
     }
 
+    // Step 3: Verify the user's role matches the selected role
     if (loginData.user) {
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
@@ -73,7 +96,7 @@ export default function Login() {
       }
 
       if (profile.role === role) {
-        navigate('/');
+        navigate('/'); // Success!
       } else {
         setErrorMessage("This is not the role you registered with. Please select the correct role.");
         await supabase.auth.signOut();
@@ -81,6 +104,7 @@ export default function Login() {
     }
     setLoading(false);
   };
+
 
   return (
     <>
@@ -127,14 +151,14 @@ export default function Login() {
                   <span className="absolute inset-y-0 left-0 flex items-center pl-3">
                     <UserIcon />
                   </span>
-                  <input 
-                    type="email" 
-                    value={email} 
-                    onChange={e => setEmail(e.target.value)} 
-                    required 
-                    placeholder="User ID No."
-                    className="pl-10 mt-1 block w-full px-3 py-3 bg-white border border-gray-300 rounded-md shadow-sm" 
-                  />
+              <input 
+                type="text" 
+                value={loginIdentifier} 
+                onChange={e => setLoginIdentifier(e.target.value)} 
+                required 
+                placeholder="Email or User ID No."
+                className="pl-10 mt-1 block w-full px-3 py-3 bg-white border border-gray-300 rounded-md shadow-sm" 
+              />
                 </div>
                 <div className="relative">
                    <span className="absolute inset-y-0 left-0 flex items-center pl-3">
