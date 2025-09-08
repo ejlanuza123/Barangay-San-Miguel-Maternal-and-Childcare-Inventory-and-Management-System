@@ -21,7 +21,7 @@ import AppointmentPage from './pages/bhw/AppointmentPage';
 import InventoryPage from './pages/bhw/InventoryPage';
 import ReportsPage from './pages/bhw/ReportsPage'; 
 // You will create these BNS files next
-// import BnsDashboard from './pages/bns/BnsDashboard';
+import BnsDashboard from './pages/bns/BnsDashboard';
 // import ChildHealthRecords from './pages/bns/ChildHealthRecords';
 
 import UserDashboard from './pages/user/UserDashboard';
@@ -61,12 +61,11 @@ export default function App() {
                       <Route path="bhw/appointment" element={<AppointmentPage />} />
                       <Route path="bhw/inventory" element={<InventoryPage />} />
                       <Route path="bhw/reports" element={<ReportsPage />} />
-
-
-                      {/* --- BNS Routes (You will create these files) --- */}
-                      {/* <Route path="bns/dashboard" element={<BnsDashboard />} />  */}
-                      {/* <Route path="bns/child-records" element={<ChildHealthRecords />} />  */}
-
+                        <Route path="bns/dashboard" element={<BnsDashboard />} />
+                        <Route path="bns/child-records" element={<div>Child Health Records Page - Coming Soon</div>} /> // Add a placeholder
+                        <Route path="bns/appointment" element={<div>BNS Appointments Page - Coming Soon</div>} /> // Add a placeholder
+                        <Route path="bns/inventory" element={<div>BNS Inventory Page - Coming Soon</div>} /> // Add a placeholder
+                        <Route path="bns/reports" element={<div>BNS Reports Page - Coming Soon</div>} /> // Add a placeholder  
                       {/* User/Mother Routes */}
                       <Route path="user/dashboard" element={<UserDashboard />} />
                       <Route path="user/schedule-appointment" element={<ScheduleAppointment />} />

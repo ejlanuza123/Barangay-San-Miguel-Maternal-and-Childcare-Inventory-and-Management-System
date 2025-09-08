@@ -4,12 +4,13 @@ import AddAppointmentModal from './AddAppointmentModal';
 import { motion, AnimatePresence } from 'framer-motion';
 import { logActivity } from '../../services/activityLogger';
 import { useNotification } from '../../context/NotificationContext'; 
+import CalendarPickerModal from './CalendarPickerModal';
 
 
 // --- ICONS ---
 const ClockIcon = () => <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>;
 const SearchIcon = () => <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>;
-
+const CalendarIcon = () => <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>;
 // --- Helper & Widget Components ---
 
 const Calendar = ({ selectedDate, onDateSelect, appointments }) => {
@@ -147,137 +148,104 @@ const StatusLegend = () => (
 );
 
 const EditAppointmentModal = ({ appointment, onClose, onSave, addNotification }) => {
-  const [formData, setFormData] = useState({
-    patient_name: appointment.patient_name,
-    reason: appointment.reason || "",
-    date: appointment.date,
-    time: appointment.time,
-  });
+    const [formData, setFormData] = useState({
+        patient_name: appointment.patient_name,
+        reason: appointment.reason || "",
+        date: appointment.date,
+        time: appointment.time,
+    });
+    // Add state for the calendar modal
+    const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
+    const handleChange = (e) => {
+        const { name, value } = e.target;
+        setFormData((prev) => ({ ...prev, [name]: value }));
+    };
 
-  const handleSave = async (e) => {
-      e.preventDefault();
-      const selectedDate = new Date(formData.date);
-      const dayOfWeek = selectedDate.getUTCDay();
+    const handleSave = async (e) => {
+        e.preventDefault();
+        const selectedDate = new Date(formData.date);
+        const dayOfWeek = selectedDate.getUTCDay();
 
-      if (dayOfWeek === 6 || dayOfWeek === 0) {
-          addNotification('Appointments cannot be scheduled on weekends.', 'error');
-          return; // Stop the update
-      }
-      const { error } = await supabase
-          .from("appointments")
-          .update(formData)
-          .eq("id", appointment.id);
+        if (dayOfWeek === 6 || dayOfWeek === 0) {
+            addNotification('Appointments cannot be scheduled on weekends.', 'error');
+            return;
+        }
 
-      if (!error) {
-          await logActivity("Appointment Updated", `Patient: ${formData.patient_name}`);
-          addNotification('Appointment updated successfully.', 'success'); // <-- USE NOTIFICATION
-          onSave();
-          onClose();
-      } else {
-          console.error("Error updating appointment:", error);
-          addNotification(`Error: ${error.message}`, 'error'); // <-- USE NOTIFICATION
-      }
-  };
+        const { error } = await supabase
+            .from("appointments")
+            .update({ reason: formData.reason, date: formData.date, time: formData.time }) // Only update editable fields
+            .eq("id", appointment.id);
 
-  return (
-    <AnimatePresence>
-      <motion.div
-        className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-      >
-        <motion.div
-          className="bg-white rounded-xl shadow-lg w-full max-w-md p-6"
-          initial={{ scale: 0.9 }}
-          animate={{ scale: 1 }}
-          exit={{ scale: 0.9 }}
-        >
-          <h2 className="text-lg font-bold mb-6 border-b pb-2">
-            ✏️ Edit Appointment
-          </h2>
-          <form onSubmit={handleSave} className="space-y-4">
-            {/* Patient Name (read-only) */}
-            <div>
-              <label className="text-xs text-gray-500 block mb-1">
-                Patient Name
-              </label>
-              <input
-                type="text"
-                value={formData.patient_name}
-                disabled
-                className="w-full p-2 border rounded-lg bg-gray-100 cursor-not-allowed"
-              />
+        if (!error) {
+            await logActivity("Appointment Updated", `Patient: ${formData.patient_name}`);
+            addNotification('Appointment updated successfully.', 'success');
+            onSave();
+            onClose();
+        } else {
+            console.error("Error updating appointment:", error);
+            addNotification(`Error: ${error.message}`, 'error');
+        }
+    };
+
+    return (
+        <>
+            <AnimatePresence>
+                {isCalendarOpen && (
+                    <CalendarPickerModal 
+                        onClose={() => setIsCalendarOpen(false)}
+                        onDateSelect={(date) => setFormData(prev => ({ ...prev, date: date }))}
+                    />
+                )}
+            </AnimatePresence>
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
+                <motion.div
+                    className="bg-white rounded-xl shadow-lg w-full max-w-md p-6"
+                    initial={{ scale: 0.9, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.9, opacity: 0 }}
+                >
+                    <h2 className="text-lg font-bold mb-6 border-b pb-2">✏️ Edit Appointment</h2>
+                    <form onSubmit={handleSave} className="space-y-4">
+                        <div>
+                            <label className="text-xs text-gray-500 block mb-1">Patient Name</label>
+                            <input type="text" value={formData.patient_name} disabled className="w-full p-2 border rounded-lg bg-gray-100 cursor-not-allowed" />
+                        </div>
+                        <div>
+                            <label className="text-xs text-gray-500 block mb-1">Appointment Type</label>
+                            <select name="reason" value={formData.reason} onChange={handleChange} className="w-full p-2 border rounded-lg">
+                                <option value="">Select Type</option>
+                                <option value="Prenatal Checkup">Prenatal Checkup</option>
+                                <option value="Postnatal Checkup">Postnatal Checkup</option>
+                                <option value="Child Immunization">Child Immunization</option>
+                                <option value="Consultation">Consultation</option>
+                            </select>
+                        </div>
+
+                        {/* MODIFIED Date and Time Inputs */}
+                        <div className="flex gap-4">
+                            <div className="flex-1">
+                                <label className="text-xs text-gray-500 block mb-1">Date</label>
+                                <div onClick={() => setIsCalendarOpen(true)} className="w-full p-2 border rounded-lg flex justify-between items-center cursor-pointer bg-white">
+                                    <span>{formData.date || 'Select a date'}</span>
+                                    <CalendarIcon />
+                                </div>
+                            </div>
+                            <div className="flex-1">
+                                <label className="text-xs text-gray-500 block mb-1">Time</label>
+                                <input type="time" name="time" value={formData.time} onChange={handleChange} className="w-full p-2 border rounded-lg" />
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-3 pt-4">
+                            <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 text-sm">Cancel</button>
+                            <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">Save Changes</button>
+                        </div>
+                    </form>
+                </motion.div>
             </div>
-
-            {/* Appointment Type Dropdown */}
-            <div>
-              <label className="text-xs text-gray-500 block mb-1">
-                Appointment Type
-              </label>
-              <select
-                name="reason"
-                value={formData.reason}
-                onChange={handleChange}
-                className="w-full p-2 border rounded-lg"
-              >
-                <option value="">Select Type</option>
-                <option value="Prenatal Checkup">Prenatal Checkup</option>
-                <option value="Postnatal Checkup">Postnatal Checkup</option>
-                <option value="Child Immunization">Child Immunization</option>
-                <option value="Consultation">Consultation</option>
-              </select>
-            </div>
-
-            {/* Date */}
-            <div>
-              <label className="text-xs text-gray-500 block mb-1">Date</label>
-              <input
-                type="date"
-                name="date"
-                value={formData.date}
-                onChange={handleChange}
-                className="w-full p-2 border rounded-lg"
-              />
-            </div>
-
-            {/* Time */}
-            <div>
-              <label className="text-xs text-gray-500 block mb-1">Time</label>
-              <input
-                type="time"
-                name="time"
-                value={formData.time}
-                onChange={handleChange}
-                className="w-full p-2 border rounded-lg"
-              />
-            </div>
-
-            <div className="flex justify-end gap-3 pt-4">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 text-sm"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
-              >
-                Save Changes
-              </button>
-            </div>
-          </form>
-        </motion.div>
-      </motion.div>
-    </AnimatePresence>
-  );
+        </>
+    );
 };
 
 

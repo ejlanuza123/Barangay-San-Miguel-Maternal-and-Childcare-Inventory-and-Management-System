@@ -11,6 +11,8 @@ const InventoryIcon = () => <svg className="w-5 h-5" fill="none" stroke="current
 const ReportsIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>;
 const LogOutIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H3"></path></svg>;
 const UsersIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm6-6a3 3 0 100-6 3 3 0 000 6z"></path></svg>;
+const HelpIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.546-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>;
+
 
 export default function Sidebar({ role }) {
     const { signOut, profile } = useAuth();
@@ -37,13 +39,14 @@ export default function Sidebar({ role }) {
                     { name: 'Inventory', path: '/bhw/inventory', icon: <InventoryIcon /> },
                     { name: 'Reports', path: '/bhw/reports', icon: <ReportsIcon /> },
                 ];
-            case 'BNS':
-                return [
-                    { name: 'Dashboard', path: '/bns/dashboard', icon: <DashboardIcon /> },
-                    { name: 'Child Health Records', path: '/bns/child-records', icon: <MaternityIcon /> },
-                    { name: 'Inventory', path: '/bns/inventory', icon: <InventoryIcon /> },
-                    { name: 'Reports', path: '/bns/reports', icon: <ReportsIcon /> },
-                ];
+            case 'BNS':
+                return [
+                    { name: 'Dashboard', path: '/bns/dashboard', icon: <DashboardIcon /> },
+                    { name: 'Child Health Records', path: '/bns/child-records', icon: <MaternityIcon /> },
+                    { name: 'Appointment', path: '/bns/appointment', icon: <AppointmentIcon /> },
+                    { name: 'Inventory', path: '/bns/inventory', icon: <InventoryIcon /> },
+                    { name: 'Reports', path: '/bns/reports', icon: <ReportsIcon /> },
+                ];
             case 'USER/MOTHER/GUARDIAN':
                 return [
                     { name: 'Dashboard', path: '/user/dashboard', icon: <DashboardIcon /> },
@@ -90,6 +93,14 @@ export default function Sidebar({ role }) {
             </nav>
 
             {/* --- UPDATED: Reduced padding --- */}
+            <NavLink 
+                    to="/help" 
+                    className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                    style={({ isActive }) => (isActive ? activeLinkStyle : undefined)}
+                >
+                    <HelpIcon />
+                    <span className="text-sm font-semibold">Help</span>
+            </NavLink>
             <div className="p-3 border-t">
                 <button onClick={handleLogout} className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-800">
                     <LogOutIcon />
