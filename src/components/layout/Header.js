@@ -3,6 +3,7 @@ import { supabase } from '../../services/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { AnimatePresence, motion } from 'framer-motion';
 import SettingsModal from './SettingsModal';
+import { useNavigate } from 'react-router-dom';
 
 // --- SVG Icons ---
 const SearchIcon = () => (
@@ -22,8 +23,20 @@ const SettingsIcon = () => (
   </svg>
 );
 
+const CheckCircleIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+  </svg>
+);
+const TrashIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+  </svg>
+);
 
-// Inside Header.js
+
+
+
 
 const ProfileDropdown = ({ profile, user}) => {
   const { signOut } = useAuth();
@@ -97,7 +110,75 @@ export default function Header() {
   const [activities, setActivities] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [notifications, setNotifications] = useState([]); // Renamed for clarity
+  const [notifications, setNotifications] = useState([]); 
+  const navigate = useNavigate();
+  const handleMarkOneRead = async (e, notificationId) => {
+    e.stopPropagation(); // Prevent navigation when clicking the button
+    
+    // Optimistically update the UI for a fast response
+    setNotifications(current => current.map(n => n.id === notificationId ? { ...n, is_read: true } : n));
+    setUnreadCount(prev => prev > 0 ? prev - 1 : 0);
+
+    // Update the database in the background
+    await supabase.from('notifications').update({ is_read: true }).eq('id', notificationId);
+  };
+
+  const handleDeleteOne = async (e, notificationId) => {
+    e.stopPropagation(); // Prevent navigation
+    
+    // Optimistically update the UI
+    setNotifications(current => current.filter(n => n.id !== notificationId));
+
+    // Delete from the database in the background
+    await supabase.from('notifications').delete().eq('id', notificationId);
+  };
+
+  const handleMarkAllRead = async () => {
+    const unreadIds = notifications.filter(n => !n.is_read).map(n => n.id);
+    if (unreadIds.length === 0) return;
+
+    // Optimistically update the UI
+    setNotifications(current => current.map(n => ({ ...n, is_read: true })));
+    setUnreadCount(0);
+    setIsNotifOpen(false); // Close dropdown after action
+
+    // Update the database in the background
+    await supabase.from('notifications').update({ is_read: true }).in('id', unreadIds);
+  };
+
+  const handleNotificationClick = (notification) => {
+    // Determine the base path from the user's role (e.g., 'bhw', 'bns', 'admin')
+  const rolePath = profile.role.toLowerCase().split('/')[0];
+
+    let path = '';
+    // Determine the destination path based on the notification type
+    switch (notification.type) {
+      case 'inventory_alert':
+        path = `/${rolePath}/inventory`;
+        break;
+      case 'appointment_reminder':
+        path = `/${rolePath}/appointment`;
+        break;
+      case 'patient_followup':
+        // Redirect to the primary patient management page for the role
+        if (rolePath === 'bhw') {
+          path = '/bhw/maternity-management';
+        } else if (rolePath === 'bns') {
+          path = '/bns/child-records';
+        }
+        break;
+      default:
+        // Optional: you can navigate to a default page or do nothing
+        break;
+    }
+    
+    // If a valid path was found, navigate to it
+    if(path) {
+        navigate(path);
+    }
+    // Close the notification dropdown
+    setIsNotifOpen(false);
+  };
 
   
 
@@ -148,28 +229,9 @@ export default function Header() {
         return () => { supabase.removeChannel(channel); };
     }, [user, profile]); // Rerun when profile (and its preferences) changes
 
-    const handleNotifClick = async () => {
-        setIsNotifOpen(!isNotifOpen);
-        if (!isNotifOpen && unreadCount > 0) {
-            const unreadIds = notifications.filter(n => !n.is_read).map(n => n.id);
-
-            if (unreadIds.length > 0) {
-                // --- FIX #1: Mark as read in the correct 'notifications' table ---
-                const { error } = await supabase
-                    .from('notifications')
-                    .update({ is_read: true })
-                    .in('id', unreadIds);
-
-                if (!error) {
-                    setUnreadCount(0); // Immediately set counter to 0 for a fast UI response
-                }
-            }
-        }
+  const handleNotifClick = () => {
+      setIsNotifOpen(!isNotifOpen);
     };
-
-
-
-
 
   const getTitle = () => {
     if (!profile) return 'Loading...';
@@ -223,19 +285,57 @@ export default function Header() {
                           initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
                           className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-xl border z-20"
                       >
-                          <div className="p-4 font-bold border-b">Notifications</div>
-                          <div className="p-2 max-h-96 overflow-y-auto">
-                              {notifications.length > 0 ? notifications.map(notif => (
-                                  <div key={notif.id} className={`p-2 border-b hover:bg-gray-50 ${!notif.is_read ? 'bg-blue-50' : ''}`}>
-                                      <p className="font-semibold text-sm text-gray-800">{notif.type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</p>
-                                      <p className="text-xs text-gray-600">{notif.message}</p>
-                                      <p className="text-xs text-gray-400 mt-1">{new Date(notif.created_at).toLocaleString()}</p>
-                                  </div>
-                              )) : (
-                                  <p className="text-sm text-gray-500 p-4 text-center">No notifications.</p>
-                              )}
-                          </div>
-                      </motion.div>
+                                    <div className="p-4 font-bold border-b">Notifications</div>
+                                    <div className="p-2 max-h-96 overflow-y-auto">
+                                        {notifications.length > 0 ? notifications.map(notif => (
+                                            <div 
+                                                key={notif.id} 
+                                                onClick={() => handleNotificationClick(notif)}
+                                                // Add 'group' to enable hover effects on child elements
+                                                className={`group relative p-2 border-b hover:bg-gray-100 cursor-pointer ${!notif.is_read ? 'bg-blue-50' : ''}`}
+                                            >
+                                                <p className="font-semibold text-sm text-gray-800">{notif.type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</p>
+                                                <p className="text-xs text-gray-600">{notif.message}</p>
+                                                <p className="text-xs text-gray-400 mt-1">{new Date(notif.created_at).toLocaleString()}</p>
+                                                
+                                                {/* --- ACTION BUTTONS ON HOVER --- */}
+                                                <div className="absolute top-1 right-1 flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    {/* Show Mark as Read button only if unread */}
+                                                    {!notif.is_read && (
+                                                        <button 
+                                                            onClick={(e) => handleMarkOneRead(e, notif.id)} 
+                                                            className="p-1 rounded-full text-gray-400 hover:bg-green-100 hover:text-green-600"
+                                                            title="Mark as Read"
+                                                        >
+                                                            <CheckCircleIcon />
+                                                        </button>
+                                                    )}
+                                                    <button 
+                                                        onClick={(e) => handleDeleteOne(e, notif.id)} 
+                                                        className="p-1 rounded-full text-gray-400 hover:bg-red-100 hover:text-red-600"
+                                                        title="Delete Notification"
+                                                    >
+                                                        <TrashIcon />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )) : (
+                                            <p className="text-sm text-gray-500 p-4 text-center">No notifications.</p>
+                                        )}
+                                    </div>
+                                    {/* --- NEW DROPDOWN FOOTER --- */}
+                                    {notifications.length > 0 && (
+                                        <div className="p-2 border-t bg-gray-50 text-center">
+                                            <button 
+                                                onClick={handleMarkAllRead}
+                                                disabled={unreadCount === 0}
+                                                className="text-xs font-semibold text-blue-600 hover:underline disabled:text-gray-400 disabled:no-underline"
+                                            >
+                                                Mark all as read
+                                            </button>
+                                        </div>
+                                    )}
+                                </motion.div>
                   )}
               </AnimatePresence>
           </div>
