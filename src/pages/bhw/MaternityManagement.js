@@ -4,6 +4,7 @@ import AddPatientModal from '../../pages/bhw/AddPatientModal';
 import { AnimatePresence, motion } from 'framer-motion';
 import { logActivity } from '../../services/activityLogger';
 import { useNotification } from '../../context/NotificationContext'; 
+import { useAuth } from '../../context/AuthContext'; 
 
 // --- ICONS ---
 const SearchIcon = () => <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>;
@@ -285,7 +286,8 @@ export default function MaternityManagement() {
     const [modalMode, setModalMode] = useState(null);
     const [selectedPatient, setSelectedPatient] = useState(null);
     const [patientToDelete, setPatientToDelete] = useState(null);
-    const { addNotification } = useNotification(); // <-- 2. GET THE FUNCTION
+    const { user } = useAuth();
+    const { addNotification } = useNotification();
 
     
     // --- NEW: Pagination State ---
@@ -312,13 +314,19 @@ export default function MaternityManagement() {
             setTotalPatients(patientCount || 0);
         }
         
-        // Fetch other data (not paginated)
-        const { data: appointmentsData } = await supabase.from('appointments').select('*').order('date', { ascending: true }).limit(3);
-        setUpcomingAppointments(appointmentsData || []);
-        setStats({ total: patientCount, active: patientCount, today: 0 });
+        const { data: appointmentsData, error: appointmentsError } = await supabase
+            .from('appointments')
+            .select('*')
+            .eq('created_by', user.id) // Only get appointments created by the current BNS
+            .order('date', { ascending: true })
+            .limit(3);
+
+        if (!appointmentsError) {
+            setUpcomingAppointments(appointmentsData || []);
+        }
 
         setLoading(false);
-    }, [currentPage, itemsPerPage]);
+    }, [addNotification, currentPage, itemsPerPage, user]); // <-- Add 'user' as a dependency
 
     useEffect(() => {
         fetchPageData();
