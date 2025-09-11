@@ -2,9 +2,21 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../../services/supabase';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useAuth } from '../../context/AuthContext';
+import { useNotification } from '../../context/NotificationContext';
 
 // --- WIDGETS & SUB-COMPONENTS ---
-
+const getDotColor = (role) => {
+    switch (role) {
+        case 'BNS':
+            return 'bg-green-500'; // Green for BNS
+        case 'Admin':
+            return 'bg-orange-500'; // Orange for Admin
+        case 'BHW':
+        default:
+            return 'bg-blue-500'; // Blue for BHW and others
+    }
+};
 const Calendar = () => {
     const [currentDate, setCurrentDate] = useState(new Date());
     const daysOfWeek = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
@@ -78,14 +90,14 @@ const RecentActivity = ({ activities, onViewAll }) => (
         <div className="space-y-3">
             {activities.length > 0 ? activities.slice(0, 4).map((item) => (
                 <div key={item.id} className="flex items-start space-x-2">
-                    <div className="w-1.5 h-1.5 rounded-full mt-1.5 bg-blue-500"></div>
+                    {/* MODIFIED: Now uses the shared getDotColor function */}
+                    <div className={`w-1.5 h-1.5 rounded-full mt-1.5 ${getDotColor(item.profiles?.role)}`}></div>
                     <div>
-                            <p className="font-semibold text-gray-700 text-sm">
-                                {/* Display user's role and name if available */}
-                                <span className="font-bold">{item.profiles?.role || 'System'} {item.profiles?.last_name || ''}</span> {item.action}
-                            </p>
-                            <p className="text-xs text-gray-500">{item.details}</p>
-                            <p className="text-xs text-gray-400 mt-0.5">{new Date(item.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+                        <p className="font-semibold text-gray-700 text-sm">
+                            <span className="font-bold">{item.profiles?.role || 'System'} {item.profiles?.last_name || ''}</span> {item.action}
+                        </p>
+                        <p className="text-xs text-gray-500">{item.details}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">{new Date(item.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
                     </div>
                 </div>
             )) : <p className="text-sm text-gray-500">No recent activity.</p>}
@@ -156,7 +168,6 @@ const UpcomingAppointments = ({ appointments }) => {
     );
 };
 
-// --- NEW: Modal to view all activities ---
 const ViewAllActivityModal = ({ activities, onClose }) => (
     <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4">
         <motion.div
@@ -170,9 +181,13 @@ const ViewAllActivityModal = ({ activities, onClose }) => (
                 <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-3">
                     {activities.length > 0 ? activities.map((item) => (
                         <div key={item.id} className="flex items-start space-x-3 pb-3 border-b last:border-b-0">
-                            <div className="w-1.5 h-1.5 rounded-full mt-1.5 bg-blue-500 flex-shrink-0"></div>
+                            {/* MODIFIED: Dot color is now dynamic */}
+                            <div className={`w-1.5 h-1.5 rounded-full mt-1.5 ${getDotColor(item.profiles?.role)} flex-shrink-0`}></div>
                             <div className="flex-grow">
-                                <p className="font-semibold text-gray-700 text-sm">{item.action}</p>
+                                {/* MODIFIED: Added user's role and name */}
+                                <p className="font-semibold text-gray-700 text-sm">
+                                    <span className="font-bold">{item.profiles?.role || 'System'} {item.profiles?.last_name || ''}</span> {item.action}
+                                </p>
                                 <p className="text-xs text-gray-500">{item.details}</p>
                                 <p className="text-xs text-gray-400 mt-0.5">
                                     {new Date(item.created_at).toLocaleString()}
@@ -198,31 +213,44 @@ export default function BhwDashboard() {
     const [loading, setLoading] = useState(true);
     const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
 
+    const { user } = useAuth(); 
+    const { addNotification } = useNotification();
+
     const fetchDashboardData = useCallback(async () => {
+        if (!user) return; // Wait until the user object is available
+
         setLoading(true);
 
-        const today = new Date().toISOString().split('T')[0];
+        const [appointmentsRes, activityRes] = await Promise.all([
+            // MODIFIED: This query now filters appointments by the logged-in user's ID
+            supabase
+                .from('appointments')
+                .select('*, profiles(first_name, last_name)')
+                .eq('created_by', user.id) // Only get appointments created by the current user
+                .order('created_at', { ascending: false })
+                .limit(10),
 
-
-        const [patientCountRes, activePatientsRes, todayVisitsRes, appointmentsRes, activityRes] = await Promise.all([
-            supabase.from('patients').select('*', { count: 'exact', head: true }),
-            supabase.from('patients').select('id'),
-            supabase.from('appointments').select('*', { count: 'exact', head: true }).eq('date', today),
-            supabase.from('appointments').select('*, profiles(first_name, last_name)').order('created_at', { ascending: false }).limit(10),            // Join activity_log with profiles table on the 'user_id' foreign key
-            supabase.from('activity_log').select('*, profiles(role, last_name)').order('created_at', { ascending: false })
+            // This query for activity remains the same, as the feed shows all activities
+            supabase
+                .from('activity_log')
+                .select('*, profiles(role, last_name)')
+                .order('created_at', { ascending: false })
         ]);
 
-        setStats({
-            total: patientCountRes.count || 0,
-            active: activePatientsRes.data?.length || 0,
-            today: todayVisitsRes.count || 0
-        });
+        if (appointmentsRes.error) {
+            addNotification(`Error fetching appointments: ${appointmentsRes.error.message}`, 'error');
+        } else {
+            setUpcomingAppointments(appointmentsRes.data || []);
+        }
+        
+        if (activityRes.error) {
+            addNotification(`Error fetching activity: ${activityRes.error.message}`, 'error');
+        } else {
+            setRecentActivities(activityRes.data || []);
+        }
 
-        setUpcomingAppointments(appointmentsRes.data || []);
-        setRecentActivities(activityRes.data || []);
         setLoading(false);
-    }, []);
-
+    }, [user, addNotification]); // Add 'user' to the dependency array
     useEffect(() => {
         fetchDashboardData();
     }, [fetchDashboardData]);
