@@ -20,9 +20,12 @@ import MaternityManagement from './pages/bhw/MaternityManagement';
 import AppointmentPage from './pages/bhw/AppointmentPage';
 import InventoryPage from './pages/bhw/InventoryPage';
 import ReportsPage from './pages/bhw/ReportsPage'; 
-// You will create these BNS files next
+// BNS files 
 import BnsDashboard from './pages/bns/BnsDashboard';
 import ChildHealthRecords from './pages/bns/ChildHealthRecords'; 
+import BnsAppointmentPage from './pages/bns/AppointmentPage'; 
+import BnsInventoryPage from './pages/bns/InventoryPage'; 
+import BnsReportsPage from './pages/bns/ReportsPage'; 
 
 
 import UserDashboard from './pages/user/UserDashboard';
@@ -65,8 +68,9 @@ export default function App() {
                         {/* BNS Routes */}
                             <Route path="bns/dashboard" element={<BnsDashboard />} />
                             <Route path="bns/child-records" element={<ChildHealthRecords />} />
-                            
-
+                            <Route path="bns/appointment" element={<BnsAppointmentPage />} /> 
+                            <Route path="bns/inventory" element={<BnsInventoryPage />} /> 
+                            <Route path="bns/reports" element={<BnsReportsPage />} /> 
                       {/* User/Mother Routes */}
                       <Route path="user/dashboard" element={<UserDashboard />} />
                       <Route path="user/schedule-appointment" element={<ScheduleAppointment />} />

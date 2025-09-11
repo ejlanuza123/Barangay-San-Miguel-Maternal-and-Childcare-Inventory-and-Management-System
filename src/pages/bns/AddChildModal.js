@@ -26,10 +26,17 @@ const Step1 = ({ formData, handleChange, newChildId }) => (
                 <div className="col-span-2"><label className="text-sm">Name of Father</label><input type="text" name="father_name" value={formData.father_name || ''} onChange={handleChange} className="w-full p-2 border rounded-md" /></div>
                 <div className="col-span-2"><label className="text-sm">Name of Guardian</label><input type="text" name="guardian_name" value={formData.guardian_name || ''} onChange={handleChange} className="w-full p-2 border rounded-md" /></div>
             </div>
-             <div className="w-1/4 space-y-4 p-4 border rounded-lg bg-gray-50">
+            <div className="w-1/4 space-y-4 p-4 border rounded-lg bg-gray-50">
                 <h3 className="font-bold text-center">ID Numbers</h3>
                 <div><label className="text-sm">NHTS No.</label><input type="text" name="nhts_no" value={formData.nhts_no || ''} onChange={handleChange} className="w-full p-2 border rounded-md" /></div>
                 <div><label className="text-sm">PhilHealth No.</label><input type="text" name="philhealth_no" value={formData.philhealth_no || ''} onChange={handleChange} className="w-full p-2 border rounded-md" /></div>
+                
+                <div className="border-t pt-4">
+                    <h3 className="font-bold text-center mb-4">Measurements</h3>
+                    <div><label className="text-sm">Weight (kg)</label><input type="number" step="0.1" name="weight_kg" value={formData.weight_kg || ''} onChange={handleChange} className="w-full p-2 border rounded-md" /></div>
+                    <div><label className="text-sm">Height (cm)</label><input type="number" step="0.1" name="height_cm" value={formData.height_cm || ''} onChange={handleChange} className="w-full p-2 border rounded-md" /></div>
+                    <div><label className="text-sm">Body Mass Index (BMI)</label><input type="text" name="bmi" value={formData.bmi || ''} readOnly className="w-full p-2 border rounded-md bg-gray-200 cursor-not-allowed" /></div>
+                </div>
             </div>
         </div>
     </div>
@@ -66,6 +73,17 @@ const Step2 = ({ formData, handleChange }) => (
     </div>
 );
 
+// --- NEW: Helper function to determine nutrition status from BMI ---
+const getNutritionStatus = (bmi) => {
+    if (!bmi) return null;
+    const bmiValue = parseFloat(bmi);
+    if (bmiValue < 14.5) return 'UW';
+    if (bmiValue >= 14.5 && bmiValue < 17.5) return 'H';
+    if (bmiValue >= 17.5 && bmiValue < 20) return 'OW';
+    if (bmiValue >= 20) return 'O';
+    return null; // Return null if BMI is not in a valid range
+};
+
 export default function AddChildModal({ onClose, onSave, mode = 'add', initialData = null }) {
     const [step, setStep] = useState(1);
     const [loading, setLoading] = useState(false);
@@ -92,47 +110,70 @@ export default function AddChildModal({ onClose, onSave, mode = 'add', initialDa
         }
     }, [mode, initialData]);
 
+    // NEW: useEffect to automatically calculate BMI
+    useEffect(() => {
+        const weight = parseFloat(formData.weight_kg);
+        const height = parseFloat(formData.height_cm);
+
+        if (weight > 0 && height > 0) {
+            const heightInMeters = height / 100;
+            const bmiValue = weight / (heightInMeters * heightInMeters);
+            // Update formData with the calculated BMI, rounded to one decimal place
+            setFormData(prev => ({ ...prev, bmi: bmiValue.toFixed(1) }));
+        }
+    }, [formData.weight_kg, formData.height_cm]);
+
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
         setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
     };
 
     const handleSave = async () => {
-        setLoading(true);
+        setLoading(true);
+        
+        const [firstName, ...lastNameParts] = (formData.child_name || '').split(' ');
+        const lastName = lastNameParts.join(' ');
         
-        // Extract main columns and detailed data
-        const [firstName, ...lastNameParts] = (formData.child_name || '').split(' ');
-        const lastName = lastNameParts.join(' ');
-        
-        const recordData = {
-            child_id: childId,
-            first_name: firstName,
-            last_name: lastName,
-            dob: formData.dob,
-            sex: formData.sex,
-            mother_name: formData.mother_name,
-            guardian_name: formData.guardian_name,
-            health_details: formData // Save the entire form state as JSON
-        };
+        // --- MODIFIED: Automatically determine status and update checkup date ---
+        const nutritionStatus = getNutritionStatus(formData.bmi);
+        const lastCheckupDate = new Date().toISOString().split('T')[0]; // Get today's date in YYYY-MM-DD format
+        
+        const recordData = {
+            child_id: childId,
+            first_name: firstName,
+            last_name: lastName,
+            dob: formData.dob,
+            sex: formData.sex,
+            mother_name: formData.mother_name,
+            guardian_name: formData.guardian_name,
+            weight_kg: formData.weight_kg || null,
+            height_cm: formData.height_cm || null,
+            bmi: formData.bmi || null,
+            nhts_no: formData.nhts_no || null,
+            philhealth_no: formData.philhealth_no || null,
+            nutrition_status: nutritionStatus, // Add the calculated status
+            last_checkup: lastCheckupDate, // Add the current date as the last checkup
+            health_details: formData
+        };
 
-        let result;
-        if (mode === 'edit') {
-            result = await supabase.from('child_records').update(recordData).eq('id', initialData.id);
-        } else {
-            result = await supabase.from('child_records').insert([recordData]);
-        }
+        let result;
+        if (mode === 'edit') {
+            result = await supabase.from('child_records').update(recordData).eq('id', initialData.id);
+        } else {
+            result = await supabase.from('child_records').insert([recordData]);
+        }
 
-        if (result.error) {
-            addNotification(`Error: ${result.error.message}`, 'error');
-        } else {
-            const successMsg = mode === 'edit' ? 'Child record updated successfully.' : 'New child added successfully.';
-            addNotification(successMsg, 'success');
-            logActivity(mode === 'edit' ? 'Child Record Updated' : 'New Child Added', `ID: ${childId}, Name: ${formData.child_name}`);
-            onSave();
-            onClose();
-        }
-        setLoading(false);
-    };
+        if (result.error) {
+            addNotification(`Error: ${result.error.message}`, 'error');
+        } else {
+            const successMsg = mode === 'edit' ? 'Child record updated successfully.' : 'New child added successfully.';
+            addNotification(successMsg, 'success');
+            logActivity(mode === 'edit' ? 'Child Record Updated' : 'New Child Added', `ID: ${childId}, Name: ${formData.child_name}`);
+            onSave();
+            onClose();
+        }
+        setLoading(false);
+    };
 
     const title = mode === 'edit' ? 'Edit Child Immunization Record' : 'New Child Immunization Record';
 

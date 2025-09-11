@@ -2,9 +2,21 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../../services/supabase';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useAuth } from '../../context/AuthContext';
+import { useNotification } from '../../context/NotificationContext';
 
 // --- WIDGETS & SUB-COMPONENTS ---
-
+const getDotColor = (role) => {
+    switch (role) {
+        case 'BNS':
+            return 'bg-green-500'; // Green for BNS
+        case 'Admin':
+            return 'bg-orange-500'; // Orange for Admin
+        case 'BHW':
+        default:
+            return 'bg-blue-500'; // Blue for BHW and others
+    }
+};
 const Calendar = () => {
     const [currentDate, setCurrentDate] = useState(new Date());
     const daysOfWeek = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
@@ -79,7 +91,8 @@ const RecentActivity = ({ activities, onViewAll }) => (
         <div className="space-y-3">
             {activities.length > 0 ? activities.slice(0, 4).map((item) => (
                 <div key={item.id} className="flex items-start space-x-2">
-                    <div className="w-1.5 h-1.5 rounded-full mt-1.5 bg-blue-500"></div>
+                    {/* MODIFIED: Now uses the shared getDotColor function */}
+                    <div className={`w-1.5 h-1.5 rounded-full mt-1.5 ${getDotColor(item.profiles?.role)}`}></div>
                     <div>
                         <p className="font-semibold text-gray-700 text-sm">
                             <span className="font-bold">{item.profiles?.role || 'System'} {item.profiles?.last_name || ''}</span> {item.action}
@@ -165,10 +178,12 @@ const ViewAllActivityModal = ({ activities, onClose }) => (
                 <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-3">
                     {activities.length > 0 ? activities.map((item) => (
                         <div key={item.id} className="flex items-start space-x-3 pb-3 border-b last:border-b-0">
-                            <div className="w-1.5 h-1.5 rounded-full mt-1.5 bg-blue-500 flex-shrink-0"></div>
+                            {/* MODIFIED: Dot color is now dynamic */}
+                            <div className={`w-1.5 h-1.5 rounded-full mt-1.5 ${getDotColor(item.profiles?.role)} flex-shrink-0`}></div>
                             <div className="flex-grow">
+                                {/* MODIFIED: Added user's role and name */}
                                 <p className="font-semibold text-gray-700 text-sm">
-                                  <span className="font-bold">{item.profiles?.role || 'System'} {item.profiles?.last_name || ''}</span> {item.action}
+                                    <span className="font-bold">{item.profiles?.role || 'System'} {item.profiles?.last_name || ''}</span> {item.action}
                                 </p>
                                 <p className="text-xs text-gray-500">{item.details}</p>
                                 <p className="text-xs text-gray-400 mt-0.5">
@@ -185,7 +200,6 @@ const ViewAllActivityModal = ({ activities, onClose }) => (
         </motion.div>
     </div>
 );
-
 // --- Main BNS Dashboard Component ---
 export default function BnsDashboard() {
     const [upcomingAppointments, setUpcomingAppointments] = useState([]);
@@ -193,22 +207,67 @@ export default function BnsDashboard() {
     const [loading, setLoading] = useState(true);
     const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
 
+    const { user } = useAuth(); // Import useAuth at the top of your component
+    const { addNotification } = useNotification();
+
     const fetchDashboardData = useCallback(async () => {
+        if (!user) return; // Wait until the user object is available
+
         setLoading(true);
 
         const [appointmentsRes, activityRes] = await Promise.all([
-            supabase.from('appointments').select('*, profiles(first_name, last_name)').order('created_at', { ascending: false }).limit(10),
-            supabase.from('activity_log').select('*, profiles(role, last_name)').order('created_at', { ascending: false })
+            // MODIFIED: This query now filters appointments by the logged-in user's ID
+            supabase
+                .from('appointments')
+                .select('*, profiles(first_name, last_name)')
+                .eq('created_by', user.id) // Only get appointments created by the current user
+                .order('created_at', { ascending: false })
+                .limit(10),
+
+            // This query for activity remains the same, as the feed shows all activities
+            supabase
+                .from('activity_log')
+                .select('*, profiles(role, last_name)')
+                .order('created_at', { ascending: false })
         ]);
 
-        setUpcomingAppointments(appointmentsRes.data || []);
-        setRecentActivities(activityRes.data || []);
+        if (appointmentsRes.error) {
+            addNotification(`Error fetching appointments: ${appointmentsRes.error.message}`, 'error');
+        } else {
+            setUpcomingAppointments(appointmentsRes.data || []);
+        }
+        
+        if (activityRes.error) {
+            addNotification(`Error fetching activity: ${activityRes.error.message}`, 'error');
+        } else {
+            setRecentActivities(activityRes.data || []);
+        }
+
         setLoading(false);
-    }, []);
+    }, [user, addNotification]); // Add 'user' to the dependency array
 
     useEffect(() => {
+        // 1. Fetch the initial data when the component loads
         fetchDashboardData();
-    }, [fetchDashboardData]);
+
+        // 2. Set up a real-time subscription to the activity_log table
+        const channel = supabase.channel('activity-log-channel')
+            .on(
+                'postgres_changes',
+                { event: 'INSERT', schema: 'public', table: 'activity_log' },
+                (payload) => {
+                    // 3. When a new activity is inserted, re-fetch all dashboard data
+                    // This will make the new activity appear instantly.
+                    fetchDashboardData();
+                }
+            )
+            .subscribe();
+
+        // 4. Cleanup function to remove the subscription when the component unmounts
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [fetchDashboardData]); // The dependency array should contain the fetch function
 
     if (loading) {
         return <div className="flex h-full items-center justify-center">Loading Dashboard...</div>;
