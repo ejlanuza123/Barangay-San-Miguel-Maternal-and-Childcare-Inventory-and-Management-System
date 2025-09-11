@@ -85,210 +85,151 @@ const DeleteConfirmationModal = ({ patientName, onConfirm, onCancel }) => (
     </div>
 );
 
-// --- UPDATED ViewPatientModal Component ---
+// MODIFIED: ViewPatientModal now displays all medical history details
 const ViewPatientModal = ({ patient, onClose }) => {
-    const history = patient.medical_history || {};
-    
-    // Helper function to render section headers
+    // Safely get the detailed records, or an empty object if it's null
+    const details = patient.medical_history || {};
+
+    // Helper components for styling the document view
     const SectionHeader = ({ title }) => (
-        <div className="bg-gray-100 p-2 rounded-md mb-3">
-            <h3 className="font-bold text-gray-800 text-sm">{title}</h3>
+        <h3 className="font-bold text-gray-700 text-sm mt-6 mb-2 pb-1 border-b">{title}</h3>
+    );
+    const Field = ({ label, value }) => (
+        <div>
+            <p className="text-xs text-gray-500">{label}</p>
+            <p className="font-semibold text-gray-800">{value || 'N/A'}</p>
         </div>
     );
-
-    // Helper function to render field rows
-    const FieldRow = ({ label, value, cols = 2 }) => (
-        <div className={`grid grid-cols-1 md:grid-cols-${cols} gap-4 mb-3`}>
-            <div className="font-semibold text-gray-700 text-sm">{label}:</div>
-            <div className="text-gray-600 text-sm">{value || 'N/A'}</div>
-        </div>
-    );
-
-    // Helper function to render checkbox fields
-    const CheckboxField = ({ label, checked }) => (
-        <div className="flex items-center mb-2">
-            <div className={`w-4 h-4 border rounded mr-2 ${checked ? 'bg-blue-500 border-blue-500' : 'bg-white border-gray-300'}`}>
-                {checked && (
-                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-                    </svg>
-                )}
+     const CheckboxDisplay = ({ label, isChecked }) => (
+        <div className="flex items-center space-x-2">
+            <div className={`w-4 h-4 border-2 rounded ${isChecked ? 'bg-blue-500 border-blue-500' : 'border-gray-300'}`}>
+                {isChecked && <svg className="w-full h-full text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>}
             </div>
-            <span className="text-sm text-gray-600">{label}</span>
+            <span className="text-sm">{label}</span>
         </div>
     );
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
             <motion.div
-                className="bg-white rounded-lg shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden"
-                initial={{ opacity: 0, y: -30 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 30 }}
+                className="bg-white rounded-lg shadow-2xl w-full max-w-4xl overflow-hidden"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
             >
-                {/* Header */}
-                <div className="bg-blue-600 text-white p-4">
-                    <div className="flex justify-between items-center">
-                        <h2 className="text-xl font-bold">PATIENT TREATMENT RECORD</h2>
-                        <button onClick={onClose} className="text-white hover:text-gray-200">
-                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
-                            </svg>
-                        </button>
-                    </div>
-                    <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                        <div><span className="font-semibold">Patient ID:</span> {patient.patient_id}</div>
-                        <div><span className="font-semibold">Name:</span> {`${patient.first_name || ''} ${patient.middle_name || ''} ${patient.last_name || ''}`}</div>
-                        <div><span className="font-semibold">Age:</span> {patient.age}</div>
-                        <div><span className="font-semibold">Contact:</span> {patient.contact_no || 'N/A'}</div>
-                    </div>
+                {/* Header Section */}
+                <div className="p-4 bg-gray-50 border-b">
+                    <h2 className="text-lg font-bold text-gray-800">Maternal Patient Record</h2>
+                    <p className="text-sm text-gray-600">Viewing record for <span className="font-semibold">{patient.first_name} {patient.last_name}</span> (ID: {patient.patient_id})</p>
                 </div>
 
-                {/* Content */}
+                {/* Main Content Body with Scrolling */}
                 <div className="p-6 overflow-y-auto max-h-[70vh]">
-                    {/* Personal Information */}
-                    <SectionHeader title="PERSONAL INFORMATION" />
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                        <FieldRow label="Patient ID" value={patient.patient_id} />
-                        <FieldRow label="Last Name" value={patient.last_name} />
-                        <FieldRow label="First Name" value={patient.first_name} />
-                        <FieldRow label="Middle Name" value={patient.middle_name} />
-                        <FieldRow label="Age" value={patient.age} />
-                        <FieldRow label="Contact No." value={patient.contact_no} />
-                        <FieldRow label="Weeks of Pregnancy" value={patient.weeks} />
-                        <FieldRow label="Last Visit" value={patient.last_visit} />
-                        <FieldRow label="Risk Level" value={patient.risk_level} />
-                        <FieldRow label="Date of Birth" value={history.dob} />
-                        <FieldRow label="Blood Type" value={history.blood_type} />
-                        <FieldRow label="NHTS No." value={history.nhts_no} />
-                        <FieldRow label="PhilHealth No." value={history.philhealth_no} />
-                        <FieldRow label="Family Folder No." value={history.family_folder_no} />
-                        <FieldRow label="Purok" value={history.purok} />
-                        <FieldRow label="Street" value={history.street} />
+                    <SectionHeader title="Personal Information" />
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                        <Field label="Full Name" value={`${patient.first_name || ''} ${details.middle_name || ''} ${patient.last_name || ''}`} />
+                        <Field label="Age" value={patient.age} />
+                        <Field label="Date of Birth" value={details.dob} />
+                        <Field label="Contact No." value={patient.contact_no} />
+                        <Field label="Address" value={`${details.purok || ''}, ${details.street || ''}`} />
+                        <Field label="Blood Type" value={details.blood_type} />
+                        <Field label="NHTS No." value={details.nhts_no} />
+                        <Field label="PhilHealth No." value={details.philhealth_no} />
+                        <Field label="Family Folder No." value={details.family_folder_no} />
+                        <Field label="Risk Level" value={patient.risk_level} />
                     </div>
 
-                    {/* Obstetrical Score */}
-                    <SectionHeader title="OBSTETRICAL SCORE" />
-                    <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
-                        <FieldRow label="G" value={history.g_score} cols={1} />
-                        <FieldRow label="P" value={history.p_score} cols={1} />
-                        <FieldRow label="Term" value={history.term} cols={1} />
-                        <FieldRow label="Preterm" value={history.preterm} cols={1} />
-                        <FieldRow label="Abortion" value={history.abortion} cols={1} />
-                        <FieldRow label="Living Children" value={history.living_children} cols={1} />
+                    <SectionHeader title="Obstetrical History" />
+                     <div className="grid grid-cols-3 md:grid-cols-6 gap-4 text-sm">
+                        <Field label="Gravida (G)" value={details.g_score} />
+                        <Field label="Para (P)" value={details.p_score} />
+                        <Field label="Term" value={details.term} />
+                        <Field label="Preterm" value={details.preterm} />
+                        <Field label="Abortion" value={details.abortion} />
+                        <Field label="Living" value={details.living_children} />
                     </div>
 
-                    {/* Pregnancy History */}
-                    <SectionHeader title="PREGNANCY HISTORY" />
-                    <div className="overflow-x-auto mb-6">
-                        <table className="w-full text-sm border">
-                            <thead className="bg-gray-50">
+                    {/* ADDED: Pregnancy History Table */}
+                    <SectionHeader title="Pregnancy History Details" />
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-center text-xs border">
+                            <thead className="bg-gray-100 font-semibold">
                                 <tr>
-                                    {['Gravida', 'Outcome', 'Sex', 'NSD/CS', 'Delivered At'].map(h => 
-                                        <th key={h} className="p-2 border font-medium text-xs">{h}</th>
-                                    )}
+                                    {['Gravida', 'Outcome', 'Sex', 'NSD/CS', 'Delivered At'].map(h => <th key={h} className="p-2 border">{h}</th>)}
                                 </tr>
                             </thead>
-                            <tbody>
+                            <tbody className="divide-y">
                                 {Array.from({ length: 10 }, (_, i) => i + 1).map(g => (
                                     <tr key={g}>
-                                        <td className="p-2 border text-center font-semibold text-gray-600">G{g}</td>
-                                        <td className="p-2 border">{history[`g${g}_outcome`] || '-'}</td>
-                                        <td className="p-2 border">{history[`g${g}_sex`] || '-'}</td>
-                                        <td className="p-2 border">{history[`g${g}_delivery_type`] || '-'}</td>
-                                        <td className="p-2 border">{history[`g${g}_delivered_at`] || '-'}</td>
+                                        <td className="p-2 border font-semibold">G{g}</td>
+                                        <td className="p-2 border">{details[`g${g}_outcome`] || '-'}</td>
+                                        <td className="p-2 border">{details[`g${g}_sex`] || '-'}</td>
+                                        <td className="p-2 border">{details[`g${g}_delivery_type`] || '-'}</td>
+                                        <td className="p-2 border">{details[`g${g}_delivered_at`] || '-'}</td>
                                     </tr>
                                 ))}
                             </tbody>
                         </table>
                     </div>
 
-                    {/* Menstrual Period & OB History */}
-                    <SectionHeader title="MENSTRUAL PERIOD & OB HISTORY" />
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                        <FieldRow label="Last Menstrual Period (LMP)" value={history.lmp} />
-                        <FieldRow label="Risk Code" value={history.risk_code} />
-                        <FieldRow label="Expected Date of Confinement (EDC)" value={history.edc} />
-                        <FieldRow label="Age of First Period" value={history.age_first_period} />
-                        <FieldRow label="Age of Menarche" value={history.age_of_menarche} />
-                        <FieldRow label="Amount of Bleeding" value={history.bleeding_amount} />
-                        <FieldRow label="Duration of Menstruation (days)" value={history.menstruation_duration} />
+
+                    <SectionHeader title="Menstrual & Pregnancy Details" />
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                        <Field label="LMP" value={details.lmp} />
+                        <Field label="EDC" value={details.edc} />
+                        <Field label="Age of Menarche" value={details.age_of_menarche} />
+                        <Field label="Weeks Pregnant" value={patient.weeks} />
+                        <Field label="Age of First Period" value={details.age_first_period} />
+                        <Field label="Bleeding Amount" value={details.bleeding_amount} />
+                        <Field label="Menstruation Duration" value={`${details.menstruation_duration || 'N/A'} days`} />
+                        <Field label="Risk Code" value={details.risk_code} />
                     </div>
 
-                    {/* Vaccination Record */}
-                    <SectionHeader title="VACCINATION RECORD" />
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <SectionHeader title="Vaccination Record (Tetanus Toxoid)" />
+                    <div className="grid grid-cols-3 md:grid-cols-6 gap-4 text-sm">
                         {['TT1', 'TT2', 'TT3', 'TT4', 'TT5', 'FIM'].map(vaccine => (
-                            <FieldRow 
-                                key={vaccine} 
-                                label={`${vaccine} Date`} 
-                                value={history[`vaccine_${vaccine.toLowerCase()}`]} 
-                            />
+                           <Field key={vaccine} label={vaccine} value={details[`vaccine_${vaccine.toLowerCase()}`]} />
                         ))}
                     </div>
-
-                    {/* Medical History */}
-                    <SectionHeader title="MEDICAL HISTORY" />
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                        {/* Personal History */}
+                    
+                    <SectionHeader title="Medical History" />
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
                         <div>
-                            <h4 className="font-semibold text-gray-700 mb-3 text-sm">Personal History</h4>
-                            {['Diabetes Mellitus (DM)', 'Asthma', 'Cardiovascular Disease (CVD)', 'Heart Disease', 'Goiter'].map(condition => (
-                                <CheckboxField 
-                                    key={condition}
-                                    label={condition} 
-                                    checked={history[`ph_${condition}`]} 
-                                />
-                            ))}
+                            <h4 className="font-semibold mb-2">Personal</h4>
+                            {['Diabetes Mellitus (DM)', 'Asthma', 'Cardiovascular Disease (CVD)', 'Heart Disease', 'Goiter'].map(c => <CheckboxDisplay key={c} label={c} isChecked={details[`ph_${c}`]} />)}
                         </div>
-
-                        {/* Hereditary Disease History */}
                         <div>
-                            <h4 className="font-semibold text-gray-700 mb-3 text-sm">Hereditary Disease History</h4>
-                            {['Hypertension (HPN)', 'Asthma', 'Heart Disease', 'Diabetes Mellitus', 'Goiter'].map(condition => (
-                                <CheckboxField 
-                                    key={condition}
-                                    label={condition} 
-                                    checked={history[`hdh_${condition}`]} 
-                                />
-                            ))}
+                            <h4 className="font-semibold mb-2">Hereditary</h4>
+                            {['Hypertension (HPN)', 'Asthma', 'Heart Disease', 'Diabetes Mellitus', 'Goiter'].map(c => <CheckboxDisplay key={c} label={c} isChecked={details[`hdh_${c}`]} />)}
                         </div>
-
-                        {/* Social History */}
                         <div>
-                            <h4 className="font-semibold text-gray-700 mb-3 text-sm">Social History</h4>
-                            {['Smoker', 'Ex-smoker', 'Second-hand Smoker', 'Alcohol Drinker', 'Substance Abuse'].map(habit => (
-                                <CheckboxField 
-                                    key={habit}
-                                    label={habit} 
-                                    checked={history[`sh_${habit}`]} 
-                                />
-                            ))}
+                            <h4 className="font-semibold mb-2">Social</h4>
+                             {['Smoker', 'Ex-smoker', 'Second-hand Smoker', 'Alcohol Drinker', 'Substance Abuse'].map(c => <CheckboxDisplay key={c} label={c} isChecked={details[`sh_${c}`]} />)}
                         </div>
                     </div>
 
-                    {/* Allergy and Family Planning History */}
-                    <SectionHeader title="ADDITIONAL INFORMATION" />
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                        <div>
-                            <h4 className="font-semibold text-gray-700 mb-2 text-sm">History of Allergy and Drugs</h4>
-                            <div className="bg-gray-50 p-3 rounded-md text-sm text-gray-600 min-h-[80px]">
-                                {history.allergy_history || 'No allergies recorded'}
+                    {/* ADDED: Allergy and Family Planning History */}
+                    <SectionHeader title="Additional Information" />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
+                         <div>
+                            <h4 className="font-semibold text-gray-700 mb-2">History of Allergy and Drugs</h4>
+                            <div className="bg-gray-50 p-3 rounded-md min-h-[80px] whitespace-pre-wrap">
+                                {details.allergy_history || 'No allergies recorded'}
                             </div>
                         </div>
                         <div>
-                            <h4 className="font-semibold text-gray-700 mb-2 text-sm">Family Planning History</h4>
-                            <div className="bg-gray-50 p-3 rounded-md text-sm text-gray-600 min-h-[80px]">
-                                {history.family_planning_history || 'No family planning history recorded'}
+                            <h4 className="font-semibold text-gray-700 mb-2">Family Planning History</h4>
+                            <div className="bg-gray-50 p-3 rounded-md min-h-[80px] whitespace-pre-wrap">
+                                {details.family_planning_history || 'No family planning history recorded'}
                             </div>
                         </div>
                     </div>
+
                 </div>
 
                 {/* Footer */}
-                <div className="bg-gray-100 p-4 border-t">
-                    <div className="flex justify-end">
-                    </div>
+                <div className="p-4 bg-gray-50 border-t flex justify-end">
+                    <button onClick={onClose} className="px-6 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 font-semibold text-sm">Close</button>
                 </div>
             </motion.div>
         </div>
