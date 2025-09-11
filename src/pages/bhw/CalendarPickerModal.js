@@ -99,7 +99,7 @@ export default function CalendarPickerModal({ onClose, onDateSelect }) {
     };
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-[51] p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-[100] p-4">
             <motion.div
                 className="bg-white rounded-lg shadow-xl w-full max-w-sm p-4"
                 initial={{ opacity: 0, scale: 0.9 }}
