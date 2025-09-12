@@ -245,7 +245,25 @@ const ViewChildModal = ({ child, onClose }) => {
         </div>
     );
 };
-// --- MAIN PAGE COMPONENT ---
+
+const DeleteConfirmationModal = ({ patientName, onConfirm, onCancel }) => (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
+        <motion.div
+            className="bg-white rounded-lg shadow-2xl w-full max-w-sm p-6 text-center"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+        >
+            <h3 className="text-lg font-bold text-gray-800">Confirm Deletion</h3>
+            <p className="text-sm text-gray-600 my-4">Are you sure you want to delete the record for <span className="font-semibold">{patientName}</span>? This action cannot be undone.</p>
+            <div className="flex justify-center gap-4">
+                <button onClick={onCancel} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 font-semibold text-sm">Cancel</button>
+                <button onClick={onConfirm} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 font-semibold text-sm">Yes, Delete</button>
+            </div>
+        </motion.div>
+    </div>
+);
+
 export default function ChildHealthRecords() {
     const [childRecords, setChildRecords] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -255,6 +273,7 @@ export default function ChildHealthRecords() {
     const [upcomingAppointments, setUpcomingAppointments] = useState([]);
     const [isFilterOpen, setIsFilterOpen] = useState(false);
     const [activeFilter, setActiveFilter] = useState('All');
+    const [patientToDelete, setPatientToDelete] = useState(null);
     
     // State for pagination
     const [currentPage, setCurrentPage] = useState(1);
@@ -312,17 +331,19 @@ export default function ChildHealthRecords() {
         return age > 0 ? age : '< 1';
     };
 
-    const handleDelete = async (child) => {
-        if (window.confirm(`Are you sure you want to delete the record for ${child.first_name} ${child.last_name}?`)) {
-            const { error } = await supabase.from('child_records').delete().eq('id', child.id);
-            if (error) {
-                addNotification(`Error: ${error.message}`, 'error');
-            } else {
-                addNotification('Record deleted successfully.', 'success');
-                logActivity('Child Record Deleted', `Deleted record for ${child.first_name}`);
-                fetchPageData();
-            }
+    const handleDelete = async () => {
+        if (!patientToDelete) return; // Make sure there is a patient selected
+
+        const { error } = await supabase.from('child_records').delete().eq('id', patientToDelete.id);
+        
+        if (error) {
+            addNotification(`Error: ${error.message}`, 'error');
+        } else {
+            addNotification('Record deleted successfully.', 'success');
+            logActivity('Child Record Deleted', `Deleted record for ${patientToDelete.first_name} ${patientToDelete.last_name}`);
+            fetchPageData(); // Refresh the list
         }
+        setPatientToDelete(null); // Close the modal
     };
 
     const filteredRecords = useMemo(() => {
@@ -347,6 +368,14 @@ export default function ChildHealthRecords() {
                 )}
                 {modalMode === 'view' && (
                     <ViewChildModal child={selectedChild} onClose={() => setModalMode(null)} />
+                )}
+                                {/* --- THIS BLOCK RENDERS THE DELETE MODAL --- */}
+                {patientToDelete && (
+                    <DeleteConfirmationModal
+                        patientName={`${patientToDelete.first_name} ${patientToDelete.last_name}`}
+                        onConfirm={handleDelete}
+                        onCancel={() => setPatientToDelete(null)}
+                    />
                 )}
             </AnimatePresence>
 
@@ -428,7 +457,7 @@ export default function ChildHealthRecords() {
                                                     <div className="flex space-x-1">
                                                         <button onClick={() => { setSelectedChild(record); setModalMode('view'); }} className="text-gray-400 hover:text-blue-600 p-1" title="View"><ViewIcon /></button>
                                                         <button onClick={() => { setSelectedChild(record); setModalMode('edit'); }} className="text-gray-400 hover:text-green-600 p-1" title="Edit"><UpdateIcon /></button>
-                                                        <button onClick={() => handleDelete(record)} className="text-gray-400 hover:text-red-600 p-1" title="Delete"><DeleteIcon /></button>
+                                                        <button onClick={() => setPatientToDelete(record)} className="text-gray-400 hover:text-red-600 p-1" title="Delete"><DeleteIcon /></button>
                                                     </div>
                                                 </td>
                                             </tr>
