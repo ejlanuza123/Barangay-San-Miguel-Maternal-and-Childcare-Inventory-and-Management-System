@@ -66,7 +66,7 @@ export default function Sidebar({ role }) {
         <div className="w-64 bg-white border-r flex flex-col h-screen pb-6">
 
             {/* --- UPDATED: Reduced padding, logo size, and font size --- */}
-            <div className="p-3 border-b flex items-center space-x-2">
+            <div className="p-3 border-b flex items-center space-x-2 flex-shrink-0">
                 <img src={logo} alt="Logo" className="w-10 h-10 rounded-md" />
                 <div>
                     <h2 className="font-bold text-sm text-gray-800">Barangay San Miguel</h2>
@@ -101,7 +101,7 @@ export default function Sidebar({ role }) {
                     <HelpIcon />
                     <span className="text-sm font-semibold">Help</span>
             </NavLink>
-            <div className="p-3 border-t">
+            <div className="px-3 py-2 border-t flex-shrink-0">
                 <button onClick={handleLogout} className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-800">
                     <LogOutIcon />
                     <span className="text-sm font-semibold">Log Out</span>

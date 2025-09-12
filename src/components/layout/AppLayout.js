@@ -1,7 +1,8 @@
+// src/components/layout/AppLayout.js
 import React, { useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
-import Header from './Header'; // Import the new Header component
+import Header from './Header';
 import { useAuth } from '../../context/AuthContext';
 
 export default function AppLayout() {
@@ -17,7 +18,6 @@ export default function AppLayout() {
           case 'Admin': navigate('/admin/dashboard', { replace: true }); break;
           case 'BHW': navigate('/bhw/dashboard', { replace: true }); break;
           case 'BNS': navigate('/bns/dashboard', { replace: true }); break;
-          case 'USER/MOTHER/GUARDIAN': navigate('/user/dashboard', { replace: true }); break;
           default: navigate('/login', { replace: true });
         }
       }
@@ -25,19 +25,29 @@ export default function AppLayout() {
   }, [profile, loading, navigate, location.pathname]);
 
   if (!profile) {
-    return <div className="flex h-screen items-center justify-center">Loading User Profile...</div>;
+    return (
+      <div className="flex h-screen items-center justify-center">
+        Loading User Profile...
+      </div>
+    );
   }
 
   return (
-    <div className="flex h-screen bg-gray-100 font-sans">
-      <Sidebar role={profile.role} />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* The Header is now a permanent part of the layout */}
+    <div className="h-screen w-screen bg-gray-100 font-sans overflow-hidden">
+      {/* Sidebar fixed */}
+      <aside className="fixed top-0 left-0 h-screen w-64 bg-white border-r shadow-sm z-10">
+        <Sidebar role={profile.role} />
+      </aside>
+
+      {/* Header fixed */}
+      <header className="fixed top-0 left-64 right-0 h-16 border-b bg-white shadow-sm z-20">
         <Header role={profile.role} />
-        <main className="flex-1 overflow-x-hidden overflow-y-auto p-6">
-          <Outlet />
-        </main>
-      </div>
+      </header>
+
+      {/* Scrollable content area */}
+      <main className="absolute top-16 left-64 right-0 bottom-0 overflow-y-auto p-4">
+        <Outlet />
+      </main>
     </div>
   );
 }
