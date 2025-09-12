@@ -4,7 +4,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNotification } from '../../context/NotificationContext';
 import AddBnsInventoryModal from './AddBnsInventoryModal';
 import { logActivity } from '../../services/activityLogger';
-import IssueItemModal from './IssueItemModal';
 import { useAuth } from '../../context/AuthContext';
  
 
