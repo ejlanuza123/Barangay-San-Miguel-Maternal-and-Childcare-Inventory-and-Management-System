@@ -186,38 +186,39 @@ export default function Header() {
 
 
     useEffect(() => {
-        const fetchNotifications = async () => {
-            if (!user || !profile) return; // Wait for both user and profile
+        const fetchNotifications = async () => {
+            if (!user || !profile) return;
 
-            const { data, error } = await supabase
-                .from('notifications')
-                .select('*')
-                .order('created_at', { ascending: false });
+            // MODIFIED: This query now filters notifications by the current user's ID
+            const { data, error } = await supabase
+                .from('notifications')
+                .select('*')
+                .eq('user_id', user.id) // Only get notifications for the logged-in user
+                .order('created_at', { ascending: false });
 
-            if (error) {
-                console.error("Error fetching notifications:", error);
-                return;
-            }
-            
-            // --- NEW: Filter notifications based on user preferences ---
-            const userPreferences = profile.preferences || {};
-            const filteredNotifications = (data || []).filter(n => {
-                if (n.type === 'appointment_reminder') {
-                    return userPreferences.appointment_reminders !== false; // Show if true or undefined
-                }
-                if (n.type === 'inventory_alert') {
-                    return userPreferences.inventory_alerts !== false; // Show if true or undefined
-                }
-                if (n.type === 'patient_followup') {
-                    return userPreferences.patient_followups !== false; // Show if true or undefined
-                }
-                return true; // Show any other types by default
-            });
+            if (error) {
+                console.error("Error fetching notifications:", error);
+                return;
+            }
+            
+            const userPreferences = profile.preferences || {};
+            const filteredNotifications = (data || []).filter(n => {
+                if (n.type === 'appointment_reminder') {
+                    return userPreferences.appointment_reminders !== false;
+                }
+                if (n.type === 'inventory_alert') {
+                    return userPreferences.inventory_alerts !== false;
+                }
+                if (n.type === 'patient_followup') {
+                    return userPreferences.patient_followups !== false;
+                }
+                return true;
+            });
 
-            const unread = filteredNotifications.filter(n => !n.is_read);
-            setNotifications(filteredNotifications);
-            setUnreadCount(unread.length);
-        };
+            const unread = filteredNotifications.filter(n => !n.is_read);
+            setNotifications(filteredNotifications);
+            setUnreadCount(unread.length);
+        };
 
         fetchNotifications();
 

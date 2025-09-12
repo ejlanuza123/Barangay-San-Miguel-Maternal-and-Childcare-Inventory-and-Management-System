@@ -5,6 +5,9 @@ import { useNotification } from '../../context/NotificationContext';
 import AddBnsInventoryModal from './AddBnsInventoryModal';
 import { logActivity } from '../../services/activityLogger';
 import IssueItemModal from './IssueItemModal';
+import { useAuth } from '../../context/AuthContext';
+ 
+
 
 // --- ICONS ---
 const SearchIcon = () => <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>;
@@ -128,7 +131,28 @@ const DeleteConfirmationModal = ({ itemName, onConfirm, onCancel }) => (
         </motion.div>
     </div>
 );
-// --- MAIN PAGE COMPONENT ---
+
+// NEW: Notification component specifically for stock alerts
+const Notification = ({ message, onClear }) => {
+    useEffect(() => {
+        const timer = setTimeout(onClear, 3000); // Auto-dismiss after 5 seconds
+        return () => clearTimeout(timer);
+    }, [onClear]);
+
+    return (
+        <motion.div
+            // MODIFIED: Removed fixed positioning to let the parent container control it
+            className="w-80 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 rounded-md shadow-lg mb-4"
+            layout // Added for smooth animation when items are removed
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, x: 100 }}
+        >
+            <p className="font-bold">Low Stock Warning</p>
+            <p>{message}</p>
+        </motion.div>
+    );
+};
 
 export default function BnsInventoryPage() {
     const [inventory, setInventory] = useState([]);
@@ -141,11 +165,13 @@ export default function BnsInventoryPage() {
     const [itemToDelete, setItemToDelete] = useState(null);
     const [isFilterOpen, setIsFilterOpen] = useState(false);
     const [activeCategory, setActiveCategory] = useState('All');
+    const [stockNotifications, setStockNotifications] = useState([]);
     
     // State for pagination
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage] = useState(10);
     const [totalRecords, setTotalRecords] = useState(0);
+    const { user } = useAuth();
 
 
     const fetchPageData = useCallback(async () => {
@@ -165,7 +191,8 @@ export default function BnsInventoryPage() {
             const CRITICAL_THRESHOLD = 10;
             const LOW_THRESHOLD = 20;
             const updatePromises = [];
-            const notificationPromises = []; // --- NEW: Array for notifications ---
+            const headerNotificationPromises = []; // For the bell icon in the header
+            const popUpNotificationMessages = []; // For the pop-up on the page
 
             data.forEach(item => {
                 let newStatus = 'Normal';
@@ -179,42 +206,47 @@ export default function BnsInventoryPage() {
                     updatePromises.push(
                         supabase.from('bns_inventory').update({ status: newStatus }).eq('id', item.id)
                     );
-                    item.status = newStatus;
+                    item.status = newStatus; 
 
-                    // --- NEW: Create a notification when status changes to Low or Critical ---
-                    if (newStatus === 'Low' || newStatus === 'Critical') {
-                        notificationPromises.push(
+                    if ((newStatus === 'Low' || newStatus === 'Critical') && user) {
+                        const message = `${item.item_name} stock is ${newStatus.toLowerCase()} (${item.quantity} units left).`;
+
+                        // ✅ 1. Always insert into Supabase (for the bell)
+                        headerNotificationPromises.push(
                             supabase.from('notifications').insert([{
                                 type: 'inventory_alert',
-                                message: `${item.item_name} stock is ${newStatus.toLowerCase()} (${item.quantity} units left).`,
-                                is_read: false
+                                message,
+                                user_id: user.id
                             }])
                         );
+
+                        // ✅ 2. Only push to pop-up if not already showing
+                        setStockNotifications(prev => {
+                            if (!prev.some(n => n.message === message)) {
+                                return [...prev, { id: item.id + Date.now(), message }];
+                            }
+                            return prev; // avoid duplicate pop-ups
+                        });
                     }
                 }
             });
 
-            // Run all database updates and notification inserts concurrently
-            if (updatePromises.length > 0) {
-                await Promise.all(updatePromises);
+            if (updatePromises.length > 0) await Promise.all(updatePromises);
+            if (headerNotificationPromises.length > 0) await Promise.all(headerNotificationPromises);
+            if (popUpNotificationMessages.length > 0) {
+                setStockNotifications(prev => [...prev, ...popUpNotificationMessages]);
             }
-            if (notificationPromises.length > 0) {
-                await Promise.all(notificationPromises);
-            }
-            // --- END OF NEW LOGIC ---
-
+            
             setInventory(data);
             setTotalRecords(count || 0);
         }
-
-
-
         setLoading(false);
-    }, [addNotification, currentPage, itemsPerPage]);
+    }, [addNotification, currentPage, itemsPerPage, user]);
 
+    // This is now the ONLY useEffect for fetching data
     useEffect(() => {
         fetchPageData();
-    }, [fetchPageData]); // Now there is only one useEffect, which depends on the single fetch function
+    }, [fetchPageData]);
 
     const handleDelete = async () => {
         if (!itemToDelete) return;
@@ -256,6 +288,17 @@ export default function BnsInventoryPage() {
                     />
                 )}
             </AnimatePresence>
+            <div className="fixed top-5 right-5 z-50">
+                <AnimatePresence>
+                    {stockNotifications.map(notif => (
+                        <Notification 
+                            key={notif.id} 
+                            message={notif.message} 
+                            onClear={() => setStockNotifications(current => current.filter(n => n.id !== notif.id))} 
+                        />
+                    ))}
+                </AnimatePresence>
+            </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
                 {/* Main Content Area */}
