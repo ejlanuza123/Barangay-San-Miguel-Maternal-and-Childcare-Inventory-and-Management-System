@@ -9,7 +9,7 @@ import RegisterVIP from './components/auth/RegisterVIP';
 import AppLayout from './components/layout/AppLayout';
 import PrivateRoute from './components/auth/PrivateRoute';
 import AdminDashboard from './pages/admin/AdminDashboard';
-import ManageUsers from './pages/admin/ManageUsers';
+import RequestionsPage from './pages/admin/RequestionsPage';
 import { AuthProvider } from './context/AuthContext';
 import { NotificationProvider } from './context/NotificationContext';
 
@@ -57,8 +57,7 @@ export default function App() {
                     >
                       {/* Admin Routes */}
                       <Route path="admin/dashboard" element={<AdminDashboard />} />
-                      <Route path="admin/manage-users" element={<ManageUsers />} />
-                      
+                        <Route path="admin/requestions" element={<RequestionsPage />} />
                       {/* --- UPDATED BHW ROUTES --- */}
                       <Route path="bhw/dashboard" element={<BhwDashboard />} />
                       <Route path="bhw/maternity-management" element={<MaternityManagement />} />

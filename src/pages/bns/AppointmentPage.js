@@ -146,15 +146,36 @@ const StatusLegend = () => (
 );
 
 const EditAppointmentModal = ({ appointment, onClose, onSave, addNotification }) => {
-    const [formData, setFormData] = useState({ reason: appointment.reason || "", date: appointment.date, time: appointment.time });
+    const [formData, setFormData] = useState({});
     const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+    const { user } = useAuth(); // <-- MOVED HOOK HERE, TO THE TOP LEVEL
+
+    useEffect(() => {
+        if (appointment) {
+            setFormData({
+                patient_name: appointment.patient_name || '',
+                reason: appointment.reason || "",
+                date: appointment.date || '',
+                time: appointment.time || '',
+            });
+        }
+    }, [appointment]);
+
     const handleChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
-    
+
     const handleSave = async (e) => {
         e.preventDefault();
-        const { error } = await supabase.from("appointments").update({ reason: formData.reason, date: formData.date, time: formData.time }).eq("id", appointment.id);
+        const { error } = await supabase.from("appointments")
+            .update({ reason: formData.reason, date: formData.date, time: formData.time })
+            .eq("id", appointment.id);
+
         if (!error) {
-            await logActivity("Appointment Updated", `Updated appointment for ${appointment.patient_name}`);
+            await logActivity("Appointment Rescheduled", `Rescheduled for ${appointment.patient_name}`);
+            await supabase.from('notifications').insert([{
+                type: 'appointment_reminder',
+                message: `Appointment for ${appointment.patient_name} was rescheduled to ${formData.date}.`,
+                user_id: user.id
+            }]);
             addNotification('Appointment updated successfully.', 'success');
             onSave();
             onClose();
@@ -162,6 +183,7 @@ const EditAppointmentModal = ({ appointment, onClose, onSave, addNotification })
             addNotification(`Error: ${error.message}`, 'error');
         }
     };
+
 
     return (
         <>
@@ -210,10 +232,19 @@ const EditAppointmentModal = ({ appointment, onClose, onSave, addNotification })
 };
 
 const DeleteAppointmentModal = ({ appointment, onClose, onDelete, addNotification }) => {
+    const { user } = useAuth(); // Get current user
+
     const handleDelete = async () => {
         const { error } = await supabase.from("appointments").delete().eq("id", appointment.id);
         if (!error) {
+            // --- THIS IS THE FIX ---
             await logActivity("Appointment Deleted", `Deleted appointment for ${appointment.patient_name}`);
+            await supabase.from('notifications').insert([{
+                type: 'appointment_reminder', // or a new 'alert' type
+                message: `The appointment for ${appointment.patient_name} on ${appointment.date} was deleted.`,
+                user_id: user.id
+            }]);
+            // --- END FIX ---
             addNotification('Appointment deleted successfully.', 'success');
             onDelete();
             onClose();
@@ -236,10 +267,19 @@ const DeleteAppointmentModal = ({ appointment, onClose, onDelete, addNotificatio
 };
 
 const UpdateStatusModal = ({ appointment, onClose, onUpdate, addNotification }) => {
+    const { user } = useAuth(); // Get current user
+
     const handleStatusChange = async (newStatus) => {
         const { error } = await supabase.from("appointments").update({ status: newStatus }).eq("id", appointment.id);
         if (!error) {
+            // --- THIS IS THE FIX ---
             await logActivity(`Appointment ${newStatus}`, `Marked appointment for ${appointment.patient_name} as ${newStatus}`);
+            await supabase.from('notifications').insert([{
+                type: 'appointment_reminder',
+                message: `Appointment for ${appointment.patient_name} was marked as ${newStatus}.`,
+                user_id: user.id
+            }]);
+            // --- END FIX ---
             addNotification(`Appointment marked as ${newStatus}.`, 'success');
             onUpdate();
             onClose();
@@ -247,6 +287,7 @@ const UpdateStatusModal = ({ appointment, onClose, onUpdate, addNotification }) 
             addNotification(`Error: ${error.message}`, 'error');
         }
     };
+
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
             <motion.div className="bg-white rounded-xl shadow-lg w-full max-w-sm p-6 text-center" initial={{ scale: 0.8 }} animate={{ scale: 1 }}>

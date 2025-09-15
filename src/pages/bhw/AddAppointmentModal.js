@@ -70,6 +70,15 @@ export default function AddAppointmentModal({ onClose, onSave }) {
         setLoading(true);
         setError('');
 
+        const selectedDate = new Date(formData.date);
+        const dayOfWeek = selectedDate.getUTCDay();
+        if (dayOfWeek === 6 || dayOfWeek === 0) {
+            setError('Appointments cannot be scheduled on weekends. Please choose a weekday.');
+            addNotification('Appointments cannot be scheduled on weekends.', 'error');
+            setLoading(false);
+            return;
+        }
+
         if (!formData.patient_id) {
             setError('You must select a patient from the search list before saving.');
             setLoading(false);
@@ -77,24 +86,29 @@ export default function AddAppointmentModal({ onClose, onSave }) {
         }
 
         const { data: { user } } = await supabase.auth.getUser();
-
-        const { error: insertError } = await supabase.from('appointments').insert([
-            {
-                patient_display_id: formData.patient_id,
-                patient_name: formData.patient_name,
-                reason: formData.reason,
-                date: formData.date,
-                time: formData.time,
-                notes: formData.notes,
-                status: 'Scheduled',
-                created_by: user?.id // Add the user's ID here
-            }
-        ]);
+        const { error: insertError } = await supabase.from('appointments').insert([{
+            patient_display_id: formData.patient_id,
+            patient_name: formData.patient_name,
+            reason: formData.reason,
+            date: formData.date,
+            time: formData.time,
+            notes: formData.notes,
+            status: 'Scheduled',
+            created_by: user?.id
+        }]);
 
         if (insertError) {
             setError(insertError.message);
             addNotification(`Error: ${insertError.message}`, 'error');
         } else {
+            // --- THIS IS THE FIX ---
+            // Create a notification for the user who scheduled the appointment
+            await supabase.from('notifications').insert([{
+                type: 'appointment_reminder',
+                message: `You scheduled an appointment for ${formData.patient_name} on ${formData.date}.`,
+                user_id: user.id
+            }]);
+            
             logActivity('New Appointment Scheduled', `Appointment for ${formData.patient_name} on ${formData.date}`);
             addNotification('New appointment scheduled successfully.', 'success');
             onSave();

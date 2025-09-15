@@ -422,55 +422,64 @@ export default function AddPatientModal({ onClose, onSave, mode = 'add', initial
     const prevStep = () => setStep(prev => prev - 1);
 
     const handleSave = async () => {
-        setLoading(true);
-        setError('');
-                // --- THIS IS THE CORRECTED DATA STRUCTURE FOR SAVING ---
-        const patientData = {
-            patient_id: patientId,
-            first_name: formData.first_name,
-            middle_name: formData.middle_name,
-            last_name: formData.last_name,
-            age: formData.age,
-            contact_no: formData.contact_no,
-            risk_level: formData.risk_level,
-            weeks: formData.weeks,
-            last_visit: formData.last_visit,
-            purok: formData.purok,
-            street: formData.street,
-            sms_notifications_enabled: formData.sms_notifications_enabled ?? true,
-            // The medical_history column will now only store the detailed history
-            medical_history: formData, 
-        };
-        try {
-            let result;
-            if (mode === 'edit') {
-                result = await supabase.from('patients').update({ ...patientData, updated_at: new Date().toISOString() }).eq('id', initialData.id);
-            } else {
-                result = await supabase.from('patients').insert([patientData]);
-            }
-            
-            if (result.error) {
-                // Use the error property from the result
-                setError(result.error.message);
-                addNotification(`Error: ${result.error.message}`, 'error'); // <-- 3. SHOW ERROR NOTIFICATION
-            } else {
-                if (mode === 'edit') {
-                    addNotification('Patient record updated successfully.', 'success'); // <-- 3. SHOW SUCCESS NOTIFICATION
-                    logActivity('Patient Record Updated', `Updated details for ${formData.first_name} ${formData.last_name}`);
-                } else {
-                    addNotification('New patient added successfully.', 'success'); // <-- 3. SHOW SUCCESS NOTIFICATION
-                    logActivity('New Patient Added', `Registered ${formData.first_name} ${formData.last_name}`);
-                }
-                onSave();
-                onClose();
-            }
-        } catch (err) {
-            setError('An error occurred while saving: ' + err.message);
-            addNotification(`An error occurred: ${err.message}`, 'error'); // <-- 3. SHOW ERROR NOTIFICATION
-        } finally {
-            setLoading(false);
-        }
-    };
+        setLoading(true);
+        setError('');
+        
+        const { data: { user } } = await supabase.auth.getUser();
+
+        const patientData = {
+            patient_id: patientId,
+            first_name: formData.first_name,
+            middle_name: formData.middle_name,
+            last_name: formData.last_name,
+            age: formData.age,
+            contact_no: formData.contact_no,
+            risk_level: formData.risk_level,
+            weeks: formData.weeks,
+            last_visit: formData.last_visit,
+            purok: formData.purok,
+            street: formData.street,
+            sms_notifications_enabled: formData.sms_notifications_enabled ?? true,
+            medical_history: formData, 
+        };
+
+        try {
+            let result;
+            if (mode === 'edit') {
+                // --- MODIFIED LOGIC: INSTEAD OF UPDATING, INSERT A REQUEST ---
+                result = await supabase.from('requestions').insert([{
+                    worker_id: user.id,
+                    request_type: 'Update',
+                    target_table: 'patients',
+                    target_record_id: initialData.id,
+                    request_data: patientData,
+                    status: 'Pending'
+                }]);
+            } else {
+                // Add mode remains the same
+                result = await supabase.from('patients').insert([patientData]);
+            }
+            
+            if (result.error) {
+                throw result.error;
+            } else {
+                if (mode === 'edit') {
+                    addNotification('Update request submitted for approval.', 'success');
+                    logActivity('Patient Update Request', `Submitted for ${formData.first_name} ${formData.last_name}`);
+                } else {
+                    addNotification('New patient added successfully.', 'success');
+                    logActivity('New Patient Added', `Registered ${formData.first_name} ${formData.last_name}`);
+                }
+                onSave();
+                onClose();
+            }
+        } catch (err) {
+            setError('An error occurred: ' + err.message);
+            addNotification(`An error occurred: ${err.message}`, 'error');
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const title = mode === 'edit' ? 'Edit Patient Record' : 'New Patient Record';
 

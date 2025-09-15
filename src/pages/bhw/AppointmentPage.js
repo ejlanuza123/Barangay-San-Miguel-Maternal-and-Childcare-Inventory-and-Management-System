@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { logActivity } from '../../services/activityLogger';
 import { useNotification } from '../../context/NotificationContext'; 
 import CalendarPickerModal from './CalendarPickerModal';
+import { useAuth } from '../../context/AuthContext';
 
 
 // --- ICONS ---
@@ -148,42 +149,40 @@ const StatusLegend = () => (
 );
 
 const EditAppointmentModal = ({ appointment, onClose, onSave, addNotification }) => {
-    const [formData, setFormData] = useState({
-        patient_name: appointment.patient_name,
-        reason: appointment.reason || "",
-        date: appointment.date,
-        time: appointment.time,
-    });
-    // Add state for the calendar modal
+    const [formData, setFormData] = useState({});
     const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+    const { user } = useAuth(); // <-- MOVED HOOK HERE, TO THE TOP LEVEL
 
-    const handleChange = (e) => {
-        const { name, value } = e.target;
-        setFormData((prev) => ({ ...prev, [name]: value }));
-    };
+    useEffect(() => {
+        if (appointment) {
+            setFormData({
+                patient_name: appointment.patient_name || '',
+                reason: appointment.reason || "",
+                date: appointment.date || '',
+                time: appointment.time || '',
+            });
+        }
+    }, [appointment]);
+
+    const handleChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
 
     const handleSave = async (e) => {
         e.preventDefault();
-        const selectedDate = new Date(formData.date);
-        const dayOfWeek = selectedDate.getUTCDay();
-
-        if (dayOfWeek === 6 || dayOfWeek === 0) {
-            addNotification('Appointments cannot be scheduled on weekends.', 'error');
-            return;
-        }
-
-        const { error } = await supabase
-            .from("appointments")
-            .update({ reason: formData.reason, date: formData.date, time: formData.time }) // Only update editable fields
+        const { error } = await supabase.from("appointments")
+            .update({ reason: formData.reason, date: formData.date, time: formData.time })
             .eq("id", appointment.id);
 
         if (!error) {
-            await logActivity("Appointment Updated", `Patient: ${formData.patient_name}`);
+            await logActivity("Appointment Rescheduled", `Rescheduled for ${appointment.patient_name}`);
+            await supabase.from('notifications').insert([{
+                type: 'appointment_reminder',
+                message: `Appointment for ${appointment.patient_name} was rescheduled to ${formData.date}.`,
+                user_id: user.id
+            }]);
             addNotification('Appointment updated successfully.', 'success');
             onSave();
             onClose();
         } else {
-            console.error("Error updating appointment:", error);
             addNotification(`Error: ${error.message}`, 'error');
         }
     };
@@ -251,22 +250,26 @@ const EditAppointmentModal = ({ appointment, onClose, onSave, addNotification })
 
 
 const DeleteAppointmentModal = ({ appointment, onClose, onDelete, addNotification }) => {
-  const handleDelete = async () => {
-      const { error } = await supabase
-          .from("appointments")
-          .delete()
-          .eq("id", appointment.id);
+    const { user } = useAuth(); // Get current user
 
-      if (!error) {
-          await logActivity("Appointment Deleted", `Patient: ${appointment.patient_name}`);
-          addNotification('Appointment deleted successfully.', 'success'); // <-- USE NOTIFICATION
-          onDelete();
-          onClose();
-      } else {
-          console.error("Error deleting appointment:", error);
-          addNotification(`Error: ${error.message}`, 'error'); // <-- USE NOTIFICATION
-      }
-  };
+    const handleDelete = async () => {
+        const { error } = await supabase.from("appointments").delete().eq("id", appointment.id);
+        if (!error) {
+            // --- THIS IS THE FIX ---
+            await logActivity("Appointment Deleted", `Deleted appointment for ${appointment.patient_name}`);
+            await supabase.from('notifications').insert([{
+                type: 'appointment_reminder', // or a new 'alert' type
+                message: `The appointment for ${appointment.patient_name} on ${appointment.date} was deleted.`,
+                user_id: user.id
+            }]);
+            // --- END FIX ---
+            addNotification('Appointment deleted successfully.', 'success');
+            onDelete();
+            onClose();
+        } else {
+            addNotification(`Error: ${error.message}`, 'error');
+        }
+    };
 
   return (
     <AnimatePresence>
@@ -304,22 +307,26 @@ const DeleteAppointmentModal = ({ appointment, onClose, onDelete, addNotificatio
 // --- inside AppointmentPage.js, add this new modal ---
 
 const UpdateStatusModal = ({ appointment, onClose, onUpdate, addNotification }) => {
-  const handleStatusChange = async (newStatus) => {
-      const { error } = await supabase
-          .from("appointments")
-          .update({ status: newStatus })
-          .eq("id", appointment.id);
+    const { user } = useAuth(); // Get current user
 
-      if (!error) {
-          await logActivity(`Appointment ${newStatus}`, `Patient: ${appointment.patient_name}`);
-          addNotification(`Appointment marked as ${newStatus}.`, 'success'); // <-- USE NOTIFICATION
-          onUpdate();
-          onClose();
-      } else {
-          console.error("Error updating status:", error);
-          addNotification(`Error: ${error.message}`, 'error'); // <-- USE NOTIFICATION
-      }
-  };
+    const handleStatusChange = async (newStatus) => {
+        const { error } = await supabase.from("appointments").update({ status: newStatus }).eq("id", appointment.id);
+        if (!error) {
+            // --- THIS IS THE FIX ---
+            await logActivity(`Appointment ${newStatus}`, `Marked appointment for ${appointment.patient_name} as ${newStatus}`);
+            await supabase.from('notifications').insert([{
+                type: 'appointment_reminder',
+                message: `Appointment for ${appointment.patient_name} was marked as ${newStatus}.`,
+                user_id: user.id
+            }]);
+            // --- END FIX ---
+            addNotification(`Appointment marked as ${newStatus}.`, 'success');
+            onUpdate();
+            onClose();
+        } else {
+            addNotification(`Error: ${error.message}`, 'error');
+        }
+    };
 
   return (
     <AnimatePresence>

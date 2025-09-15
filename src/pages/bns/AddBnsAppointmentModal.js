@@ -3,6 +3,7 @@ import { supabase } from '../../services/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
 import { logActivity } from '../../services/activityLogger';
 import { useNotification } from '../../context/NotificationContext';
+
 import CalendarPickerModal from '../bns/CalendarPickerModal'; 
 
 const CalendarIcon = () => <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>;
@@ -69,6 +70,14 @@ export default function AddBnsAppointmentModal({ onClose, onSave }) {
         if (insertError) {
             addNotification(`Error: ${insertError.message}`, 'error');
         } else {
+            // --- THIS IS THE FIX ---
+            // Create a notification for the user who scheduled the appointment
+            await supabase.from('notifications').insert([{
+                type: 'appointment_reminder',
+                message: `You scheduled an appointment for ${formData.patient_name} on ${formData.date}.`,
+                user_id: user.id
+            }]);
+            
             logActivity('New Appointment Scheduled', `Appointment for ${formData.patient_name} on ${formData.date}`);
             addNotification('New appointment scheduled successfully.', 'success');
             onSave();

@@ -5,6 +5,8 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { logActivity } from '../../services/activityLogger';
 import { useNotification } from '../../context/NotificationContext';
 import { useAuth } from '../../context/AuthContext'; 
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 // --- ICONS ---
 const SearchIcon = () => <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>;
@@ -142,6 +144,89 @@ const ViewChildModal = ({ child, onClose }) => {
     // Safely get the detailed records, or an empty object if it's null
     const details = child.health_details || {};
 
+    const handleDownloadPdf = () => {
+        const doc = new jsPDF();
+        
+        // --- PDF Header based on template ---
+        doc.setFontSize(10);
+        doc.text("Republic of the Philippines", 105, 10, { align: 'center' });
+        doc.text("CITY HEALTH DEPARTMENT", 105, 15, { align: 'center' });
+        doc.text("Nursing Services Division", 105, 20, { align: 'center' });
+        doc.text("City of Puerto Princesa", 105, 25, { align: 'center' });
+        doc.setFontSize(12);
+        doc.setFont(undefined, 'bold');
+        doc.text("EXPANDED PROGRAM ON IMMUNIZATION", 105, 35, { align: 'center' });
+        doc.text("INDIVIDUAL TREATMENT RECORD (ITR)", 105, 40, { align: 'center' });
+
+        // --- Child Details Table ---
+        doc.setFontSize(9);
+        doc.setFont(undefined, 'normal');
+        autoTable(doc, {
+            startY: 45,
+            theme: 'plain',
+            body: [
+                [`Name of BHS: ${details.bhs_name || 'San Miguel'}`, `NHTS No.: ${details.nhts_no || 'N/A'}`],
+                [`Name of Child: ${child.first_name} ${child.last_name}`, `PhilHealth No.: ${details.philhealth_no || 'N/A'}`],
+                [`Date of Birth: ${child.dob || 'N/A'}`, `Sex: ${child.sex || 'N/A'}`],
+                [`Place of Birth: ${details.place_of_birth || 'N/A'}`, `Birth Weight: ${child.weight_kg || 'N/A'} kg`],
+                [`Name of Mother: ${child.mother_name || 'N/A'}`, `Name of Father: ${details.father_name || 'N/A'}`],
+                [`Name of Guardian: ${child.guardian_name || 'N/A'}`, `Relationship: ${details.guardian_relationship || 'N/A'}`],
+            ],
+            styles: { fontSize: 9, cellPadding: 0.5 },
+        });
+        
+        // --- Mother's Immunization Status Table ---
+        doc.setFontSize(10).setFont(undefined, 'bold').text("MOTHER'S IMMUNIZATION STATUS", 14, doc.lastAutoTable.finalY + 10);
+        autoTable(doc, {
+            startY: doc.lastAutoTable.finalY + 12,
+            theme: 'grid',
+            head: [['Antigen', 'Td1', 'Td2', 'Td3', 'Td4', 'Td5', 'FIM']],
+            body: [[
+                'Date Given',
+                details.mother_immunization_Td1 || '',
+                details.mother_immunization_Td2 || '',
+                details.mother_immunization_Td3 || '',
+                details.mother_immunization_Td4 || '',
+                details.mother_immunization_Td5 || '',
+                details.mother_immunization_FIM || ''
+            ]],
+            styles: { fontSize: 8, halign: 'center' }
+        });
+
+        // --- Main Immunization Table ---
+        // NOTE: The data for this table is not yet collected in your AddChildModal form.
+        // I have created the structure, but the cells will be empty.
+        const immunizationRows = [
+            'BCG', 'Hepa B w/In 24 hrs', 'Pentavalent 1', 'Pentavalent 2', 'Pentavalent 3',
+            'OPV1', 'OPV2', 'OPV3', 'IPV 1', 'IPV 2', 'PCV 1', 'PCV 2', 'PCV 3',
+            'MCV 1', 'MCV 2', 'FIC', 'OTHERS'
+        ].map(vaccine => [
+            '', // Time
+            vaccine, // Type of Immunization
+            '', '', '', '', '', '', '', '' // Empty cells for other data
+        ]);
+        doc.setFontSize(10).setFont(undefined, 'bold').text("IMMUNIZATION", 14, doc.lastAutoTable.finalY + 10);
+        autoTable(doc, {
+            startY: doc.lastAutoTable.finalY + 12,
+            head: [['Time', 'Type of Immunization', 'Age', 'Weight', 'Height', 'Nutritional Status', 'Admitted by', 'Immunized by', 'Next Visit', 'Remarks']],
+            body: immunizationRows,
+            theme: 'grid',
+            styles: { fontSize: 7, cellPadding: 1 }
+        });
+
+        // --- Exclusive Breastfeeding Table ---
+        const breastfeedingBody = [['', '', '', '', '', '', '']];
+        autoTable(doc, {
+            startY: doc.lastAutoTable.finalY + 5,
+            head: [['Exclusive Breastfeeding:', '1st Month', '2nd Month', '3rd Month', '4th Month', '5th Month', 'Date/Time']],
+            body: breastfeedingBody,
+            theme: 'grid', styles: { fontSize: 8, halign: 'center' }
+        });
+
+        doc.save(`ITR_${child.last_name}_${child.first_name}.pdf`);
+        logActivity("Downloaded PDF Record", `Generated PDF for child: ${child.child_id}`);
+    };
+
     // Helper components for styling the document view
     const SectionHeader = ({ title }) => (
         <h3 className="font-bold text-gray-700 text-sm mt-6 mb-2 pb-1 border-b">{title}</h3>
@@ -237,9 +322,10 @@ const ViewChildModal = ({ child, onClose }) => {
                     </div>
                 </div>
 
-                {/* Footer */}
-                <div className="p-4 bg-gray-50 border-t flex justify-end">
-                    <button onClick={onClose} className="px-6 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 font-semibold text-sm">Close</button>
+                <div className="p-4 bg-gray-50 border-t flex justify-end gap-3">
+                    <button onClick={onClose} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md font-semibold text-sm">Close</button>
+                    {/* --- NEW DOWNLOAD BUTTON --- */}
+                    <button onClick={handleDownloadPdf} className="px-4 py-2 bg-blue-600 text-white rounded-md font-semibold text-sm">Download as PDF</button>
                 </div>
             </motion.div>
         </div>
@@ -332,19 +418,25 @@ export default function ChildHealthRecords() {
     };
 
     const handleDelete = async () => {
-        if (!patientToDelete) return; // Make sure there is a patient selected
+        if (!patientToDelete || !user) return;
 
-        const { error } = await supabase.from('child_records').delete().eq('id', patientToDelete.id);
-        
-        if (error) {
-            addNotification(`Error: ${error.message}`, 'error');
-        } else {
-            addNotification('Record deleted successfully.', 'success');
-            logActivity('Child Record Deleted', `Deleted record for ${patientToDelete.first_name} ${patientToDelete.last_name}`);
-            fetchPageData(); // Refresh the list
-        }
-        setPatientToDelete(null); // Close the modal
-    };
+        const { error } = await supabase.from('requestions').insert([{
+            worker_id: user.id,
+            request_type: 'Delete',
+            target_table: 'child_records',
+            target_record_id: patientToDelete.id,
+            request_data: { child_id: patientToDelete.child_id, name: `${patientToDelete.first_name} ${patientToDelete.last_name}` },
+            status: 'Pending'
+        }]);
+        
+        if (error) {
+            addNotification(`Error submitting delete request: ${error.message}`, 'error');
+        } else {
+            addNotification('Delete request submitted for approval.', 'success');
+            logActivity('Child Record Delete Request', `Submitted request for ${patientToDelete.first_name} ${patientToDelete.last_name}`);
+        }
+        setPatientToDelete(null);
+    };
 
     const filteredRecords = useMemo(() => {
         return childRecords.filter(record => {

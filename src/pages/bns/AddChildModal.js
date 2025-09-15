@@ -130,35 +130,32 @@ export default function AddChildModal({ onClose, onSave, mode = 'add', initialDa
 
     const handleSave = async () => {
         setLoading(true);
-        
+        const { data: { user } } = await supabase.auth.getUser();
+        
         const [firstName, ...lastNameParts] = (formData.child_name || '').split(' ');
         const lastName = lastNameParts.join(' ');
-        
-        // --- MODIFIED: Automatically determine status and update checkup date ---
-        const nutritionStatus = getNutritionStatus(formData.bmi);
-        const lastCheckupDate = new Date().toISOString().split('T')[0]; // Get today's date in YYYY-MM-DD format
-        
+        const nutritionStatus = getNutritionStatus(formData.bmi);
+        const lastCheckupDate = new Date().toISOString().split('T')[0];
+        
         const recordData = {
-            child_id: childId,
-            first_name: firstName,
-            last_name: lastName,
-            dob: formData.dob,
-            sex: formData.sex,
-            mother_name: formData.mother_name,
-            guardian_name: formData.guardian_name,
-            weight_kg: formData.weight_kg || null,
-            height_cm: formData.height_cm || null,
-            bmi: formData.bmi || null,
-            nhts_no: formData.nhts_no || null,
-            philhealth_no: formData.philhealth_no || null,
-            nutrition_status: nutritionStatus, // Add the calculated status
-            last_checkup: lastCheckupDate, // Add the current date as the last checkup
-            health_details: formData
+            child_id: childId, first_name: firstName, last_name: lastName, dob: formData.dob,
+            sex: formData.sex, mother_name: formData.mother_name, guardian_name: formData.guardian_name,
+            weight_kg: formData.weight_kg || null, height_cm: formData.height_cm || null,
+            bmi: formData.bmi || null, nhts_no: formData.nhts_no || null,
+            philhealth_no: formData.philhealth_no || null, nutrition_status: nutritionStatus,
+            last_checkup: lastCheckupDate, health_details: formData
         };
 
         let result;
         if (mode === 'edit') {
-            result = await supabase.from('child_records').update(recordData).eq('id', initialData.id);
+            result = await supabase.from('requestions').insert([{
+                worker_id: user.id,
+                request_type: 'Update',
+                target_table: 'child_records',
+                target_record_id: initialData.id,
+                request_data: recordData,
+                status: 'Pending'
+            }]);
         } else {
             result = await supabase.from('child_records').insert([recordData]);
         }
@@ -166,9 +163,9 @@ export default function AddChildModal({ onClose, onSave, mode = 'add', initialDa
         if (result.error) {
             addNotification(`Error: ${result.error.message}`, 'error');
         } else {
-            const successMsg = mode === 'edit' ? 'Child record updated successfully.' : 'New child added successfully.';
+            const successMsg = mode === 'edit' ? 'Update request submitted for approval.' : 'New child added successfully.';
             addNotification(successMsg, 'success');
-            logActivity(mode === 'edit' ? 'Child Record Updated' : 'New Child Added', `ID: ${childId}, Name: ${formData.child_name}`);
+            logActivity(mode === 'edit' ? 'Child Record Update Request' : 'New Child Added', `ID: ${childId}, Name: ${formData.child_name}`);
             onSave();
             onClose();
         }
