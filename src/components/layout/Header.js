@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { supabase } from '../../services/supabase';
-import { useAuth } from '../../context/AuthContext';
-import { AnimatePresence, motion } from 'framer-motion';
+import React, { useState, useEffect, useRef } from 'react'; // Add useRef
 import SettingsModal from './SettingsModal';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '../../services/supabase';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useAuth } from '../../context/AuthContext';
 
 // --- SVG Icons ---
 const SearchIcon = () => (
@@ -112,6 +112,8 @@ export default function Header() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [notifications, setNotifications] = useState([]); 
   const navigate = useNavigate();
+  const prevUnreadCount = useRef(0);
+  const isInitialLoad = useRef(true);
   const handleMarkOneRead = async (e, notificationId) => {
     e.stopPropagation(); // Prevent navigation when clicking the button
     
@@ -131,6 +133,16 @@ export default function Header() {
 
     // Delete from the database in the background
     await supabase.from('notifications').delete().eq('id', notificationId);
+  };
+
+  const handleDeleteAll = async () => {
+    // Optimistically update the UI for a fast response
+    setNotifications([]);
+    setUnreadCount(0);
+    setIsNotifOpen(false); // Close dropdown after action
+
+    // Delete all of the user's notifications from the database in the background
+    await supabase.from('notifications').delete().eq('user_id', user.id);
   };
 
   const handleMarkAllRead = async () => {
@@ -180,55 +192,62 @@ export default function Header() {
     setIsNotifOpen(false);
   };
 
-  
-
-
-
 
     useEffect(() => {
-        const fetchNotifications = async () => {
-            if (!user || !profile) return;
+        const fetchNotifications = async () => {
+            if (!user || !profile) return;
 
-            // MODIFIED: This query now filters notifications by the current user's ID
-            const { data, error } = await supabase
-                .from('notifications')
-                .select('*')
-                .eq('user_id', user.id) // Only get notifications for the logged-in user
-                .order('created_at', { ascending: false });
+            const { data, error } = await supabase
+                .from('notifications')
+                .select('*')
+                .eq('user_id', user.id)
+                .order('created_at', { ascending: false });
 
-            if (error) {
-                console.error("Error fetching notifications:", error);
-                return;
-            }
-            
-            const userPreferences = profile.preferences || {};
-            const filteredNotifications = (data || []).filter(n => {
-                if (n.type === 'appointment_reminder') {
-                    return userPreferences.appointment_reminders !== false;
-                }
-                if (n.type === 'inventory_alert') {
-                    return userPreferences.inventory_alerts !== false;
-                }
-                if (n.type === 'patient_followup') {
-                    return userPreferences.patient_followups !== false;
-                }
-                return true;
-            });
+            if (error) {
+                console.error("Error fetching notifications:", error);
+                return;
+            }
+            
+            const userPreferences = profile.preferences || {};
+            const filteredNotifications = (data || []).filter(n => {
+                if (n.type === 'appointment_reminder') return userPreferences.appointment_reminders !== false;
+                if (n.type === 'inventory_alert') return userPreferences.inventory_alerts !== false;
+                if (n.type === 'patient_followup') return userPreferences.patient_followups !== false;
+                return true;
+            });
 
-            const unread = filteredNotifications.filter(n => !n.is_read);
-            setNotifications(filteredNotifications);
-            setUnreadCount(unread.length);
-        };
+            const newUnreadCount = filteredNotifications.filter(n => !n.is_read).length;
+            
+            // --- NEW LOGIC TO PLAY SOUND ---
+            // Play sound only if it's not the first load and a new unread notification has arrived.
+            if (!isInitialLoad.current && newUnreadCount > prevUnreadCount.current) {
+                const audio = new Audio('/notification.mp3'); // Path relative to the 'public' folder
+                audio.play().catch(e => console.error("Audio play failed:", e)); // Catch potential browser block
+            }
+            
+            setNotifications(filteredNotifications);
+            setUnreadCount(newUnreadCount);
+
+            // Update refs for the next check
+            prevUnreadCount.current = newUnreadCount;
+            isInitialLoad.current = false;
+            // --- END OF NEW LOGIC ---
+        };
 
         fetchNotifications();
 
         const channel = supabase.channel('notifications')
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, 
-            (payload) => { fetchNotifications(); })
+            (payload) => {
+                // Only refetch if the new notification is for the current user
+                if (payload.new.user_id === user.id) {
+                    fetchNotifications();
+                }
+            })
             .subscribe();
 
         return () => { supabase.removeChannel(channel); };
-    }, [user, profile]); // Rerun when profile (and its preferences) changes
+    }, [user, profile]);
 
   const handleNotifClick = () => {
       setIsNotifOpen(!isNotifOpen);
@@ -326,13 +345,25 @@ export default function Header() {
                                     </div>
                                     {/* --- NEW DROPDOWN FOOTER --- */}
                                     {notifications.length > 0 && (
-                                        <div className="p-2 border-t bg-gray-50 text-center">
+                                        <div className="p-2 border-t bg-gray-50 flex justify-center items-center space-x-4">
+                                            {/* Mark all as read button */}
                                             <button 
                                                 onClick={handleMarkAllRead}
                                                 disabled={unreadCount === 0}
                                                 className="text-xs font-semibold text-blue-600 hover:underline disabled:text-gray-400 disabled:no-underline"
                                             >
                                                 Mark all as read
+                                            </button>
+                                            
+                                            {/* Divider */}
+                                            <div className="border-l h-4"></div>
+
+                                            {/* Delete all button */}
+                                            <button 
+                                                onClick={handleDeleteAll}
+                                                className="text-xs font-semibold text-red-600 hover:underline"
+                                            >
+                                                Delete All
                                             </button>
                                         </div>
                                     )}
