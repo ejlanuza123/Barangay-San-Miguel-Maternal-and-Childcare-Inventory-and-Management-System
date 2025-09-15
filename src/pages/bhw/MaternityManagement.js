@@ -5,6 +5,8 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { logActivity } from '../../services/activityLogger';
 import { useNotification } from '../../context/NotificationContext'; 
 import { useAuth } from '../../context/AuthContext'; 
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 // --- ICONS ---
 const SearchIcon = () => <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>;
@@ -90,6 +92,101 @@ const DeleteConfirmationModal = ({ patientName, onConfirm, onCancel }) => (
 const ViewPatientModal = ({ patient, onClose }) => {
     // Safely get the detailed records, or an empty object if it's null
     const details = patient.medical_history || {};
+        const handleDownloadPdf = () => {
+        const doc = new jsPDF();
+
+        // --- PDF Header ---
+        doc.setFontSize(10);
+        doc.text("City Health Office, Nursing Services Division", 105, 15, { align: 'center' });
+        doc.text("Maternal and Child Health Services, Puerto Princesa City", 105, 20, { align: 'center' });
+        doc.setFontSize(12);
+        doc.setFont(undefined, 'bold');
+        doc.text("PRENATAL INDIVIDUAL TREATMENT RECORD", 105, 30, { align: 'center' });
+
+        // --- Patient Details ---
+        doc.setFontSize(9);
+        doc.setFont(undefined, 'normal');
+        doc.text(`Patient's ID No: ${patient.patient_id || 'N/A'}`, 140, 40);
+        
+        autoTable(doc, {
+            startY: 45, theme: 'plain', body: [
+                [`Complete/Full Name: ${patient.first_name} ${details.middle_name || ''} ${patient.last_name}`, `Age: ${patient.age || 'N/A'}`],
+                [`Date of Birth: ${details.dob || 'N/A'}`, `Blood Type: ${details.blood_type || 'N/A'}`],
+                [`Address/Purok: ${details.purok || ''}, ${details.street || ''}`, `Contact No.: ${patient.contact_no || 'N/A'}`],
+            ], styles: { fontSize: 9, cellPadding: 1 },
+        });
+
+        // --- Obstetrical Score ---
+        doc.setFontSize(10).setFont(undefined, 'bold').text("Obstetrical Score", 14, doc.lastAutoTable.finalY + 10);
+        autoTable(doc, {
+            startY: doc.lastAutoTable.finalY + 12, theme: 'grid',
+            head: [['G', 'P', 'Term', 'Preterm', 'Abortion', 'Living Children']],
+            body: [[ details.g_score || '0', details.p_score || '0', details.term || '0', details.preterm || '0', details.abortion || '0', details.living_children || '0' ]],
+            styles: { fontSize: 8, halign: 'center', cellPadding: 1 },
+        });
+
+        // --- Pregnancy History Table ---
+        doc.setFontSize(10).setFont(undefined, 'bold').text("Pregnancy History", 14, doc.lastAutoTable.finalY + 10);
+        const pregnancyHistoryBody = Array.from({ length: 10 }, (_, i) => {
+            const g = i + 1;
+            return [`G${g}`, details[`g${g}_outcome`] || '', details[`g${g}_sex`] || '', details[`g${g}_delivery_type`] || '', details[`g${g}_delivered_at`] || ''];
+        });
+        autoTable(doc, {
+            startY: doc.lastAutoTable.finalY + 12, head: [['Gravida', 'Outcome', 'Sex', 'NSD or CS', 'Delivered at']],
+            body: pregnancyHistoryBody, theme: 'grid', styles: { fontSize: 8, cellPadding: 1 }, headStyles: { halign: 'center' }
+        });
+        
+        // --- Menstrual and OB History ---
+        doc.addPage();
+        doc.setFontSize(10).setFont(undefined, 'bold').text("Menstrual & OB History", 14, 15);
+        autoTable(doc, {
+            startY: 20, theme: 'plain', body: [
+                [`Last Menstrual Period (LMP): ${details.lmp || 'N/A'}`],
+                [`Expected Date of Confinement (EDC): ${details.edc || 'N/A'}`],
+                [`Age of Menarche: ${details.age_of_menarche || 'N/A'}`, `Duration of Menses: ${details.menstruation_duration || 'N/A'} days`],
+            ], styles: { fontSize: 9, cellPadding: 1 },
+        });
+
+        // --- Vaccination Record ---
+        doc.setFontSize(10).setFont(undefined, 'bold').text("Vaccination Record (Tetanus Toxoid)", 14, doc.lastAutoTable.finalY + 10);
+        const vaccineBody = [['TT1', details.vaccine_tt1 || ''], ['TT2', details.vaccine_tt2 || ''], ['TT3', details.vaccine_tt3 || ''], ['TT4', details.vaccine_tt4 || ''], ['TT5', details.vaccine_tt5 || ''], ['FIM', details.vaccine_fim || '']];
+        autoTable(doc, { 
+            startY: doc.lastAutoTable.finalY + 12, 
+            head: [['Vaccine', 'Date Given']], 
+            body: vaccineBody, 
+            theme: 'grid', 
+            styles: { fontSize: 9, cellPadding: 2 }
+        });
+        
+        // --- Medical History ---
+        doc.setFontSize(10).setFont(undefined, 'bold').text("Medical History", 14, doc.lastAutoTable.finalY + 10);
+        const personalHistory = ['Diabetes Mellitus (DM)', 'Asthma', 'Cardiovascular Disease (CVD)', 'Heart Disease', 'Goiter']
+            .map(h => `${h}: ${details[`ph_${h}`] ? 'Yes' : 'No'}`).join('\n');
+        const hereditaryHistory = ['Hypertension (HPN)', 'Asthma', 'Heart Disease', 'Diabetes Mellitus', 'Goiter']
+            .map(h => `${h}: ${details[`hdh_${h}`] ? 'Yes' : 'No'}`).join('\n');
+        const socialHistory = ['Smoker', 'Ex-smoker', 'Second-hand Smoker', 'Alcohol Drinker', 'Substance Abuse']
+            .map(h => `${h}: ${details[`sh_${h}`] ? 'Yes' : 'No'}`).join('\n');
+            
+        autoTable(doc, {
+            startY: doc.lastAutoTable.finalY + 12,
+            head: [['Personal History', 'Hereditary Disease History', 'Social History']],
+            body: [[personalHistory, hereditaryHistory, socialHistory]],
+            theme: 'grid', styles: { fontSize: 8, cellPadding: 2, valign: 'top' },
+        });
+
+        // --- Additional Information ---
+        doc.setFontSize(10).setFont(undefined, 'bold').text("Additional Information", 14, doc.lastAutoTable.finalY + 10);
+        doc.setFontSize(9).setFont(undefined, 'normal');
+        doc.text("History of Allergy to Foods & Drugs:", 14, doc.lastAutoTable.finalY + 15);
+        doc.text(details.allergy_history || 'None', 14, doc.lastAutoTable.finalY + 20, { maxWidth: 180 });
+
+        doc.text("Family Planning History (Method previously used):", 14, doc.lastAutoTable.finalY + 40);
+        doc.text(details.family_planning_history || 'None', 14, doc.lastAutoTable.finalY + 45, { maxWidth: 180 });
+
+        doc.save(`ITR_${patient.last_name}_${patient.first_name}.pdf`);
+        logActivity("Downloaded PDF Record", `Generated PDF for patient: ${patient.patient_id}`);
+    };
+
 
     // Helper components for styling the document view
     const SectionHeader = ({ title }) => (
@@ -229,8 +326,10 @@ const ViewPatientModal = ({ patient, onClose }) => {
                 </div>
 
                 {/* Footer */}
-                <div className="p-4 bg-gray-50 border-t flex justify-end">
-                    <button onClick={onClose} className="px-6 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 font-semibold text-sm">Close</button>
+                <div className="p-4 bg-gray-50 border-t flex justify-end gap-3">
+                    <button onClick={onClose} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md font-semibold text-sm">Close</button>
+                    {/* --- NEW DOWNLOAD BUTTON --- */}
+                    <button onClick={handleDownloadPdf} className="px-4 py-2 bg-blue-600 text-white rounded-md font-semibold text-sm">Download as PDF</button>
                 </div>
             </motion.div>
         </div>
@@ -343,19 +442,28 @@ export default function MaternityManagement() {
         setModalMode('edit');
     };
 
-    const handleDelete = async () => {
-        if (!patientToDelete) return;
-        const { error } = await supabase.from('patients').delete().eq('id', patientToDelete.id);
-        
-        if (error) {
-            addNotification(`Error: ${error.message}`, 'error'); // <-- SHOW ERROR NOTIFICATION
-        } else {
-            addNotification('Patient record deleted successfully.', 'success'); // <-- SHOW SUCCESS NOTIFICATION
-            logActivity('Patient Record Deleted', `Deleted record for ${patientToDelete.first_name} ${patientToDelete.last_name}`);
-            await fetchPageData();
-        }
-        setPatientToDelete(null);
-    };
+    // src/pages/bhw/MaternityManagement.js
+
+    const handleDelete = async () => {
+        if (!patientToDelete || !user) return;
+
+        const { error } = await supabase.from('requestions').insert([{
+            worker_id: user.id,
+            request_type: 'Delete',
+            target_table: 'patients',
+            target_record_id: patientToDelete.id,
+            request_data: { patient_id: patientToDelete.patient_id, name: `${patientToDelete.first_name} ${patientToDelete.last_name}` },
+            status: 'Pending'
+        }]);
+        
+        if (error) {
+            addNotification(`Error submitting delete request: ${error.message}`, 'error');
+        } else {
+            addNotification('Delete request submitted for approval.', 'success');
+            logActivity('Patient Delete Request', `Submitted request for ${patientToDelete.first_name} ${patientToDelete.last_name}`);
+        }
+        setPatientToDelete(null); // Close the modal
+    };
     
     const filteredPatients = useMemo(() => {
         // Filtering is now done on the client-side for the current page's data
