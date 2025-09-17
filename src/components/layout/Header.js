@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../services/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
+import { useNotification } from '../../context/NotificationContext';
 
 // --- SVG Icons ---
 const SearchIcon = () => (
@@ -114,6 +115,7 @@ export default function Header() {
   const navigate = useNavigate();
   const prevUnreadCount = useRef(0);
   const isInitialLoad = useRef(true);
+  const { addNotification } = useNotification();
   const handleMarkOneRead = async (e, notificationId) => {
     e.stopPropagation(); // Prevent navigation when clicking the button
     
@@ -159,95 +161,102 @@ export default function Header() {
   };
 
   const handleNotificationClick = (notification) => {
-    // Determine the base path from the user's role (e.g., 'bhw', 'bns', 'admin')
-  const rolePath = profile.role.toLowerCase().split('/')[0];
-
-    let path = '';
-    // Determine the destination path based on the notification type
-    switch (notification.type) {
-      case 'inventory_alert':
-        path = `/${rolePath}/inventory`;
-        break;
-      case 'appointment_reminder':
-        path = `/${rolePath}/appointment`;
-        break;
-      case 'patient_followup':
-        // Redirect to the primary patient management page for the role
-        if (rolePath === 'bhw') {
-          path = '/bhw/maternity-management';
-        } else if (rolePath === 'bns') {
-          path = '/bns/child-records';
+        // --- NEW: Logic for Admin's user request notifications ---
+        if (profile.role === 'Admin' && notification.type === 'user_request') {
+            navigate('/admin/requestions');
+        } else {
+            // Original logic for other notification types
+            const rolePath = profile.role.toLowerCase().split('/')[0];
+            let path = '';
+            switch (notification.type) {
+                case 'inventory_alert': path = `/${rolePath}/inventory`; break;
+                case 'appointment_reminder': path = `/${rolePath}/appointment`; break;
+                case 'patient_followup':
+                    if (rolePath === 'bhw') {
+                        path = '/bhw/maternity-management';
+                    } else if (rolePath === 'bns') {
+                        path = '/bns/child-records';
+                    }
+                    break;
+                default:
+                    break;
+            }
+            if(path) navigate(path);
         }
-        break;
-      default:
-        // Optional: you can navigate to a default page or do nothing
-        break;
-    }
-    
-    // If a valid path was found, navigate to it
-    if(path) {
-        navigate(path);
-    }
-    // Close the notification dropdown
-    setIsNotifOpen(false);
-  };
+        setIsNotifOpen(false);
+    };
 
 
     useEffect(() => {
-        const fetchNotifications = async () => {
-            if (!user || !profile) return;
+        if (!user || !profile) return;
 
-            const { data, error } = await supabase
-                .from('notifications')
-                .select('*')
-                .eq('user_id', user.id)
-                .order('created_at', { ascending: false });
+        let channel;
 
-            if (error) {
-                console.error("Error fetching notifications:", error);
-                return;
-            }
-            
-            const userPreferences = profile.preferences || {};
-            const filteredNotifications = (data || []).filter(n => {
-                if (n.type === 'appointment_reminder') return userPreferences.appointment_reminders !== false;
-                if (n.type === 'inventory_alert') return userPreferences.inventory_alerts !== false;
-                if (n.type === 'patient_followup') return userPreferences.patient_followups !== false;
-                return true;
-            });
+        if (profile.role === 'Admin') {
+            const fetchRequestionsAsNotifications = async () => {
+                const { data, error, count } = await supabase
+                    .from('requestions')
+                    .select('*, profiles:worker_id(first_name, last_name)', { count: 'exact' })
+                    .eq('status', 'Pending');
+                if (error) { console.error("Error fetching requestions:", error); return; }
+                const formattedNotifications = (data || []).map(req => ({
+                    id: req.id, type: 'user_request',
+                    message: `${req.profiles?.first_name || 'A user'} submitted a new request for ${req.request_type}.`,
+                    created_at: req.created_at, is_read: false
+                }));
+                setNotifications(formattedNotifications);
+                setUnreadCount(data?.length || 0); // Use data.length for reliability
+            };
 
-            const newUnreadCount = filteredNotifications.filter(n => !n.is_read).length;
-            
-            // --- NEW LOGIC TO PLAY SOUND ---
-            // Play sound only if it's not the first load and a new unread notification has arrived.
-            if (!isInitialLoad.current && newUnreadCount > prevUnreadCount.current) {
-                const audio = new Audio('/notification.mp3'); // Path relative to the 'public' folder
-                audio.play().catch(e => console.error("Audio play failed:", e)); // Catch potential browser block
-            }
-            
-            setNotifications(filteredNotifications);
-            setUnreadCount(newUnreadCount);
+            fetchRequestionsAsNotifications();
 
-            // Update refs for the next check
-            prevUnreadCount.current = newUnreadCount;
-            isInitialLoad.current = false;
-            // --- END OF NEW LOGIC ---
-        };
+            channel = supabase.channel('requestions-for-admin')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'requestions' }, 
+                (payload) => {
+                    // This will update the bell icon count
+                    fetchRequestionsAsNotifications();
 
-        fetchNotifications();
+                    // --- NEW: This block shows the floating notification on a new request ---
+                    if (payload.eventType === 'INSERT') {
+                        addNotification("New user request submitted for approval.", 'warning');
+                    }
+                })
+                .subscribe();
 
-        const channel = supabase.channel('notifications')
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, 
-            (payload) => {
-                // Only refetch if the new notification is for the current user
-                if (payload.new.user_id === user.id) {
-                    fetchNotifications();
+        } else {
+            // BHW/BNS logic remains the same
+            const fetchStandardNotifications = async () => {
+                const { data, error } = await supabase.from('notifications').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
+                if (error) { console.error("Error fetching notifications:", error); return; }
+                const newUnreadCount = (data || []).filter(n => !n.is_read).length;
+                if (!isInitialLoad.current && newUnreadCount > prevUnreadCount.current) {
+                    const audio = new Audio('/notification.mp3');
+                    audio.play().catch(e => console.error("Audio play failed:", e));
                 }
-            })
-            .subscribe();
+                setNotifications(data || []);
+                setUnreadCount(newUnreadCount);
+                prevUnreadCount.current = newUnreadCount;
+                isInitialLoad.current = false;
+            };
 
-        return () => { supabase.removeChannel(channel); };
-    }, [user, profile]);
+            fetchStandardNotifications();
+
+            channel = supabase.channel('notifications-for-user')
+                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, 
+                (payload) => {
+                    if (payload.new.user_id === user.id) {
+                        fetchStandardNotifications();
+                    }
+                })
+                .subscribe();
+        }
+
+        return () => {
+            if (channel) {
+                supabase.removeChannel(channel);
+            }
+        };
+    }, [user, profile, addNotification]);
 
   const handleNotifClick = () => {
       setIsNotifOpen(!isNotifOpen);
@@ -308,36 +317,18 @@ export default function Header() {
                                     <div className="p-4 font-bold border-b">Notifications</div>
                                     <div className="p-2 max-h-96 overflow-y-auto">
                                         {notifications.length > 0 ? notifications.map(notif => (
-                                            <div 
-                                                key={notif.id} 
-                                                onClick={() => handleNotificationClick(notif)}
-                                                // Add 'group' to enable hover effects on child elements
-                                                className={`group relative p-2 border-b hover:bg-gray-100 cursor-pointer ${!notif.is_read ? 'bg-blue-50' : ''}`}
-                                            >
+                                            <div key={notif.id} onClick={() => handleNotificationClick(notif)} className={`group relative p-2 border-b hover:bg-gray-100 cursor-pointer ${!notif.is_read ? 'bg-blue-50' : ''}`}>
                                                 <p className="font-semibold text-sm text-gray-800">{notif.type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</p>
                                                 <p className="text-xs text-gray-600">{notif.message}</p>
                                                 <p className="text-xs text-gray-400 mt-1">{new Date(notif.created_at).toLocaleString()}</p>
                                                 
-                                                {/* --- ACTION BUTTONS ON HOVER --- */}
-                                                <div className="absolute top-1 right-1 flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    {/* Show Mark as Read button only if unread */}
-                                                    {!notif.is_read && (
-                                                        <button 
-                                                            onClick={(e) => handleMarkOneRead(e, notif.id)} 
-                                                            className="p-1 rounded-full text-gray-400 hover:bg-green-100 hover:text-green-600"
-                                                            title="Mark as Read"
-                                                        >
-                                                            <CheckCircleIcon />
-                                                        </button>
-                                                    )}
-                                                    <button 
-                                                        onClick={(e) => handleDeleteOne(e, notif.id)} 
-                                                        className="p-1 rounded-full text-gray-400 hover:bg-red-100 hover:text-red-600"
-                                                        title="Delete Notification"
-                                                    >
-                                                        <TrashIcon />
-                                                    </button>
-                                                </div>
+                                                {/* --- MODIFIED: Action buttons only show for non-admins --- */}
+                                                {profile.role !== 'Admin' && (
+                                                    <div className="absolute top-1 right-1 flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        {!notif.is_read && ( <button onClick={(e) => handleMarkOneRead(e, notif.id)} className="p-1 rounded-full text-gray-400 hover:bg-green-100 hover:text-green-600" title="Mark as Read"><CheckCircleIcon /></button> )}
+                                                        <button onClick={(e) => handleDeleteOne(e, notif.id)} className="p-1 rounded-full text-gray-400 hover:bg-red-100 hover:text-red-600" title="Delete Notification"><TrashIcon /></button>
+                                                    </div>
+                                                )}
                                             </div>
                                         )) : (
                                             <p className="text-sm text-gray-500 p-4 text-center">No notifications.</p>

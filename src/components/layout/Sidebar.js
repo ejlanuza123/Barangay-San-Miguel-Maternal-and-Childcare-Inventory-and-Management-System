@@ -31,8 +31,8 @@ export default function Sidebar({ role }) {
                 return [
                     { name: 'Admin Dashboard', path: '/admin/dashboard', icon: <DashboardIcon /> },
                     { name: 'Requestions', path: '/admin/requestions', icon: <RequestionsIcon /> },
-                    { name: 'Employees', path: '/admin/employees', icon: <EmployeesIcon /> },
-                    { name: 'Inventory', path: '/admin/inventory', icon: <InventoryIcon /> },
+                    { name: 'Employees', path: '/admin/employees', icon: <EmployeesIcon /> }, // This path should match the route
+                    { name: 'Inventory', path: '/admin/inventory', icon: <InventoryIcon /> },
                 ];
             case 'BHW':
                 return [

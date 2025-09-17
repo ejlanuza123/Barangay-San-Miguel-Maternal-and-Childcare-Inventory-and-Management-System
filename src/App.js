@@ -10,6 +10,9 @@ import AppLayout from './components/layout/AppLayout';
 import PrivateRoute from './components/auth/PrivateRoute';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import RequestionsPage from './pages/admin/RequestionsPage';
+import EmployeesPage from './pages/admin/EmployeesPage';
+import AdminInventoryPage from './pages/admin/InventoryPage';
+
 import { AuthProvider } from './context/AuthContext';
 import { NotificationProvider } from './context/NotificationContext';
 
@@ -58,6 +61,9 @@ export default function App() {
                       {/* Admin Routes */}
                       <Route path="admin/dashboard" element={<AdminDashboard />} />
                         <Route path="admin/requestions" element={<RequestionsPage />} />
+                        <Route path="admin/employees" element={<EmployeesPage />} />
+                        <Route path="admin/inventory" element={<AdminInventoryPage />} />
+
                       {/* --- UPDATED BHW ROUTES --- */}
                       <Route path="bhw/dashboard" element={<BhwDashboard />} />
                       <Route path="bhw/maternity-management" element={<MaternityManagement />} />

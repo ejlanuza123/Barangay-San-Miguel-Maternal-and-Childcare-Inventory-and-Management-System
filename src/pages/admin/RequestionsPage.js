@@ -66,7 +66,6 @@ export default function RequestionsPage() {
 
     // This function is called when the green checkmark is clicked
     const handleApprove = async (request) => {
-        // Step 1: Perform the requested action (Update or Delete the patient record)
         let actionError = null;
         if (request.request_type === 'Update') {
             const { error } = await supabase.from(request.target_table).update(request.request_data).eq('id', request.target_record_id);
@@ -81,16 +80,20 @@ export default function RequestionsPage() {
             return;
         }
 
-        // Step 2: If the action was successful, update the request's status to 'Approved'
         const { error: statusError } = await supabase.from('requestions').update({ status: 'Approved' }).eq('id', request.id);
         
         if (statusError) {
             addNotification(`Action completed, but failed to update request status: ${statusError.message}`, 'warning');
         } else {
             addNotification(`Request has been approved.`, 'success');
-            logActivity('Request Approved', `Approved ${request.request_type} for record ID ${request.target_record_id}`);
+            // --- MODIFIED: Pass the original worker's ID to the logger ---
+            logActivity(
+                'Request Approved', 
+                `Your ${request.request_type} request was approved by an Admin.`,
+                request.worker_id 
+            );
         }
-        fetchRequestions(); // Refresh the list to show the change
+        fetchRequestions();
     };
 
     // This function is called when the red 'X' is clicked
@@ -108,7 +111,7 @@ export default function RequestionsPage() {
 
     return (
         <div className="p-6 bg-gray-50 min-h-screen">
-            <h1 className="text-3xl font-bold text-gray-800 mb-6">Barangay Workers Requests</h1>
+            <h1 className="text-2xl font-bold text-gray-800 mb-6">Barangay Workers Requests</h1>
             <div className="bg-white p-4 rounded-lg shadow-sm border">
                 <div className="flex border-b mb-4">
                     <button onClick={() => setActiveTab('BHW')} className={`px-4 py-2 text-sm font-semibold ${activeTab === 'BHW' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500'}`}>BARANGAY HEALTH WORKER</button>
