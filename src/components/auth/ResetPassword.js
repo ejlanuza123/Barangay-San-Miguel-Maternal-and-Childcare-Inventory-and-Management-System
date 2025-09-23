@@ -1,5 +1,7 @@
+// src/components/auth/ResetPassword.js
+
 import React, { useState } from "react";
-import { useLocation, useNavigate, Navigate, Link } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { supabase } from "../../services/supabase";
 import logo from "../../assets/logo.jpg";
@@ -7,22 +9,6 @@ import illustration from "../../assets/illustration.png";
 import backgroundImage from "../../assets/background.png";
 
 // --- SVG Icons for the form ---
-const UserIcon = () => (
-  <svg
-    className="w-5 h-5 text-gray-400"
-    fill="none"
-    stroke="currentColor"
-    viewBox="0 0 24 24"
-    xmlns="http://www.w3.org/2000/svg"
-  >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-    ></path>
-  </svg>
-);
 const LockIcon = () => (
   <svg
     className="w-5 h-5 text-gray-400"
@@ -62,10 +48,25 @@ const EyeIcon = () => (
   </svg>
 );
 
+const SuccessModal = ({ message, onClose }) => (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+    <div className="bg-white rounded-lg shadow-2xl w-11/12 max-w-sm p-8 m-4 text-center">
+      <h3 className="text-xl font-bold mb-4 text-green-600">Success</h3>
+      <p className="text-gray-700 mb-6">{message}</p>
+      <button
+        onClick={onClose}
+        className="bg-green-500 text-white font-bold py-2 px-8 rounded-lg hover:bg-green-600 transition-colors"
+      >
+        Proceed to Login
+      </button>
+    </div>
+  </div>
+);
+
 const ErrorModal = ({ message, onClose }) => (
   <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
     <div className="bg-white rounded-lg shadow-2xl w-11/12 max-w-sm p-8 m-4 text-center">
-      <h3 className="text-xl font-bold mb-4 text-red-600">Login Error</h3>
+      <h3 className="text-xl font-bold mb-4 text-red-600">Error</h3>
       <p className="text-gray-700 mb-6">{message}</p>
       <button
         onClick={onClose}
@@ -77,88 +78,51 @@ const ErrorModal = ({ message, onClose }) => (
   </div>
 );
 
-export default function Login() {
-  const [loginIdentifier, setLoginIdentifier] = useState("");
+export default function ResetPassword() {
   const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
   const navigate = useNavigate();
-  const location = useLocation();
 
-  const role = location.state?.role;
-
-  if (!role) {
-    return <Navigate to="/role-selection" replace />;
-  }
-
-  const handleLogin = async (e) => {
+  const handlePasswordReset = async (e) => {
     e.preventDefault();
-    setLoading(true);
-    setErrorMessage("");
-
-    let emailForLogin;
-
-    if (loginIdentifier.includes("@")) {
-      emailForLogin = loginIdentifier;
-    } else {
-      // MODIFIED: Use the new database function to get the email
-      const { data, error } = await supabase.rpc("get_email_by_user_id", {
-        user_id_param: loginIdentifier,
-      });
-
-      if (error || !data) {
-        setErrorMessage("Invalid User ID. Please check the ID and try again.");
-        setLoading(false);
-        return;
-      }
-      emailForLogin = data; // The function directly returns the email string
+    if (password !== confirmPassword) {
+      setErrorMessage("Passwords do not match.");
+      return;
     }
-
-    // Step 2: Attempt to sign in using the determined email
-    const { data: loginData, error: loginError } =
-      await supabase.auth.signInWithPassword({
-        email: emailForLogin,
-        password: password,
-      });
-
-    if (loginError) {
-      setErrorMessage(loginError.message);
-      setLoading(false);
+    if (password.length < 6) {
+      setErrorMessage("Password must be at least 6 characters long.");
       return;
     }
 
-    // Step 3: Verify the user's role matches the selected role
-    if (loginData.user) {
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", loginData.user.id)
-        .single();
+    setLoading(true);
+    setSuccessMessage("");
+    setErrorMessage("");
 
-      if (profileError) {
-        setErrorMessage(
-          "Could not find a user profile. Please contact an administrator."
-        );
-        await supabase.auth.signOut();
-        setLoading(false);
-        return;
-      }
+    const { error } = await supabase.auth.updateUser({ password });
 
-      if (profile.role === role) {
-        navigate("/"); // Success!
-      } else {
-        setErrorMessage(
-          "This is not the role you registered with. Please select the correct role."
-        );
-        await supabase.auth.signOut();
-      }
+    if (error) {
+      setErrorMessage(error.message);
+    } else {
+      setSuccessMessage("Your password has been reset successfully!");
     }
+
     setLoading(false);
+  };
+
+  const closeSuccessModal = () => {
+    setSuccessMessage("");
+    navigate("/login");
   };
 
   return (
     <>
+      {successMessage && (
+        <SuccessModal message={successMessage} onClose={closeSuccessModal} />
+      )}
       {errorMessage && (
         <ErrorModal
           message={errorMessage}
@@ -172,6 +136,7 @@ export default function Login() {
           transition={{ duration: 0.5, ease: "easeOut" }}
           className="w-full max-w-5xl flex flex-col md:flex-row bg-white rounded-2xl shadow-2xl overflow-hidden"
         >
+          {/* Left Panel */}
           <div
             className="w-full md:w-1/2 p-8 sm:p-12 flex flex-col justify-start text-white relative bg-cover bg-center"
             style={{ backgroundImage: `url(${backgroundImage})` }}
@@ -200,7 +165,7 @@ export default function Login() {
               </div>
               <div className="flex-grow flex flex-col justify-around items-center text-center">
                 <h2 className="text-5xl font-bold drop-shadow-2xl">
-                  Welcome Back!
+                  Create New Password
                 </h2>
                 <img
                   src={illustration}
@@ -211,29 +176,19 @@ export default function Login() {
             </div>
           </div>
 
+          {/* Right Panel (Form) */}
           <div className="w-full md:w-1/2 p-8 sm:p-12 flex flex-col justify-center bg-slate-50">
             <div className="bg-white rounded-2xl p-8 sm:p-12 shadow-lg border border-gray-200">
               <div className="mb-6">
-                <h2 className="text-3xl font-bold text-gray-800">Login</h2>
+                <h2 className="text-3xl font-bold text-gray-800">
+                  Set New Password
+                </h2>
                 <p className="text-gray-500 mt-2">
-                  Please login to your account.
+                  Please enter and confirm your new password.
                 </p>
               </div>
 
-              <form onSubmit={handleLogin} className="space-y-6">
-                <div className="relative">
-                  <span className="absolute inset-y-0 left-0 flex items-center pl-3">
-                    <UserIcon />
-                  </span>
-                  <input
-                    type="text"
-                    value={loginIdentifier}
-                    onChange={(e) => setLoginIdentifier(e.target.value)}
-                    required
-                    placeholder="Email or User ID No."
-                    className="pl-10 mt-1 block w-full px-3 py-3 bg-white border border-gray-300 rounded-md shadow-sm"
-                  />
-                </div>
+              <form onSubmit={handlePasswordReset} className="space-y-6">
                 <div className="relative">
                   <span className="absolute inset-y-0 left-0 flex items-center pl-3">
                     <LockIcon />
@@ -243,7 +198,7 @@ export default function Login() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    placeholder="Password"
+                    placeholder="New Password"
                     className="pl-10 mt-1 block w-full px-3 py-3 bg-white border border-gray-300 rounded-md shadow-sm"
                   />
                   <button
@@ -254,14 +209,18 @@ export default function Login() {
                     <EyeIcon />
                   </button>
                 </div>
-
-                <div className="text-right">
-                  <Link
-                    to="/forgot-password"
-                    className="text-sm font-medium text-blue-600 hover:text-blue-800"
-                  >
-                    Forgot password
-                  </Link>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 flex items-center pl-3">
+                    <LockIcon />
+                  </span>
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                    placeholder="Confirm New Password"
+                    className="pl-10 mt-1 block w-full px-3 py-3 bg-white border border-gray-300 rounded-md shadow-sm"
+                  />
                 </div>
 
                 <button
@@ -269,30 +228,9 @@ export default function Login() {
                   disabled={loading}
                   className="w-full bg-blue-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-600 transition-colors duration-300 disabled:bg-gray-400"
                 >
-                  {loading ? "Logging in..." : "Login"}
+                  {loading ? "Resetting..." : "Reset Password"}
                 </button>
               </form>
-              <div className="mt-6 flex justify-center">
-                <button
-                  onClick={() => navigate("/role-selection")}
-                  className="text-gray-500 hover:text-gray-700 font-semibold p-2 rounded-full border-2 border-gray-300 hover:bg-gray-100"
-                >
-                  <svg
-                    className="w-6 h-6"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M10 19l-7-7m0 0l7-7m-7 7h18"
-                    ></path>
-                  </svg>
-                </button>
-              </div>
             </div>
           </div>
         </motion.div>
