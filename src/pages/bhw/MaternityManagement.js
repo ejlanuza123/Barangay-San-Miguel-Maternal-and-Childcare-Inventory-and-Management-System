@@ -5,8 +5,11 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { logActivity } from '../../services/activityLogger';
 import { useNotification } from '../../context/NotificationContext'; 
 import { useAuth } from '../../context/AuthContext'; 
+import { QRCodeSVG } from 'qrcode.react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import PatientQRCode from '../../components/reusables/PatientQRCode';
+import PatientQRCodeModal from '../../components/reusables/PatientQRCodeModal';
 
 // --- ICONS ---
 const SearchIcon = () => <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>;
@@ -15,6 +18,7 @@ const ViewIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor
 const UpdateIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>;
 const DeleteIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>;
 const CalendarIcon = () => <svg className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>;
+const QRIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12h1m8-9v1m0 16v1m8-9h-1M4 12a8 8 0 018-8m0 16a8 8 0 01-8-8m16 0a8 8 0 01-8 8"></path></svg>;
 
 // --- Helper Components ---
 const RiskLevelBadge = ({ level }) => {
@@ -91,6 +95,7 @@ const DeleteConfirmationModal = ({ patientName, onConfirm, onCancel }) => (
 // MODIFIED: ViewPatientModal now displays all medical history details
 const ViewPatientModal = ({ patient, onClose }) => {
     // Safely get the detailed records, or an empty object if it's null
+    const [isQrModalVisible, setIsQrModalVisible] = useState(false);
     const details = patient.medical_history || {};
         const handleDownloadPdf = () => {
         const doc = new jsPDF();
@@ -186,6 +191,9 @@ const ViewPatientModal = ({ patient, onClose }) => {
         doc.save(`ITR_${patient.last_name}_${patient.first_name}.pdf`);
         logActivity("Downloaded PDF Record", `Generated PDF for patient: ${patient.patient_id}`);
     };
+    <div className="md:col-span-1">
+             <PatientQRCode patient={patient} />
+    </div>
 
 
     // Helper components for styling the document view
@@ -208,6 +216,13 @@ const ViewPatientModal = ({ patient, onClose }) => {
     );
 
     return (
+        <>
+        {isQrModalVisible && (
+                <PatientQRCodeModal 
+                    patient={patient} 
+                    onClose={() => setIsQrModalVisible(false)} 
+                />
+            )}
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
             <motion.div
                 className="bg-white rounded-lg shadow-2xl w-full max-w-4xl overflow-hidden"
@@ -329,10 +344,13 @@ const ViewPatientModal = ({ patient, onClose }) => {
                 <div className="p-4 bg-gray-50 border-t flex justify-end gap-3">
                     <button onClick={onClose} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md font-semibold text-sm">Close</button>
                     {/* --- NEW DOWNLOAD BUTTON --- */}
+                    <button onClick={() => setIsQrModalVisible(true)} className="px-4 py-2 bg-green-600 text-white rounded-md font-semibold text-sm">View QR Code</button>
                     <button onClick={handleDownloadPdf} className="px-4 py-2 bg-blue-600 text-white rounded-md font-semibold text-sm">Download as PDF</button>
+                    
                 </div>
             </motion.div>
         </div>
+        </>
     );
 };
 
@@ -387,6 +405,8 @@ export default function MaternityManagement() {
     const [patientToDelete, setPatientToDelete] = useState(null);
     const { user } = useAuth();
     const { addNotification } = useNotification();
+    const [patientForQR, setPatientForQR] = useState(null); // <-- 2. ADD STATE FOR THE MODAL
+
 
     
     // --- NEW: Pagination State ---

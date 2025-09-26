@@ -3,7 +3,7 @@ import { supabase } from '../../services/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
 import { logActivity } from '../../services/activityLogger';
 import { useNotification } from '../../context/NotificationContext'; // <-- 1. IMPORT THE HOOK
-
+import { QRCodeSVG } from 'qrcode.react';
 
 // --- Helper Icon for Profile Placeholder ---
 const ProfileIcon = () => (
@@ -19,16 +19,21 @@ const Step1 = ({ formData, handleChange, newPatientId }) => (
   <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8">
     {/* Left Profile Section */}
     <div className="md:col-span-1 flex flex-col items-center mb-6 md:mb-0">
-      <div className="w-32 h-32 bg-gray-100 rounded-md border flex items-center justify-center">
-        <ProfileIcon />
-      </div>
-      <div className="text-center mt-2">
-        <p className="font-bold text-gray-700">Patient ID: {newPatientId}</p>
-        {newPatientId.startsWith("P-") && (
-          <p className="text-xs text-gray-500">(Patient ID Auto Generated)</p>
-        )}
-      </div>
-    </div>
+            {/* It now shows a QR code if the ID is valid, otherwise it shows the placeholder */}
+            <div className="w-32 h-32 bg-white rounded-md border p-1 flex items-center justify-center">
+                {newPatientId && newPatientId.startsWith('P-') ? (
+                    <QRCodeSVG value={newPatientId} size={120} />
+                ) : (
+                    <ProfileIcon />
+                )}
+            </div>
+            <div className="text-center mt-2">
+                <p className="font-bold text-gray-700">Patient ID: {newPatientId}</p>
+                {newPatientId.startsWith("P-") && (
+                    <p className="text-xs text-gray-500">(Patient ID Auto Generated)</p>
+                )}
+            </div>
+        </div>
 
     {/* Right Side with Info + ID Numbers */}
     <div className="md:col-span-2 space-y-4">
