@@ -1,14 +1,14 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion"; // Import AnimatePresence
+import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "../../services/supabase";
 import logo from "../../assets/logo.jpg";
 import illustration from "../../assets/illustration.png";
 import backgroundImage from "../../assets/background.png";
 
-// --- New Admin Login Modal Component ---
+// --- UPDATED Admin Login Modal ---
 const AdminLoginModal = ({ onClose }) => {
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState(""); // Changed from email
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -19,9 +19,10 @@ const AdminLoginModal = ({ onClose }) => {
     setLoading(true);
     setError("");
 
+    // Assuming admin logs in with email, but the field is labeled "Username"
     const { data, error: loginError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
+      email: username,
+      password: password,
     });
 
     if (loginError) {
@@ -41,41 +42,41 @@ const AdminLoginModal = ({ onClose }) => {
         setError("Invalid administrator credentials.");
         await supabase.auth.signOut();
       } else {
-        navigate("/"); // Navigate to main layout on success
+        navigate("/");
       }
     }
     setLoading(false);
   };
 
   return (
-    <div className="bg-gray-100 h-screen flex items-center justify-center font-sans p-4">
-      <div className="w-full max-w-4xl p-8 bg-white shadow-lg rounded-lg"></div>
+    <div
+      className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50"
+      onClick={onClose}
+    >
       <motion.div
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.9 }} // Add the exit animation
+        exit={{ opacity: 0, scale: 0.9 }}
         transition={{ duration: 0.2, ease: "easeOut" }}
         onClick={(e) => e.stopPropagation()}
-        className="bg-white rounded-lg shadow-2xl w-11/12 max-w-md p-8 m-4"
+        className="bg-white rounded-lg shadow-xl w-11/12 max-w-sm p-6"
       >
-        <h2 className="text-2xl font-bold text-gray-800 text-center">
+        <h2 className="text-xl font-bold text-gray-800 text-center">
           Admin Login Required
         </h2>
-        <p className="text-gray-500 mt-2 mb-6 text-center">
-          Please enter your administrator username and password to continue.{" "}
-          <br />{" "}
-          <span className="text-xs italic">
-            This area is restricted to authorized personnel only.
-          </span>
+        <p className="text-xs text-gray-500 mt-1 mb-4 text-center">
+          Please enter your administrator username and password to continue.
+          This area is restricted to authorized personnel only.
         </p>
+
         <form onSubmit={handleAdminLogin} className="space-y-4">
           <input
-            type="email"
+            type="text" // Changed from email to text
             placeholder="Username"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
             required
-            className="w-full px-4 py-3 bg-gray-100 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
           />
           <input
             type="password"
@@ -83,21 +84,14 @@ const AdminLoginModal = ({ onClose }) => {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            className="w-full px-4 py-3 bg-gray-100 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
           />
-          {error && <p className="text-sm text-red-600 text-center">{error}</p>}
-          <div className="flex justify-center items-center space-x-4 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="text-gray-600 font-semibold px-4 py-2 rounded-md hover:bg-gray-100 border border-gray-300"
-            >
-              Cancel
-            </button>
+          {error && <p className="text-xs text-red-600 text-center">{error}</p>}
+          <div className="pt-2">
             <button
               type="submit"
               disabled={loading}
-              className="bg-blue-500 text-white font-bold px-6 py-2 rounded-lg hover:bg-blue-600 disabled:bg-gray-400"
+              className="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
             >
               {loading ? "Submitting..." : "Submit"}
             </button>
@@ -289,6 +283,7 @@ export default function RoleSelection() {
           transition={{ duration: 0.5, ease: "easeOut" }}
           className="w-full max-w-5xl flex flex-col md:flex-row bg-white rounded-2xl shadow-2xl overflow-hidden"
         >
+          {/* Left Panel */}
           <div
             className="w-full md:w-1/2 p-8 sm:p-12 flex flex-col justify-start text-white relative bg-cover bg-center"
             style={{ backgroundImage: `url(${backgroundImage})` }}
@@ -328,6 +323,7 @@ export default function RoleSelection() {
             </div>
           </div>
 
+          {/* Right Panel */}
           <div className="w-full md:w-1/2 p-8 sm:p-12 flex flex-col justify-center bg-slate-50">
             <div className="bg-white rounded-2xl p-8 shadow-lg border border-gray-200">
               <div className="mb-8">
