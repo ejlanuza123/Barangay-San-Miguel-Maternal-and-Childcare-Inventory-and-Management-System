@@ -204,6 +204,26 @@ const ViewAllActivityModal = ({ activities, onClose }) => (
     </div>
 );
 
+const AppointmentRequests = ({ requests, onApprove, onDeny }) => (
+    // MODIFIED: Added a fixed height and scrollbar to prevent layout shifts
+    <div className="bg-white p-4 rounded-lg shadow border flex flex-col h-full">
+        <h3 className="font-bold text-gray-700 text-base mb-3 flex-shrink-0">Appointment Requests</h3>
+        <div className="overflow-y-auto flex-grow">
+            {requests.length > 0 ? requests.map(req => (
+                <div key={req.id} className="flex justify-between items-center py-2 border-b last:border-b-0">
+                    <div>
+                        <p className="font-semibold text-sm">{req.patient_name}</p>
+                        <p className="text-xs text-gray-500">{req.reason} on {new Date(req.date).toLocaleDateString()}</p>
+                    </div>
+                    <div className="flex gap-2 flex-shrink-0">
+                        <button onClick={() => onApprove(req.id)} className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200">Approve</button>
+                        <button onClick={() => onDeny(req.id)} className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200">Deny</button>
+                    </div>
+                </div>
+            )) : <p className="text-sm text-gray-500 mt-2">No pending requests.</p>}
+        </div>
+    </div>
+);
 
 // --- Main BHW Dashboard Component ---
 export default function BhwDashboard() {
@@ -212,6 +232,7 @@ export default function BhwDashboard() {
     const [recentActivities, setRecentActivities] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
+    const [pendingRequests, setPendingRequests] = useState([]);
 
     const { user } = useAuth(); 
     const { addNotification } = useNotification();
@@ -249,8 +270,23 @@ export default function BhwDashboard() {
             setRecentActivities(activityRes.data || []);
         }
 
+        const { data: requestsData } = await supabase.from('appointments').select('*').eq('status', 'Pending');
+        setPendingRequests(requestsData || []);
+
         setLoading(false);
-    }, [user, addNotification]); // Add 'user' to the dependency array
+    }, [user, addNotification]);
+    
+    const handleApprove = async (appointmentId) => {
+        await supabase.rpc('approve_appointment_and_notify_user', { appointment_id_param: appointmentId });
+        fetchDashboardData(); // Refresh list
+    };
+    
+    // You would create a similar RPC for denying/cancelling
+    const handleDeny = async (appointmentId) => {
+        await supabase.from('appointments').update({ status: 'Cancelled' }).eq('id', appointmentId);
+        fetchDashboardData(); // Refresh list
+    };
+
     useEffect(() => {
         fetchDashboardData();
     }, [fetchDashboardData]);
@@ -270,20 +306,27 @@ export default function BhwDashboard() {
                 )}
             </AnimatePresence>
             <div className="space-y-4">
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                    <div className="lg:col-span-1">
-                        <RecentActivity activities={recentActivities} onViewAll={() => setIsActivityModalOpen(true)} />
+                {/* --- RESTRUCTURED LAYOUT: A balanced 2x2 grid for widgets --- */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="lg:col-span-2">
+                        <AppointmentRequests requests={pendingRequests} onApprove={handleApprove} onDeny={handleDeny} />
                     </div>
                     <div className="lg:col-span-1">
-                        <Calendar />
+                         <RecentActivity activities={recentActivities} onViewAll={() => setIsActivityModalOpen(true)} />
                     </div>
                     <div className="lg:col-span-1">
                         <QuickAccess />
                     </div>
                 </div>
                 
-                <div>
-                    <UpcomingAppointments appointments={upcomingAppointments} />
+                 {/* --- The calendar and appointments table are now below the main grid --- */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                     <div className="lg:col-span-2">
+                        <UpcomingAppointments appointments={upcomingAppointments} />
+                    </div>
+                    <div className="lg:col-span-1">
+                        <Calendar />
+                    </div>
                 </div>
             </div>
         </>
