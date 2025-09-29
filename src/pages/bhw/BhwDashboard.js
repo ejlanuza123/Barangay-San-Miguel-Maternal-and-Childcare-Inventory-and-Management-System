@@ -277,8 +277,10 @@ export default function BhwDashboard() {
     }, [user, addNotification]);
     
     const handleApprove = async (appointmentId) => {
-        await supabase.rpc('approve_appointment_and_notify_user', { appointment_id_param: appointmentId });
-        fetchDashboardData(); // Refresh list
+        await supabase.rpc('approve_appointment_and_notify_user', { 
+            appointment_id_param: appointmentId,
+            approver_name_param: profile.full_name // Send the BHW's name
+        });
     };
     
     // You would create a similar RPC for denying/cancelling
