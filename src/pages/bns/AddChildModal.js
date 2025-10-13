@@ -3,44 +3,96 @@ import { supabase } from '../../services/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
 import { logActivity } from '../../services/activityLogger';
 import { useNotification } from '../../context/NotificationContext';
+import { QRCodeSVG } from 'qrcode.react';
 
 const ProfileIcon = () => ( <svg className="w-full h-full text-gray-300" fill="currentColor" viewBox="0 0 24 24"><path d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z" /></svg> );
 const BackIcon = () => ( <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg> );
 
 // --- Form Step Components ---
 const Step1 = ({ formData, handleChange, newChildId }) => (
-    <div className="space-y-4">
-        <div className="flex items-start gap-6">
-            <div className="flex-shrink-0 text-center">
-                <div className="w-24 h-24 bg-gray-100 rounded-md border flex items-center justify-center"><ProfileIcon /></div>
-                <p className="font-bold text-gray-700 mt-2">Child ID: {newChildId}</p>
-                <p className="text-xs text-gray-500">(Auto Generated)</p>
+    // MODIFIED: This is the main container, now a 3-column grid on medium screens and up.
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8">
+      
+        {/* --- LEFT COLUMN: QR Code --- */}
+        <div className="md:col-span-1 flex flex-col items-center mb-6 md:mb-0">
+            <div className="w-32 h-32 bg-white rounded-md border p-1 flex items-center justify-center">
+                {newChildId && newChildId.startsWith('C-') ? (
+                    <QRCodeSVG value={newChildId} size={120} />
+                ) : (
+                    <div className="w-full h-full bg-gray-100 animate-pulse rounded-sm"></div>
+                )}
             </div>
-            <div className="flex-grow grid grid-cols-2 gap-4">
-                <div><label className="text-sm">Name of BHS</label><input type="text" name="bhs_name" value={formData.bhs_name || 'San Miguel'} onChange={handleChange} className="w-full p-2 border rounded-md" /></div>
-                <div><label className="text-sm">Name of Child</label><input type="text" name="child_name" value={formData.child_name || ''} onChange={handleChange} className="w-full p-2 border rounded-md" required /></div>
-                <div><label className="text-sm">Date of Birth</label><input type="date" name="dob" value={formData.dob || ''} onChange={handleChange} className="w-full p-2 border rounded-md" required /></div>
-                <div><label className="text-sm">Sex</label><select name="sex" value={formData.sex || ''} onChange={handleChange} className="w-full p-2 border rounded-md bg-gray-50" required><option value="">Select</option><option value="Male">Male</option><option value="Female">Female</option></select></div>
-                <div className="col-span-2"><label className="text-sm">Place of Birth</label><input type="text" name="place_of_birth" value={formData.place_of_birth || ''} onChange={handleChange} className="w-full p-2 border rounded-md" /></div>
-                <div className="col-span-2"><label className="text-sm">Name of Mother</label><input type="text" name="mother_name" value={formData.mother_name || ''} onChange={handleChange} className="w-full p-2 border rounded-md" /></div>
-                <div className="col-span-2"><label className="text-sm">Name of Father</label><input type="text" name="father_name" value={formData.father_name || ''} onChange={handleChange} className="w-full p-2 border rounded-md" /></div>
-                <div className="col-span-2"><label className="text-sm">Name of Guardian</label><input type="text" name="guardian_name" value={formData.guardian_name || ''} onChange={handleChange} className="w-full p-2 border rounded-md" /></div>
+            <div className="text-center mt-2">
+                <p className="font-bold text-gray-700">Child ID: {newChildId}</p>
+                {newChildId.startsWith("C-") && (
+                    <p className="text-xs text-gray-500">(Auto Generated)</p>
+                )}
             </div>
-            <div className="w-1/4 space-y-4 p-4 border rounded-lg bg-gray-50">
-                <h3 className="font-bold text-center">ID Numbers</h3>
-                <div><label className="text-sm">NHTS No.</label><input type="text" name="nhts_no" value={formData.nhts_no || ''} onChange={handleChange} className="w-full p-2 border rounded-md" /></div>
-                <div><label className="text-sm">PhilHealth No.</label><input type="text" name="philhealth_no" value={formData.philhealth_no || ''} onChange={handleChange} className="w-full p-2 border rounded-md" /></div>
+        </div>
+
+        {/* --- RIGHT COLUMN: All Form Fields --- */}
+        <div className="md:col-span-2 space-y-4">
+            
+            {/* MODIFIED: A flex container to put Personal Info and ID Numbers side-by-side */}
+            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
                 
-                <div className="border-t pt-4">
-                    <h3 className="font-bold text-center mb-4">Measurements</h3>
+                {/* Personal Information Section */}
+                <div className="flex-1">
+                    <h3 className="font-semibold text-gray-700 mb-2">Personal Information</h3>
+                    {/* MODIFIED: Name is now split into two fields for better data quality */}
+                    <div className="grid grid-cols-2 gap-2 mb-2">
+                        <div>
+                            <label className="text-xs text-gray-500">First Name</label>
+                            <input type="text" name="first_name" value={formData.first_name || ""} onChange={handleChange} className="w-full p-2 border rounded-md text-sm" required />
+                        </div>
+                        <div>
+                            <label className="text-xs text-gray-500">Last Name</label>
+                            <input type="text" name="last_name" value={formData.last_name || ""} onChange={handleChange} className="w-full p-2 border rounded-md text-sm" required />
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                        <div>
+                            <label className="text-xs text-gray-500">Date of Birth</label>
+                            <input type="date" name="dob" value={formData.dob || ''} onChange={handleChange} className="w-full p-2 border rounded-md text-sm" required />
+                        </div>
+                        <div>
+                            <label className="text-xs text-gray-500">Sex</label>
+                            <select name="sex" value={formData.sex || ''} onChange={handleChange} className="w-full p-2 border rounded-md text-sm bg-gray-50" required>
+                                <option value="">Select</option>
+                                <option value="Male">Male</option>
+                                <option value="Female">Female</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                {/* ID Numbers & Measurements Box */}
+                <div className="w-full md:w-1/3 space-y-2 p-3 border rounded-lg bg-gray-50 shadow-sm">
+                    <h3 className="font-bold text-center text-sm">ID Numbers</h3>
+                    <div><label className="text-xs">NHTS No.</label><input type="text" name="nhts_no" value={formData.nhts_no || ''} onChange={handleChange} className="w-full p-2 border rounded-md text-sm" /></div>
+                    <div><label className="text-xs">PhilHealth No.</label><input type="text" name="philhealth_no" value={formData.philhealth_no || ''} onChange={handleChange} className="w-full p-2 border rounded-md text-sm" /></div>
+                </div>
+            </div>
+
+            {/* Other form fields, now correctly placed below the sections above */}
+            <div><label className="text-sm">Place of Birth</label><input type="text" name="place_of_birth" value={formData.place_of_birth || ''} onChange={handleChange} className="w-full p-2 border rounded-md" /></div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div><label className="text-sm">Name of Mother</label><input type="text" name="mother_name" value={formData.mother_name || ''} onChange={handleChange} className="w-full p-2 border rounded-md" /></div>
+                <div><label className="text-sm">Name of Father</label><input type="text" name="father_name" value={formData.father_name || ''} onChange={handleChange} className="w-full p-2 border rounded-md" /></div>
+            </div>
+            
+             <div className="border-t pt-4">
+                <h3 className="font-semibold text-gray-700 mb-2">Measurements</h3>
+                <div className="grid grid-cols-3 gap-4">
                     <div><label className="text-sm">Weight (kg)</label><input type="number" step="0.1" name="weight_kg" value={formData.weight_kg || ''} onChange={handleChange} className="w-full p-2 border rounded-md" /></div>
                     <div><label className="text-sm">Height (cm)</label><input type="number" step="0.1" name="height_cm" value={formData.height_cm || ''} onChange={handleChange} className="w-full p-2 border rounded-md" /></div>
                     <div><label className="text-sm">Body Mass Index (BMI)</label><input type="text" name="bmi" value={formData.bmi || ''} readOnly className="w-full p-2 border rounded-md bg-gray-200 cursor-not-allowed" /></div>
                 </div>
-            </div>
+             </div>
         </div>
     </div>
 );
+
 
 const Step2 = ({ formData, handleChange }) => (
     <div className="space-y-6">

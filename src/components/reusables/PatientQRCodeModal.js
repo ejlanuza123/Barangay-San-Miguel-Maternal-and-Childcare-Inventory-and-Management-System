@@ -1,32 +1,41 @@
 // src/components/reusables/PatientQRCodeModal.js
 import React from 'react';
 import { QRCodeSVG } from 'qrcode.react';
+import { saveAs } from 'file-saver';
 
-// This new modal component will display the QR code and handle the download
-export default function PatientQRCodeModal({ patient, onClose }) {
-    if (!patient) return null;
+// MODIFIED: This modal is now generic and can handle different record types
+export default function PatientQRCodeModal({ subject, idKey, idLabel, onClose }) {
+    if (!subject) return null;
+
+    const idValue = subject[idKey];
+    const nameValue = `${subject.first_name || ''} ${subject.last_name || ''}`;
 
     const handleDownload = () => {
-        // Find the SVG element rendered by the QR code component
-        const svg = document.getElementById('patient-qr-code');
+        const svg = document.getElementById('generic-qr-code-svg');
         if (svg) {
+            // Temporarily add a white background for the PNG conversion
+            const bgRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+            bgRect.setAttribute("width", "100%");
+            bgRect.setAttribute("height", "100%");
+            bgRect.setAttribute("fill", "white");
+            svg.prepend(bgRect);
+
             const svgData = new XMLSerializer().serializeToString(svg);
+
+            // Remove the temporary background
+            svg.removeChild(bgRect);
+
             const canvas = document.createElement("canvas");
             const ctx = canvas.getContext("2d");
             const img = new Image();
+            
             img.onload = () => {
-                canvas.width = img.width;
-                canvas.height = img.height;
-                ctx.drawImage(img, 0, 0);
-                const pngFile = canvas.toDataURL("image/png");
-                
-                // Create a link and trigger the download
-                const downloadLink = document.createElement("a");
-                downloadLink.href = pngFile;
-                downloadLink.download = `${patient.patient_id}_QR_Code.png`;
-                document.body.appendChild(downloadLink);
-                downloadLink.click();
-                document.body.removeChild(downloadLink);
+                canvas.width = 256;
+                canvas.height = 256;
+                ctx.drawImage(img, 0, 0, 256, 256);
+                canvas.toBlob((blob) => {
+                    saveAs(blob, `${nameValue.replace(/ /g, '_')}_QR_Code.png`);
+                });
             };
             img.src = "data:image/svg+xml;base64," + btoa(svgData);
         }
@@ -35,15 +44,12 @@ export default function PatientQRCodeModal({ patient, onClose }) {
     return (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-[100]">
             <div className="bg-white rounded-lg shadow-2xl w-full max-w-xs p-6 text-center">
-                <h3 className="text-lg font-bold mb-2">
-                    {`${patient.first_name} ${patient.last_name}`}
-                </h3>
-                <p className="text-sm text-gray-500 mb-4">Patient ID: {patient.patient_id}</p>
+                <h3 className="text-lg font-bold mb-2">{nameValue}</h3>
+                <p className="text-sm text-gray-500 mb-4">{idLabel}: {idValue}</p>
                 
-                {/* The QR Code, with an ID so we can select it for download */}
                 <QRCodeSVG 
-                    id="patient-qr-code"
-                    value={patient.patient_id}
+                    id="generic-qr-code-svg" // Use a generic ID
+                    value={idValue}
                     size={200}
                     level={"H"}
                 />

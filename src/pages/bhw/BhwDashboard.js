@@ -234,7 +234,7 @@ export default function BhwDashboard() {
     const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
     const [pendingRequests, setPendingRequests] = useState([]);
 
-    const { user } = useAuth(); 
+    const { user, profile } = useAuth(); 
     const { addNotification } = useNotification();
 
     const fetchDashboardData = useCallback(async () => {

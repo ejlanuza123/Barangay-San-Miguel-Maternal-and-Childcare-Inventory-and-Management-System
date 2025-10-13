@@ -466,11 +466,11 @@ const ViewChildModal = ({ child, onClose, onViewQRCode }) => {
         </div>
         <div className="p-4 bg-gray-50 border-t flex justify-end gap-3">
           <button
-            onClick={() => onViewQRCode(child)}
+            onClick={() => onViewQRCode(child)} // This passes the child object up
             className="px-4 py-2 bg-purple-600 text-white rounded-md font-semibold text-sm hover:bg-purple-700"
-          >
+        >
             View QR Code
-          </button>
+        </button>
           <button
             onClick={handleDownloadPdf}
             className="px-4 py-2 bg-blue-600 text-white rounded-md font-semibold text-sm hover:bg-blue-700"
@@ -657,10 +657,12 @@ export default function ChildHealthRecords() {
           />
         )}
         {selectedChildForQR && (
-          <PatientQRCodeModal
-            patient={selectedChildForQR}
-            onClose={() => setSelectedChildForQR(null)}
-          />
+            <PatientQRCodeModal 
+                subject={selectedChildForQR}      // Pass the child object as 'subject'
+                idKey="child_id"                  // Tell the modal to use the 'child_id' field
+                idLabel="Child ID"                // Tell the modal how to label the ID
+                onClose={() => setSelectedChildForQR(null)} 
+            />
         )}
       </AnimatePresence>
       <div className="p-6 bg-gray-50 min-h-screen">
