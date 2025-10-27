@@ -19,6 +19,7 @@ import PrivateRoute from "./components/auth/PrivateRoute";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import RequestionsPage from "./pages/admin/RequestionsPage";
 import EmployeesPage from "./pages/admin/EmployeesPage";
+import PatientRecordsPage from "./pages/admin/PatientRecordsPage";
 import AdminInventoryPage from "./pages/admin/InventoryPage";
 
 import { AuthProvider } from "./context/AuthContext";
@@ -40,7 +41,8 @@ import ScheduleAppointment from "./pages/user/ScheduleAppointment";
 import ViewUserRecords from "./pages/user/ViewUserRecords";
 
 function App() {
-  const termsAccepted = sessionStorage.getItem("termsAccepted") === "true";
+  // --- MODIFIED: Removed the termsAccepted variable. ---
+  // PrivateRoute now handles this logic internally.
 
   return (
     <Router>
@@ -72,10 +74,17 @@ function App() {
               }
             >
               {/* Nest all protected pages here */}
+              {/* --- ADMIN --- */}
               <Route path="admin/dashboard" element={<AdminDashboard />} />
               <Route path="admin/requestions" element={<RequestionsPage />} />
               <Route path="admin/employees" element={<EmployeesPage />} />
+              <Route
+                path="admin/patient-records"
+                element={<PatientRecordsPage />}
+              />{" "}
+              {/* <-- YOUR NEW ROUTE --> */}
               <Route path="admin/inventory" element={<AdminInventoryPage />} />
+              {/* --- BHW --- */}
               <Route path="bhw/dashboard" element={<BhwDashboard />} />
               <Route
                 path="bhw/maternity-management"
@@ -84,6 +93,7 @@ function App() {
               <Route path="bhw/appointment" element={<AppointmentPage />} />
               <Route path="bhw/inventory" element={<InventoryPage />} />
               <Route path="bhw/reports" element={<ReportsPage />} />
+              {/* --- BNS --- */}
               <Route path="bns/dashboard" element={<BnsDashboard />} />
               <Route
                 path="bns/child-records"
@@ -92,6 +102,7 @@ function App() {
               <Route path="bns/appointment" element={<BnsAppointmentPage />} />
               <Route path="bns/inventory" element={<BnsInventoryPage />} />
               <Route path="bns/reports" element={<BnsReportsPage />} />
+              {/* --- USER --- */}
               <Route path="user/dashboard" element={<UserDashboard />} />
               <Route
                 path="user/schedule-appointment"
@@ -104,12 +115,10 @@ function App() {
             <Route
               path="*"
               element={
-                <Navigate
-                  to={
-                    termsAccepted ? "/role-selection" : "/terms-and-conditions"
-                  }
-                  replace
-                />
+                // --- MODIFIED: Simplified the fallback route ---
+                // PrivateRoute will handle all logic. If not logged in, it redirects
+                // to role-selection. If logged in, it redirects to the correct dashboard.
+                <Navigate to="/" replace />
               }
             />
           </Routes>
