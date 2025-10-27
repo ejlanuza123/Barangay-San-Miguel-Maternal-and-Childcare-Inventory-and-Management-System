@@ -92,6 +92,7 @@ const TrashIcon = () => (
 
 const ProfileDropdown = ({ profile, user }) => {
   const { signOut } = useAuth();
+  const navigate = useNavigate(); // <-- 1. Get the navigate function
 
   const formatDate = (dateString) => {
     if (!dateString) return "N/A";
@@ -100,6 +101,12 @@ const ProfileDropdown = ({ profile, user }) => {
       month: "long",
       day: "numeric",
     });
+  };
+
+  // --- 2. Create a handler that signs out AND navigates ---
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/role-selection", { replace: true });
   };
 
   return (
@@ -148,8 +155,9 @@ const ProfileDropdown = ({ profile, user }) => {
       </div>
 
       <div className="p-2 border-t">
+        {/* --- 3. Update the onClick handler --- */}
         <button
-          onClick={signOut}
+          onClick={handleSignOut}
           className="w-full text-left text-sm text-gray-700 px-3 py-2 rounded-md hover:bg-gray-100"
         >
           Sign Out
