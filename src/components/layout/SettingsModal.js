@@ -351,13 +351,47 @@ const MyProfile = ({ profile, onProfileUpdate }) => {
               <label className="text-sm font-medium text-gray-700">
                 Assigned Purok
               </label>
-              <input
-                type="text"
+              {/* --- MODIFICATION: Replaced text input with select dropdown --- */}
+              <select
                 name="assigned_purok"
                 value={formData.assigned_purok}
                 onChange={handleChange}
                 className="w-full p-3 border bg-gray-50 rounded-md mt-2"
-              />
+              >
+                <option value="">Select Purok</option>
+                <option value="Purok Bagong Silang Zone 1">
+                  Purok Bagong Silang Zone 1
+                </option>
+                <option value="Purok Bagong Silang Zone 2">
+                  Purok Bagong Silang Zone 2
+                </option>
+                <option value="Purok Masigla Zone 1">
+                  Purok Masigla Zone 1
+                </option>
+                <option value="Purok Masigla Zone 2">
+                  Purok Masigla Zone 2
+                </option>
+                <option value="Purok Masaya">Purok Masaya</option>
+                <option value="Purok Bagong Lipunan">
+                  Purok Bagong Lipunan
+                </option>
+                <option value="Purok Dagomboy">Purok Dagomboy</option>
+                <option value="Purok Katarungan Zone 1">
+                  Purok Katarungan Zone 1
+                </option>
+                <option value="Purok Katarungan Zone 2">
+                  Purok Katarungan Zone 2
+                </option>
+                <option value="Purok Pagkakaisa">Purok Pagkakaisa</option>
+                <option value="Purok Kilos-Agad">Purok Kilos-Agad</option>
+                <option value="Purok Balikatan">Purok Balikatan</option>
+                <option value="Purok Bayanihan">Purok Bayanihan</option>
+                <option value="Purok Magkakapitbahay">
+                  Purok Magkakapitbahay
+                </option>
+                <option value="Purok Magara Zone 2">Purok Magara Zone 2</option>
+              </select>
+              {/* --- END MODIFICATION --- */}
             </div>
           )}
         </div>
