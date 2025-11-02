@@ -311,19 +311,48 @@ const AddEmployeeModal = ({ onClose, onSave }) => {
               <option value="BNS">Barangay Nutrition Scholar</option>
             </select>
           </div>
+
+          {/* --- THIS IS THE MODIFIED PUROK DROPDOWN --- */}
           <div>
             <label className="font-semibold text-gray-600 block">
               Purok Assigned
             </label>
-            <input
-              type="text"
+            <select
               value={assignedPurok}
-              placeholder="e.g., Purok 1"
               onChange={(e) => setAssignedPurok(e.target.value)}
+              // --- STYLE CHANGE: Removed bg-gray-50 to match other fields ---
               className="w-full mt-1 p-2 border rounded"
               required
-            />
+            >
+              <option value="">Select Purok</option>
+              <option value="Purok Bagong Silang Zone 1">
+                Purok Bagong Silang Zone 1
+              </option>
+              <option value="Purok Bagong Silang Zone 2">
+                Purok Bagong Silang Zone 2
+              </option>
+              <option value="Purok Masigla Zone 1">Purok Masigla Zone 1</option>
+              <option value="Purok Masigla Zone 2">Purok Masigla Zone 2</option>
+              <option value="Purok Masaya">Purok Masaya</option>
+              <option value="Purok Bagong Lipunan">Purok Bagong Lipunan</option>
+              <option value="Purok Dagomboy">Purok Dagomboy</option>
+              <option value="Purok Katarungan Zone 1">
+                Purok Katarungan Zone 1
+              </option>
+              <option value="Purok Katarungan Zone 2">
+                Purok Katarungan Zone 2
+              </option>
+              <option value="Purok Pagkakaisa">Purok Pagkakaisa</option>
+              <option value="Purok Kilos-Agad">Purok Kilos-Agad</option>
+              <option value="Purok Balikatan">Purok Balikatan</option>
+              <option value="Purok Bayanihan">Purok Bayanihan</option>
+              <option value="Purok Magkakapitbahay">
+                Purok Magkakapitbahay
+              </option>
+              <option value="Purok Magara Zone 2">Purok Magara Zone 2</option>
+            </select>
           </div>
+          {/* --- END OF MODIFIED PUROK DROPDOWN --- */}
         </form>
         <div className="flex justify-end gap-3 p-4 border-t bg-gray-50">
           <button

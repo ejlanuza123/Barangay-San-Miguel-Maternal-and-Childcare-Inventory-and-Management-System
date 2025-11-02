@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { supabase } from "../../services/supabase";
 import { motion, AnimatePresence } from "framer-motion";
 import { logActivity } from "../../services/activityLogger";
-import { useNotification } from "../../context/NotificationContext"; // <-- 1. IMPORT THE HOOK
+import { useNotification } from "../../context/NotificationContext";
 import { QRCodeSVG } from "qrcode.react";
 
 // --- Helper Icon for Profile Placeholder ---
@@ -18,7 +18,7 @@ const ProfileIcon = () => (
 
 // --- Helper Components for Each Step of the Form ---
 
-const Step1 = ({ formData, handleChange, newPatientId }) => (
+const Step1 = ({ formData, handleChange, handleDobChange, newPatientId }) => (
   <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8">
     {/* Left Profile Section */}
     <div className="md:col-span-1 flex flex-col items-center mb-6 md:mb-0">
@@ -86,7 +86,7 @@ const Step1 = ({ formData, handleChange, newPatientId }) => (
                 type="date"
                 name="dob"
                 value={formData.dob || ""}
-                onChange={handleChange}
+                onChange={handleDobChange}
                 className="w-full p-2 border rounded-md text-sm"
               />
             </div>
@@ -115,8 +115,9 @@ const Step1 = ({ formData, handleChange, newPatientId }) => (
                 type="number"
                 name="age"
                 value={formData.age || ""}
-                onChange={handleChange}
-                className="w-full p-2 border rounded-md text-sm"
+                readOnly
+                placeholder="(Auto)"
+                className="w-full p-2 border rounded-md text-sm bg-gray-100"
               />
             </div>
           </div>
@@ -867,12 +868,17 @@ export default function AddPatientModal({
         street: initialData.street || "",
         sms_notifications_enabled:
           initialData.sms_notifications_enabled ?? true,
+        dob: initialData.dob || initialData.medical_history?.dob || "",
         ...(initialData.medical_history || {}),
       };
 
       setFormData(formDataFromPatient);
       setPatientId(initialData.patient_id);
     } else {
+      // Add mode
+      setFormData({
+        sms_notifications_enabled: true, // Default SMS to true
+      });
       const generateNewId = async () => {
         const { count, error } = await supabase
           .from("patients")
@@ -887,6 +893,40 @@ export default function AddPatientModal({
       generateNewId();
     }
   }, [mode, initialData]);
+
+  // --- ADDED: Helper function to calculate age ---
+  const calculateAge = (dobString) => {
+    if (!dobString) return "";
+    const today = new Date();
+    const birthDate = new Date(dobString);
+    if (isNaN(birthDate.getTime())) return ""; // Check for invalid date
+
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDifference = today.getMonth() - birthDate.getMonth();
+
+    // Check if the birthday has already occurred this year
+    if (
+      monthDifference < 0 ||
+      (monthDifference === 0 && today.getDate() < birthDate.getDate())
+    ) {
+      age--; // Subtract 1 if the birthday hasn't happened yet
+    }
+
+    // Handle invalid dates (e.g., future dates)
+    return age < 0 ? "" : age.toString();
+  };
+
+  // --- ADDED: Specific handler for Date of Birth input ---
+  const handleDobChange = (e) => {
+    const { name, value } = e.target; // name will be "dob"
+    const calculatedAge = calculateAge(value);
+
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value, // Set "dob"
+      age: calculatedAge, // Automatically set "age"
+    }));
+  };
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -911,7 +951,8 @@ export default function AddPatientModal({
       first_name: formData.first_name,
       middle_name: formData.middle_name,
       last_name: formData.last_name,
-      age: formData.age,
+      age: formData.age, // Age is now set from state
+      dob: formData.dob, // Ensure dob is saved
       contact_no: formData.contact_no,
       risk_level: formData.risk_level,
       weeks: formData.weeks,
@@ -919,7 +960,7 @@ export default function AddPatientModal({
       purok: formData.purok,
       street: formData.street,
       sms_notifications_enabled: formData.sms_notifications_enabled ?? true,
-      medical_history: formData,
+      medical_history: formData, // This will contain all other fields
     };
 
     try {
@@ -1019,6 +1060,7 @@ export default function AddPatientModal({
               <Step1
                 formData={formData}
                 handleChange={handleChange}
+                handleDobChange={handleDobChange}
                 newPatientId={patientId}
               />
             )}
