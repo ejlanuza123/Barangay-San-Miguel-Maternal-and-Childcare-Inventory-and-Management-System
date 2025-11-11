@@ -1,8 +1,12 @@
+// src/components/layout/SettingsModal.js
+
 import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "../../services/supabase";
 import { useAuth } from "../../context/AuthContext";
 import { motion } from "framer-motion";
 import PrivacyPolicy from "../auth/PrivacyPolicy";
+// --- 1. IMPORT HELPSECTION ---
+import HelpSection from "./HelpSection";
 
 // --- ICONS ---
 const BackIcon = () => (
@@ -278,7 +282,6 @@ const MyProfile = ({ profile, onProfileUpdate }) => {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
-          {/* --- FIX: Increased margin-top from mt-1 to mt-2 for consistency --- */}
           <div className="sm:col-span-2">
             <label className="text-sm font-medium text-gray-700">
               First Name
@@ -318,7 +321,6 @@ const MyProfile = ({ profile, onProfileUpdate }) => {
           </div>
         </div>
 
-        {/* --- FIX: Increased margin-top from mt-1 to mt-2 --- */}
         <div>
           <label className="text-sm font-medium text-gray-700 block mb-2">
             Birth Date
@@ -333,7 +335,6 @@ const MyProfile = ({ profile, onProfileUpdate }) => {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {/* --- FIX: Increased margin-top from mt-1 to mt-2 for consistency --- */}
           <div>
             <label className="text-sm font-medium text-gray-700">
               Contact No.
@@ -351,7 +352,6 @@ const MyProfile = ({ profile, onProfileUpdate }) => {
               <label className="text-sm font-medium text-gray-700">
                 Assigned Purok
               </label>
-              {/* --- MODIFICATION: Replaced text input with select dropdown --- */}
               <select
                 name="assigned_purok"
                 value={formData.assigned_purok}
@@ -391,7 +391,6 @@ const MyProfile = ({ profile, onProfileUpdate }) => {
                 </option>
                 <option value="Purok Magara Zone 2">Purok Magara Zone 2</option>
               </select>
-              {/* --- END MODIFICATION --- */}
             </div>
           )}
         </div>
@@ -530,9 +529,21 @@ const AboutSection = () => (
   </div>
 );
 
-export default function SettingsModal({ onClose }) {
+// --- 2. UPDATED: Accepts 'initialTab' prop ---
+export default function SettingsModal({ onClose, initialTab = "My Profile" }) {
   const { profile, setProfile } = useAuth();
-  const [activeTab, setActiveTab] = useState("My Profile");
+
+  // --- 3. UPDATED: Uses 'initialTab' to set default state ---
+  const [activeTab, setActiveTab] = useState(initialTab);
+
+  // --- 4. NEW: Guard clause for loading ---
+  if (!profile) {
+    return (
+      <div className="fixed inset-0 bg-white z-50 flex items-center justify-center font-sans">
+        <p className="text-lg text-gray-600">Loading settings...</p>
+      </div>
+    );
+  }
 
   const navItems = [
     { name: "My Profile", icon: <ProfileIcon /> },
@@ -558,13 +569,6 @@ export default function SettingsModal({ onClose }) {
     setProfile(updatedProfile);
   };
 
-  const tabs = [
-    "My Profile",
-    "Notification Setting",
-    "Privacy Policy",
-    "About",
-  ];
-
   const renderContent = () => {
     switch (activeTab) {
       case "My Profile":
@@ -578,6 +582,8 @@ export default function SettingsModal({ onClose }) {
             onUpdate={handleUpdatePreferences}
           />
         );
+      case "Help":
+        return <HelpSection />; // Renders your imported component
       case "Privacy Policy":
         return <PrivacyPolicy />;
       case "About":
