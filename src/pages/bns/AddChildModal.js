@@ -155,14 +155,43 @@ export default function AddChildModal({ onClose, onSave, mode = 'add', initialDa
         };
 
         if (mode === 'edit' && initialData) {
-            setFormData(initialData.health_details || {});
+            // FIXED: Set formData with the actual fields from initialData, not just health_details
+            setFormData({
+                first_name: initialData.first_name || '',
+                last_name: initialData.last_name || '',
+                dob: initialData.dob || '',
+                sex: initialData.sex || '',
+                place_of_birth: initialData.place_of_birth || '',
+                mother_name: initialData.mother_name || '',
+                father_name: initialData.father_name || '',
+                weight_kg: initialData.weight_kg || '',
+                height_cm: initialData.height_cm || '',
+                bmi: initialData.bmi || '',
+                nhts_no: initialData.nhts_no || '',
+                philhealth_no: initialData.philhealth_no || '',
+                ...initialData.health_details // Include any additional health details
+            });
             setChildId(initialData.child_id);
         } else {
             generateNewId();
+            // Initialize with empty form data for new records
+            setFormData({
+                first_name: '',
+                last_name: '',
+                dob: '',
+                sex: '',
+                place_of_birth: '',
+                mother_name: '',
+                father_name: '',
+                weight_kg: '',
+                height_cm: '',
+                bmi: '',
+                nhts_no: '',
+                philhealth_no: ''
+            });
         }
     }, [mode, initialData]);
 
-    // NEW: useEffect to automatically calculate BMI
     useEffect(() => {
         const weight = parseFloat(formData.weight_kg);
         const height = parseFloat(formData.height_cm);
@@ -184,19 +213,29 @@ export default function AddChildModal({ onClose, onSave, mode = 'add', initialDa
         setLoading(true);
         const { data: { user } } = await supabase.auth.getUser();
         
-        const [firstName, ...lastNameParts] = (formData.child_name || '').split(' ');
-        const lastName = lastNameParts.join(' ');
-        const nutritionStatus = getNutritionStatus(formData.bmi);
-        const lastCheckupDate = new Date().toISOString().split('T')[0];
-        
-        const recordData = {
-            child_id: childId, first_name: firstName, last_name: lastName, dob: formData.dob,
-            sex: formData.sex, mother_name: formData.mother_name, guardian_name: formData.guardian_name,
-            weight_kg: formData.weight_kg || null, height_cm: formData.height_cm || null,
-            bmi: formData.bmi || null, nhts_no: formData.nhts_no || null,
-            philhealth_no: formData.philhealth_no || null, nutrition_status: nutritionStatus,
-            last_checkup: lastCheckupDate, health_details: formData
-        };
+        const firstName = formData.first_name || '';
+        const lastName = formData.last_name || '';
+        const nutritionStatus = getNutritionStatus(formData.bmi);
+        const lastCheckupDate = new Date().toISOString().split('T')[0];
+        
+        const recordData = {
+            child_id: childId, 
+            first_name: firstName, 
+            last_name: lastName, 
+            dob: formData.dob,
+            sex: formData.sex, 
+            place_of_birth: formData.place_of_birth, // ADDED: This field was missing
+            mother_name: formData.mother_name, 
+            father_name: formData.father_name, // ADDED: This field was missing
+            weight_kg: formData.weight_kg || null, 
+            height_cm: formData.height_cm || null,
+            bmi: formData.bmi || null, 
+            nhts_no: formData.nhts_no || null,
+            philhealth_no: formData.philhealth_no || null, 
+            nutrition_status: nutritionStatus,
+            last_checkup: lastCheckupDate, 
+            health_details: formData
+        };
 
         let result;
         if (mode === 'edit') {
