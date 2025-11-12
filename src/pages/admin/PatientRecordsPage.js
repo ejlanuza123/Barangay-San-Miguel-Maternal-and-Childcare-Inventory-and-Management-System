@@ -13,6 +13,8 @@ import { useAuth } from "../../context/AuthContext";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import PatientQRCodeModal from "../../components/reusables/PatientQRCodeModal";
+import { utils, writeFile } from "xlsx"; 
+import { saveAs } from "file-saver";
 
 // Specific imports for Maternal (BHW)
 import AddPatientModal from "../bhw/AddPatientModal";
@@ -74,7 +76,22 @@ const ViewIcon = () => (
     ></path>
   </svg>
 );
-// NOTE: UpdateIcon and DeleteIcon are no longer used in the table, but might be in the legend.
+const ExportIcon = () => (
+  <svg
+    className="w-5 h-5 text-gray-500"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+    ></path>
+  </svg>
+);
 const UpdateIcon = () => (
   <svg
     className="w-5 h-5"
@@ -1295,6 +1312,50 @@ const MaternityManagementTab = () => {
     setPatientToDelete(null); // Close the modal
   };
 
+  const handleExport = async () => {
+    setLoading(true);
+    try {
+      // Fetch all patients, not just the paginated ones
+      const { data: allPatients, error } = await supabase
+        .from("patients")
+        .select("*")
+        .order("patient_id", { ascending: true });
+
+      if (error) throw error;
+
+      // Flatten the data for a clean export
+      const exportData = allPatients.map((p) => ({
+        "Patient ID": p.patient_id,
+        "First Name": p.first_name,
+        "Middle Name": p.middle_name || "",
+        "Last Name": p.last_name,
+        Age: p.age,
+        Contact: p.contact_no,
+        Weeks: p.weeks,
+        "Last Visit": p.last_visit,
+        "Risk Level": p.risk_level,
+        // Flatten the medical_history JSON object
+        ...(p.medical_history || {}),
+      }));
+
+      // Create worksheet and workbook
+      const ws = utils.json_to_sheet(exportData);
+      const wb = utils.book_new();
+      utils.book_append_sheet(wb, ws, "Maternal Records");
+      
+      // Generate buffer and trigger download
+      const excelBuffer = writeFile(wb, "Maternal_Patient_Records.xlsx", { bookType: "xlsx", type: "array" });
+      const dataBlob = new Blob([excelBuffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8" });
+      saveAs(dataBlob, "Maternal_Patient_Records.xlsx");
+
+      addNotification("Data exported successfully!", "success");
+    } catch (error) {
+      console.error("Error exporting data:", error);
+      addNotification(`Export failed: ${error.message}`, "error");
+    }
+    setLoading(false);
+  };
+
   const filteredPatients = useMemo(() => {
     // Filtering is now done on the client-side for the current page's data
     return allPatients
@@ -1348,7 +1409,7 @@ const MaternityManagementTab = () => {
         <div className="xl:col-span-3">
           <div className="bg-white p-4 rounded-lg shadow border">
             <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-3">
-              <h2 className="text-2xl font-bold text-gray-700">Patient List</h2>
+              <h2 className="text-xl font-bold text-gray-700">Patient List</h2>
               <div className="flex items-center space-x-2">
                 <div className="relative">
                   <span className="absolute inset-y-0 left-0 flex items-center pl-2">
@@ -1432,6 +1493,13 @@ const MaternityManagementTab = () => {
                     </div>
                   )}
                 </div>
+                <button
+                  onClick={handleExport}
+                  disabled={loading}
+                  className="flex items-center space-x-2 px-3 py-1.5 text-sm border rounded-md bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <ExportIcon /> <span>Export</span>
+                </button>
               </div>
             </div>
 
@@ -1614,6 +1682,54 @@ const ChildHealthRecordsTab = () => {
     setPatientToDelete(null);
   };
 
+  const handleExport = async () => {
+    setLoading(true);
+    try {
+      // Fetch all children, not just the paginated ones
+      const { data: allChildren, error } = await supabase
+        .from("child_records")
+        .select("*")
+        .order("child_id", { ascending: true });
+
+      if (error) throw error;
+
+      // Flatten the data for a clean export
+      const exportData = allChildren.map((c) => ({
+        "Child ID": c.child_id,
+        "Last Name": c.last_name,
+        "First Name": c.first_name,
+        "Age (Years)": calculateAge(c.dob), // Use helper
+        "Weight (kg)": c.weight_kg,
+        "Height (cm)": c.height_cm,
+        BMI: c.bmi,
+        "Nutrition Status": c.nutrition_status,
+        "Last Checkup": c.last_checkup,
+        Sex: c.sex,
+        "Date of Birth": c.dob,
+        "Mother's Name": c.mother_name,
+        "Guardian's Name": c.guardian_name,
+        // Flatten the health_details JSON object
+        ...(c.health_details || {}),
+      }));
+
+      // Create worksheet and workbook
+      const ws = utils.json_to_sheet(exportData);
+      const wb = utils.book_new();
+      utils.book_append_sheet(wb, ws, "Child Records");
+
+      // Generate buffer and trigger download
+      const excelBuffer = writeFile(wb, "Child_Health_Records.xlsx", { bookType: "xlsx", type: "array" });
+      const dataBlob = new Blob([excelBuffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-g" });
+      saveAs(dataBlob, "Child_Health_Records.xlsx");
+
+      addNotification("Data exported successfully!", "success");
+    } catch (error) {
+      console.error("Error exporting data:", error);
+      addNotification(`Export failed: ${error.message}`, "error");
+    }
+    setLoading(false);
+  };
+
   const filteredRecords = useMemo(() => {
     return childRecords.filter((record) =>
       `${record.first_name || ""} ${record.last_name || ""}`
@@ -1664,10 +1780,7 @@ const ChildHealthRecordsTab = () => {
           />
         )}
       </AnimatePresence>
-      <div className="p-6 bg-gray-50 min-h-screen">
-        <h1 className="text-2xl font-bold text-gray-800 mb-6">
-          Child Health Management
-        </h1>
+      
         <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
           <div className="xl:col-span-3">
             <div className="bg-white p-4 rounded-lg shadow-sm border">
@@ -1731,6 +1844,13 @@ const ChildHealthRecordsTab = () => {
                       )}
                     </AnimatePresence>
                   </div>
+                  <button
+                    onClick={handleExport}
+                    disabled={loading}
+                    className="flex items-center space-x-2 px-3 py-1.5 text-sm border rounded-md bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <ExportIcon /> <span>Export</span>
+                  </button>
                 </div>
                 {/* --- ADD NEW PATIENT BUTTON REMOVED --- */}
               </div>
@@ -1837,7 +1957,6 @@ const ChildHealthRecordsTab = () => {
             />
           </div>
         </div>
-      </div>
     </>
   );
 };
