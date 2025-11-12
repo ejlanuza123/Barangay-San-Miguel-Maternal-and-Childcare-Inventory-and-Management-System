@@ -317,16 +317,6 @@ export default function Sidebar({ role, openSettings }) {
           </NavLink>
         ))}
       </nav>
-
-      {/* --- UPDATED: "Help" is now a button that opens the modal --- */}
-      <button
-        onClick={() => openSettings("Help")}
-        className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-800"
-      >
-        <HelpIcon />
-        <span className="text-sm font-semibold">Help</span>
-      </button>
-
       <div className="px-3 py-2 border-t flex-shrink-0">
         <button
           onClick={handleLogout}
