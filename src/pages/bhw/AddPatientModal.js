@@ -854,8 +854,10 @@ export default function AddPatientModal({
 
   useEffect(() => {
     if (mode === "edit" && initialData) {
-      const formDataFromPatient = {
-        first_name: initialData.first_name || "",
+      // Combines the medical_history JSON with the top-level patient fields
+      const combinedData = {
+        ...(initialData.medical_history || {}), // Load all history fields first
+        first_name: initialData.first_name || "", // Then override with main table fields
         middle_name: initialData.middle_name || "",
         last_name: initialData.last_name || "",
         age: initialData.age || "",
@@ -868,11 +870,10 @@ export default function AddPatientModal({
         street: initialData.street || "",
         sms_notifications_enabled:
           initialData.sms_notifications_enabled ?? true,
-        dob: initialData.dob || initialData.medical_history?.dob || "",
-        ...(initialData.medical_history || {}),
       };
 
-      setFormData(formDataFromPatient);
+      // This now populates formData with 'dob', 'nhts_no', etc.
+      setFormData(combinedData);
       setPatientId(initialData.patient_id);
     } else {
       // Add mode
@@ -946,13 +947,14 @@ export default function AddPatientModal({
       data: { user },
     } = await supabase.auth.getUser();
 
+    // This object ONLY contains fields that are actual columns in the 'patients' table
     const patientData = {
       patient_id: patientId,
       first_name: formData.first_name,
       middle_name: formData.middle_name,
       last_name: formData.last_name,
       age: formData.age, // Age is now set from state
-      dob: formData.dob, // Ensure dob is saved
+      // dob: formData.dob, <-- REMOVED! This was the error.
       contact_no: formData.contact_no,
       risk_level: formData.risk_level,
       weeks: formData.weeks,
@@ -960,7 +962,9 @@ export default function AddPatientModal({
       purok: formData.purok,
       street: formData.street,
       sms_notifications_enabled: formData.sms_notifications_enabled ?? true,
-      medical_history: formData, // This will contain all other fields
+      // 'formData' contains ALL fields, including 'dob' and medical history,
+      // which will be stored correctly in the JSONB column.
+      medical_history: formData,
     };
 
     try {
@@ -973,7 +977,7 @@ export default function AddPatientModal({
             request_type: "Update",
             target_table: "patients",
             target_record_id: initialData.id,
-            request_data: patientData,
+            request_data: patientData, // This patientData object is now correct
             status: "Pending",
           },
         ]);
