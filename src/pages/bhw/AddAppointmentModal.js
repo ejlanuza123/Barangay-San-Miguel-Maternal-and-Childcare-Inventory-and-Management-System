@@ -70,6 +70,7 @@ export default function AddAppointmentModal({ onClose, onSave }) {
         setLoading(true);
         setError('');
 
+        // --- 1. VALIDATIONS (Your existing code) ---
         const selectedDate = new Date(formData.date);
         const dayOfWeek = selectedDate.getUTCDay();
         if (dayOfWeek === 6 || dayOfWeek === 0) {
@@ -85,6 +86,33 @@ export default function AddAppointmentModal({ onClose, onSave }) {
             return;
         }
 
+        // --- 2. GET PATIENT'S CONTACT NUMBER (New Step) ---
+        let patientContactNumber = null;
+        try {
+            // Fetch the patient's record using the patient_id from the form
+            const { data: patientData, error: patientError } = await supabase
+                .from('patients')
+                .select('contact_no')
+                .eq('patient_id', formData.patient_id) // Find patient by their ID
+                .single();
+
+            // Handle errors during fetch (but not "not found")
+            if (patientError && patientError.code !== 'PGRST116') {
+                throw patientError;
+            }
+
+            if (patientData && patientData.contact_no) {
+                patientContactNumber = patientData.contact_no;
+            } else {
+                console.warn(`Patient ${formData.patient_id} has no contact_no. SMS will not be sent.`);
+            }
+        } catch (error) {
+            console.error("Error fetching patient contact number:", error.message);
+            // Notify BHW, but still proceed to save the appointment
+            addNotification('Warning: Could not fetch patient contact info. SMS will not be sent.', 'warning');
+        }
+
+        // --- 3. SAVE APPOINTMENT (Your existing code) ---
         const { data: { user } } = await supabase.auth.getUser();
         const { error: insertError } = await supabase.from('appointments').insert([{
             patient_display_id: formData.patient_id,
@@ -99,21 +127,61 @@ export default function AddAppointmentModal({ onClose, onSave }) {
 
         if (insertError) {
             setError(insertError.message);
-            addNotification(`Error: ${insertError.message}`, 'error');
-        } else {
-            // --- THIS IS THE FIX ---
-            // Create a notification for the user who scheduled the appointment
-            await supabase.from('notifications').insert([{
-                type: 'appointment_reminder',
-                message: `You scheduled an appointment for ${formData.patient_name} on ${formData.date}.`,
-                user_id: user.id
-            }]);
-            
-            logActivity('New Appointment Scheduled', `Appointment for ${formData.patient_name} on ${formData.date}`);
-            addNotification('New appointment scheduled successfully.', 'success');
-            onSave();
-            onClose();
+            addNotification(`Error saving appointment: ${insertError.message}`, 'error');
+            setLoading(false);
+            return; // Stop if the save failed
         }
+
+        // --- 4. LOG ACTIVITY & NOTIFY BHW (Your existing code) ---
+        logActivity('New Appointment Scheduled', `Appointment for ${formData.patient_name} on ${formData.date}`);
+        await supabase.from('notifications').insert([{
+            type: 'appointment_reminder',
+            message: `You scheduled an appointment for ${formData.patient_name} on ${formData.date}.`,
+            user_id: user.id
+        }]);
+
+        // --- 5. TRY TO SEND SMS (New Step) ---
+        if (patientContactNumber) {
+            try {
+                console.log('Sending SMS to:', patientContactNumber); // Debug log
+                
+                const { data, error: funcError } = await supabase.functions.invoke(
+                'appointment-reminder',
+                {
+                    body: {
+                    to_number: patientContactNumber.toString().trim(), // Ensure it's string and trimmed
+                    patient_name: formData.patient_name,
+                    appointment_date: formData.date,
+                    appointment_time: formData.time,
+                    reason: formData.reason
+                    }
+                }
+                );
+                
+                if (funcError) {
+                console.error('Function error:', funcError);
+                throw funcError;
+                }
+                
+                console.log('SMS response:', data); // Debug log
+                
+                if (data && data.success) {
+                addNotification('Appointment scheduled and SMS reminder sent.', 'success');
+                } else {
+                throw new Error(data?.error || 'Failed to send SMS');
+                }
+                
+            } catch (invokeErr) {
+                console.error("SMS function failed:", invokeErr.message);
+                addNotification('Appointment saved, but SMS reminder failed to send.', 'warning');
+            }
+            } else {
+            addNotification('Appointment scheduled (no SMS sent - patient has no contact number).', 'success');
+            }
+
+        // --- 6. CLEANUP ---
+        onSave();
+        onClose();
         setLoading(false);
     };
 
