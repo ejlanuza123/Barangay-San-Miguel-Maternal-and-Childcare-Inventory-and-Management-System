@@ -133,23 +133,63 @@ const AddEmployeeModal = ({ onClose, onSave }) => {
   const { addNotification } = useNotification();
 
   const generateNextUserId = useCallback(async () => {
-    setUserIdNo("Generating...");
+  setUserIdNo("Generating...");
+  
+  try {
     const date = new Date();
     const year = date.getFullYear();
-    const month = date.getMonth() + 1;
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
     const pattern = `${year}${month}%`;
-    const { count, error } = await supabase
+    
+    // First, let's debug what's happening
+    console.log("Generating User ID with pattern:", pattern);
+    
+    // Use a different approach - get all user_id_no values and filter manually
+    const { data, error, count } = await supabase
       .from("profiles")
-      .select("user_id_no", { count: "exact", head: true })
-      .like("user_id_no", pattern);
+      .select("user_id_no")
+      .not("user_id_no", "is", null)
+      .like("user_id_no", `${year}${month}%`);
+    
     if (error) {
+      console.error("Error fetching user IDs:", error);
       setUserIdNo("Error");
       addNotification("Error generating User ID.", "error");
       return;
     }
-    const sequenceNumber = (count + 1).toString().padStart(3, "0");
-    setUserIdNo(`${year}${month}${sequenceNumber}`);
-  }, [addNotification]);
+    
+    console.log("Fetched existing user IDs:", data);
+    
+    // Extract sequence numbers from existing user IDs
+    const existingSequences = data
+      .map(profile => {
+        const id = profile.user_id_no;
+        if (id && id.startsWith(`${year}${month}`)) {
+          const sequencePart = id.slice(6); // Remove YYYYMM
+          return parseInt(sequencePart) || 0;
+        }
+        return 0;
+      })
+      .filter(seq => seq > 0);
+    
+    // Find the highest sequence number
+    const maxSequence = existingSequences.length > 0 
+      ? Math.max(...existingSequences) 
+      : 0;
+    
+    // Generate next sequence number
+    const sequenceNumber = (maxSequence + 1).toString().padStart(3, '0');
+    const newUserId = `${year}${month}${sequenceNumber}`;
+    
+    console.log("Generated new User ID:", newUserId);
+    setUserIdNo(newUserId);
+    
+  } catch (error) {
+    console.error("Unexpected error in generateNextUserId:", error);
+    setUserIdNo("Error");
+    addNotification("Unexpected error generating User ID.", "error");
+  }
+}, [addNotification]);
 
   useEffect(() => {
     generateNextUserId();
@@ -161,41 +201,73 @@ const AddEmployeeModal = ({ onClose, onSave }) => {
       addNotification("Passwords do not match.", "error");
       return;
     }
-    setLoading(true);
-    const { data, error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { full_name: fullName, role } },
-    });
-    if (signUpError) {
-      addNotification(signUpError.message, "error");
-      setLoading(false);
+
+    if (userIdNo === "Generating..." || userIdNo === "Error") {
+      addNotification("User ID is still generating. Please wait.", "error");
       return;
     }
-    if (data.user) {
-      // --- MODIFIED: Added new fields to the profile update ---
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .update({
-          user_id_no: userIdNo,
-          assigned_purok: assignedPurok,
-          contact_no: contactNo,
-          birth_date: birthDate,
-        })
-        .eq("id", data.user.id);
 
-      if (profileError) {
-        addNotification(
-          `User created, but failed to save profile details: ${profileError.message}`,
-          "warning"
-        );
-      } else {
+    setLoading(true);
+
+    try {
+      // Step 1: Create auth user with ALL the metadata
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+            role: role,
+            user_id_no: userIdNo,
+            assigned_purok: assignedPurok,
+            contact_no: contactNo,
+            birth_date: birthDate,
+            first_name: fullName.split(' ')[0],
+            last_name: fullName.split(' ').slice(1).join(' '),
+          },
+        },
+      });
+
+      if (signUpError) throw signUpError;
+
+      if (data.user) {
+        console.log("Auth user created:", data.user.id);
+        
+        // Step 2: Wait a moment for the automatic profile creation
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Step 3: UPDATE the existing profile instead of inserting
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({
+            full_name: fullName,
+            role: role,
+            user_id_no: userIdNo,
+            assigned_purok: assignedPurok,
+            contact_no: contactNo,
+            birth_date: birthDate,
+            first_name: fullName.split(' ')[0],
+            last_name: fullName.split(' ').slice(1).join(' '),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', data.user.id);
+
+        if (updateError) {
+          console.error("Profile update error:", updateError);
+          throw new Error(`Failed to update profile: ${updateError.message}`);
+        }
+
+        console.log("Profile updated successfully");
         addNotification("Employee successfully registered.", "success");
         onSave();
         onClose();
       }
+    } catch (error) {
+      console.error("Registration error:", error);
+      addNotification(error.message, "error");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
@@ -534,16 +606,29 @@ const DeleteEmployeeModal = ({
 
   const handleDelete = async () => {
     setLoading(true);
-    const { error } = await supabase.rpc("delete_employee_by_id", {
-      user_id: employee.id,
-    });
-    if (error) {
-      addNotification(`Error deleting user: ${error.message}`, "error");
-    } else {
+    
+    try {
+      // First call the RPC function to clean up profile and related data
+      const { error: rpcError } = await supabase.rpc("delete_employee_by_id", {
+        user_id: employee.id,
+      });
+      
+      if (rpcError) throw rpcError;
+      
+      // Then use the Admin API to delete the user
+      const { error: adminError } = await supabase.auth.admin.deleteUser(
+        employee.id
+      );
+      
+      if (adminError) throw adminError;
+      
       addNotification("Employee has been deleted.", "success");
-      onSave(); // Refresh the employee list
+      onSave();
       onClose();
+    } catch (error) {
+      addNotification(`Error deleting user: ${error.message}`, "error");
     }
+    
     setLoading(false);
   };
 
@@ -711,15 +796,25 @@ const ViewAccountModal = ({ employee, onClose, onSave }) => {
     e.preventDefault();
     setLoading(true);
     setError("");
-    const { error } = await supabase.auth.signInWithPassword({
-      email: adminUser.email,
-      password: password,
-    });
-    if (error) {
-      setError("Incorrect password. Please try again.");
-    } else {
+    
+    // Use RPC to verify admin password without changing session
+    const { data: isValid, error: verifyError } = await supabase.rpc(
+      "verify_admin_password", 
+      {
+        user_email: adminUser.email,
+        user_password: password
+      }
+    );
+
+    if (verifyError) {
+      console.error("Password verification error:", verifyError);
+      setError("Error verifying password. Please try again.");
+    } else if (isValid) {
       setIsAuthenticated(true);
+    } else {
+      setError("Incorrect admin password. Please try again.");
     }
+    
     setLoading(false);
   };
 
@@ -779,44 +874,42 @@ const ViewAccountModal = ({ employee, onClose, onSave }) => {
         >
           {!isAuthenticated ? (
             <form onSubmit={handleVerifyPassword} className="p-6">
-              {" "}
               <h2 className="text-xl font-bold text-gray-800">
                 Admin Authentication Required
-              </h2>{" "}
+              </h2>
               <p className="text-sm text-gray-600 mt-2 mb-4">
-                Please enter your password to view or manage this account.
-              </p>{" "}
+                Please enter your <strong>admin password</strong> to view or manage this account.
+              </p>
               <div>
-                {" "}
                 <label className="font-semibold text-gray-600 block text-sm">
-                  Your Password
-                </label>{" "}
+                  Admin Password
+                </label>
                 <input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full mt-1 p-2 border rounded"
+                  placeholder="Enter your admin password"
                   required
-                />{" "}
-              </div>{" "}
-              {error && <p className="text-red-500 text-xs mt-2">{error}</p>}{" "}
+                />
+              </div>
+              {error && <p className="text-red-500 text-xs mt-2">{error}</p>}
               <div className="flex justify-end gap-3 pt-4 mt-2">
-                {" "}
                 <button
                   type="button"
                   onClick={onClose}
                   className="px-4 py-2 bg-gray-200 rounded-md"
                 >
                   Cancel
-                </button>{" "}
+                </button>
                 <button
                   type="submit"
                   disabled={loading}
                   className="px-4 py-2 bg-blue-600 text-white rounded-md disabled:bg-gray-400"
                 >
                   {loading ? "Verifying..." : "Continue"}
-                </button>{" "}
-              </div>{" "}
+                </button>
+              </div>
             </form>
           ) : (
             <div>
@@ -838,7 +931,6 @@ const ViewAccountModal = ({ employee, onClose, onSave }) => {
               </div>
               <div className="p-6 max-h-[50vh] overflow-y-auto">
                 <div className="space-y-6">
-                  {/* --- NEW: Full Information Section --- */}
                   <div>
                     <h3 className="font-bold text-gray-700 mb-3">
                       Employee Information
@@ -846,7 +938,6 @@ const ViewAccountModal = ({ employee, onClose, onSave }) => {
                     <div className="grid grid-cols-2 gap-4 text-sm">
                       <InfoField label="User ID" value={employee.user_id_no} />
                       <InfoField label="Role" value={employee.role} />
-                      {/* --- MODIFIED: Safely checks for a valid date --- */}
                       <InfoField
                         label="Joining Date"
                         value={
@@ -859,8 +950,6 @@ const ViewAccountModal = ({ employee, onClose, onSave }) => {
                         label="Assigned Purok"
                         value={employee.assigned_purok}
                       />
-
-                      {/* --- NEW: Added Contact No. and Birth Date fields --- */}
                       <InfoField
                         label="Contact No."
                         value={employee.contact_no}
@@ -908,14 +997,13 @@ const ViewAccountModal = ({ employee, onClose, onSave }) => {
                       {activities.length > 0 ? (
                         activities.map((act) => (
                           <div key={act.id} className="text-sm">
-                            {" "}
                             <p className="font-semibold text-gray-800">
                               {act.action}
-                            </p>{" "}
-                            <p className="text-gray-600">{act.details}</p>{" "}
+                            </p>
+                            <p className="text-gray-600">{act.details}</p>
                             <p className="text-xs text-gray-400">
                               {new Date(act.created_at).toLocaleString()}
-                            </p>{" "}
+                            </p>
                           </div>
                         ))
                       ) : (

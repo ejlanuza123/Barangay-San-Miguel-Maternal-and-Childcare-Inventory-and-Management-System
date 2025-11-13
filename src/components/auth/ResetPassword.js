@@ -1,12 +1,12 @@
 // src/components/auth/ResetPassword.js
-
-import React, { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { useNavigate, Link, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import { supabase } from "../../services/supabase";
 import logo from "../../assets/logo.jpg";
 import illustration from "../../assets/illustration.png";
 import backgroundImage from "../../assets/background.png";
+
 
 // --- SVG Icons for the form ---
 const LockIcon = () => (
@@ -85,14 +85,57 @@ export default function ResetPassword() {
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [session, setSession] = useState(null);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Check for existing session on component mount
+  useEffect(() => {
+    checkSession();
+    
+    // Also set up auth state listener
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === 'PASSWORD_RECOVERY') {
+          setSession(session);
+        } else if (event === 'SIGNED_IN') {
+          setSession(session);
+        }
+      }
+    );
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
+
+  const checkSession = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      setSession(session);
+      
+      if (!session) {
+        setErrorMessage("Invalid or expired reset link. Please request a new password reset.");
+      }
+    } catch (error) {
+      console.error('Error checking session:', error);
+      setErrorMessage("Error verifying reset link.");
+    }
+  };
 
   const handlePasswordReset = async (e) => {
     e.preventDefault();
+    
+    if (!session) {
+      setErrorMessage("Invalid or expired reset link. Please request a new password reset.");
+      return;
+    }
+
     if (password !== confirmPassword) {
       setErrorMessage("Passwords do not match.");
       return;
     }
+    
     if (password.length < 6) {
       setErrorMessage("Password must be at least 6 characters long.");
       return;
@@ -102,12 +145,23 @@ export default function ResetPassword() {
     setSuccessMessage("");
     setErrorMessage("");
 
-    const { error } = await supabase.auth.updateUser({ password });
+    try {
+      const { error } = await supabase.auth.updateUser({ 
+        password: password 
+      });
 
-    if (error) {
-      setErrorMessage(error.message);
-    } else {
-      setSuccessMessage("Your password has been reset successfully!");
+      if (error) {
+        throw error;
+      }
+
+      setSuccessMessage("Your password has been reset successfully! You can now log in with your new password.");
+      
+      // Sign out after successful password reset
+      await supabase.auth.signOut();
+      
+    } catch (error) {
+      console.error('Password reset error:', error);
+      setErrorMessage(error.message || "An error occurred while resetting your password.");
     }
 
     setLoading(false);
@@ -118,6 +172,24 @@ export default function ResetPassword() {
     navigate("/login");
   };
 
+  const closeErrorModal = () => {
+    setErrorMessage("");
+    // Optionally redirect to forgot password page
+    // navigate("/forgot-password");
+  };
+
+  // Show loading while checking session
+  if (loading && !session) {
+    return (
+      <div className="bg-gray-100 min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Verifying reset link...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       {successMessage && (
@@ -126,9 +198,10 @@ export default function ResetPassword() {
       {errorMessage && (
         <ErrorModal
           message={errorMessage}
-          onClose={() => setErrorMessage("")}
+          onClose={closeErrorModal}
         />
       )}
+      
       <div className="bg-gray-100 min-h-screen flex items-center justify-center font-sans p-4">
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
@@ -184,53 +257,78 @@ export default function ResetPassword() {
                   Set New Password
                 </h2>
                 <p className="text-gray-500 mt-2">
-                  Please enter and confirm your new password.
+                  {session 
+                    ? "Please enter and confirm your new password."
+                    : "Verifying your reset link..."
+                  }
                 </p>
               </div>
 
-              <form onSubmit={handlePasswordReset} className="space-y-6">
-                <div className="relative">
-                  <span className="absolute inset-y-0 left-0 flex items-center pl-3">
-                    <LockIcon />
-                  </span>
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    placeholder="New Password"
-                    className="pl-10 mt-1 block w-full px-3 py-3 bg-white border border-gray-300 rounded-md shadow-sm"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 flex items-center pr-3"
-                  >
-                    <EyeIcon />
-                  </button>
-                </div>
-                <div className="relative">
-                  <span className="absolute inset-y-0 left-0 flex items-center pl-3">
-                    <LockIcon />
-                  </span>
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    required
-                    placeholder="Confirm New Password"
-                    className="pl-10 mt-1 block w-full px-3 py-3 bg-white border border-gray-300 rounded-md shadow-sm"
-                  />
-                </div>
+              {session ? (
+                <form onSubmit={handlePasswordReset} className="space-y-6">
+                  <div className="relative">
+                    <span className="absolute inset-y-0 left-0 flex items-center pl-3">
+                      <LockIcon />
+                    </span>
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      placeholder="New Password"
+                      className="pl-10 mt-1 block w-full px-3 py-3 bg-white border border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute inset-y-0 right-0 flex items-center pr-3"
+                    >
+                      <EyeIcon />
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <span className="absolute inset-y-0 left-0 flex items-center pl-3">
+                      <LockIcon />
+                    </span>
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      required
+                      placeholder="Confirm New Password"
+                      className="pl-10 mt-1 block w-full px-3 py-3 bg-white border border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                    />
+                  </div>
 
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full bg-blue-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-600 transition-colors duration-300 disabled:bg-gray-400"
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full bg-blue-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-600 transition-colors duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  >
+                    {loading ? "Resetting..." : "Reset Password"}
+                  </button>
+                </form>
+              ) : (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                  <p className="text-gray-600">Verifying reset link...</p>
+                  <Link 
+                    to="/forgot-password" 
+                    className="text-blue-500 hover:text-blue-600 mt-4 inline-block"
+                  >
+                    Request new reset link
+                  </Link>
+                </div>
+              )}
+              
+              <div className="mt-6 text-center">
+                <Link 
+                  to="/login" 
+                  className="text-blue-500 hover:text-blue-600 font-medium"
                 >
-                  {loading ? "Resetting..." : "Reset Password"}
-                </button>
-              </form>
+                  Back to Login
+                </Link>
+              </div>
             </div>
           </div>
         </motion.div>
