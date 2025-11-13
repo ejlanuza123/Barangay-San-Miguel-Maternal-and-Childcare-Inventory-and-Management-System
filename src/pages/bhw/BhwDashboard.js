@@ -159,6 +159,7 @@ const UpcomingAppointments = ({ appointments }) => {
       Scheduled: "bg-blue-100 text-blue-800",
       Completed: "bg-green-100 text-green-700",
       Cancelled: "bg-red-100 text-red-500",
+      Missed: "bg-orange-100 text-orange-500",
     };
     return styles[status] || styles.Cancelled;
   };
