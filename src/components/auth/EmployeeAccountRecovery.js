@@ -5,7 +5,6 @@ import { supabase } from "../../services/supabase";
 export default function AccountRecovery() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState("BHW"); // --- 1. ADDED: State for selected role, defaults to BHW
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const navigate = useNavigate();
@@ -15,12 +14,11 @@ export default function AccountRecovery() {
     setLoading(true);
     setMessage("");
 
-    // 1. Sign in with your credentials
-    const { data: loginData, error: loginError } =
-      await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+    // 1. Sign in with credentials
+    const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
 
     if (loginError) {
       setMessage(`Error: ${loginError.message}`);
@@ -29,26 +27,29 @@ export default function AccountRecovery() {
     }
 
     if (loginData.user) {
-      // 2. Immediately update the profile role back to the selected role
-      const { error: updateError } = await supabase
+      // 2. Fetch profile to check existing role (ensure we aren't creating a new role)
+      const { data: profile, error: profileError } = await supabase
         .from("profiles")
-        .update({ role: role }) // --- 2. MODIFIED: Use the selected role from state
-        .eq("id", loginData.user.id);
+        .select("role")
+        .eq("id", loginData.user.id)
+        .single();
 
-      if (updateError) {
-        setMessage(
-          `Logged in, but could not update role: ${updateError.message}`
-        );
-      } else {
-        setMessage(
-          `Success! Your account has been reactivated. Redirecting to login...`
-        );
-        // 3. Log out and redirect to the normal login page with the correct role
-        await supabase.auth.signOut();
-        setTimeout(() => {
-          navigate("/login", { state: { role: role } }); // --- 3. MODIFIED: Use the selected role for navigation
-        }, 2000);
+      if (profileError) {
+        setMessage(`Logged in, but could not verify profile: ${profileError.message}`);
+        setLoading(false);
+        return;
       }
+
+      // 3. Reactivate logic (assuming reactivation just means logging in successfully here)
+      // In a complex system, you might toggle a 'status' field from 'suspended' to 'active'.
+      // For now, we just confirm they can access the system.
+
+      setMessage(`Success! Account verified. Redirecting to login...`);
+      
+      await supabase.auth.signOut(); // Sign out so they have to log in properly through the main gate
+      setTimeout(() => {
+        navigate("/login");
+      }, 2000);
     }
     setLoading(false);
   };
@@ -63,22 +64,7 @@ export default function AccountRecovery() {
           Enter your credentials to reactivate your account.
         </p>
         <form onSubmit={handleRecover} className="space-y-4">
-          {/* --- 4. NEW: Role Selection Dropdown --- */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Account Role
-            </label>
-            <select
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-gray-50"
-            >
-              <option value="BHW">Barangay Health Worker</option>
-              <option value="BNS">Barangay Nutrition Scholar</option>
-              <option value="Admin">Admin</option>
-            </select>
-          </div>
-
+          {/* Role Selection Removed - Automatic Detection */}
           <div>
             <label className="block text-sm font-medium text-gray-700">
               Email
