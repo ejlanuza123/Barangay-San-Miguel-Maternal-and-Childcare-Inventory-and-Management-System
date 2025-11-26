@@ -180,14 +180,8 @@ export default function Sidebar({ role, openSettings }) {
   const navigate = useNavigate();
 
   const handleLogout = async () => {
-    try {
-      await signOut(); // Sign out from Supabase
-      // FORCE a hard reload to clear all memory/context states
-      // This prevents the Login page from thinking we are still logged in
-      window.location.href = "/login"; 
-    } catch (error) {
-      console.error("Error logging out:", error);
-    }
+    await signOut();
+    navigate("/login", { replace: true });
   };
 
   const getNavItems = () => {

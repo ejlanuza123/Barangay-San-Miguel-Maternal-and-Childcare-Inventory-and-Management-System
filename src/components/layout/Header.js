@@ -106,8 +106,7 @@ const ProfileDropdown = ({ profile, user }) => {
   // --- 2. Create a handler that signs out AND navigates ---
   const handleSignOut = async () => {
     await signOut();
-    // FORCE a hard reload
-    window.location.href = "/login"; 
+    navigate("/login", { replace: true });
   };
 
   return (
