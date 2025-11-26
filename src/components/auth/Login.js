@@ -1,10 +1,11 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { supabase } from "../../services/supabase";
 import logo from "../../assets/logo.jpg";
 import illustration from "../../assets/illustration.png";
 import backgroundImage from "../../assets/background.png";
+import { useAuth } from "../../context/AuthContext";
 
 // --- SVG Icons ---
 const UserIcon = () => (
@@ -40,7 +41,21 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const { user, profile } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (user && profile) {
+      // If the user is already logged in, send them to their dashboard immediately
+      switch (profile.role) {
+        case "Admin": navigate("/admin/dashboard", { replace: true }); break;
+        case "BHW": navigate("/bhw/dashboard", { replace: true }); break;
+        case "BNS": navigate("/bns/dashboard", { replace: true }); break;
+        case "USER/MOTHER/GUARDIAN": navigate("/user/dashboard", { replace: true }); break;
+        default: break;
+      }
+    }
+  }, [user, profile, navigate]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -49,7 +64,6 @@ export default function Login() {
 
     let emailForLogin = loginIdentifier;
 
-    // 1. Resolve Email if User ID is provided
     if (!loginIdentifier.includes("@")) {
       const { data, error } = await supabase.rpc("get_email_by_user_id", {
         user_id_param: loginIdentifier,
@@ -63,7 +77,6 @@ export default function Login() {
       emailForLogin = data; 
     }
 
-    // 2. Authenticate with Supabase
     const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
       email: emailForLogin,
       password: password,
@@ -74,42 +87,8 @@ export default function Login() {
       setLoading(false);
       return;
     }
-
-    // 3. Fetch Profile to Determine Role
-    if (loginData.user) {
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", loginData.user.id)
-        .single();
-
-      if (profileError || !profile) {
-        setErrorMessage("User profile not found. Please contact support.");
-        await supabase.auth.signOut();
-        setLoading(false);
-        return;
-      }
-
-      // 4. Dynamic Redirection based on Role
-      switch (profile.role) {
-        case "Admin":
-          navigate("/admin/dashboard");
-          break;
-        case "BHW":
-          navigate("/bhw/dashboard");
-          break;
-        case "BNS":
-          navigate("/bns/dashboard");
-          break;
-        case "USER/MOTHER/GUARDIAN":
-          navigate("/user/dashboard");
-          break;
-        default:
-          setErrorMessage("Unknown role assigned. Contact administrator.");
-          await supabase.auth.signOut();
-      }
-    }
-    setLoading(false);
+    // Note: We don't need to manually navigate here anymore. 
+    // The useEffect above will detect the state change and redirect automatically.
   };
 
   return (
