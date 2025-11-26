@@ -95,7 +95,8 @@ function App() {
 
             </Route>
 
-            <Route path="*" element={<Navigate to="/" replace />} />
+            {/* Fallback - Send to Login if route unknown */}
+            <Route path="*" element={<Navigate to="/login" replace />} />
           </Routes>
         </NotificationProvider>
       </AuthProvider>
