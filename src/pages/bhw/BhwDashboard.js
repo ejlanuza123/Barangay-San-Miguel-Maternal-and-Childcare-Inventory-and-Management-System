@@ -462,7 +462,7 @@ const AppointmentRequests = ({ requests, onApprove, onDeny }) => (
   </div>
 );
 
-// --- Main BHW Dashboard Component ---
+
 export default function BhwDashboard() {
   const [stats, setStats] = useState({ total: 0, active: 0, today: 0 });
   const [upcomingAppointments, setUpcomingAppointments] = useState([]);

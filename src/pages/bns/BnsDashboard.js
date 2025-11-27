@@ -35,7 +35,6 @@ const AnalyticsOverview = ({ analytics }) => (
 );
 
 const NutritionStatusChart = ({ nutritionData }) => {
-  // FIX: Handle undefined/null nutritionData
   const data = nutritionData || {};
   const total = Object.values(data).reduce((sum, count) => sum + count, 0);
   
