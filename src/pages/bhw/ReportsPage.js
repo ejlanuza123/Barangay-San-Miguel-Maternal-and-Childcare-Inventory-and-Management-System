@@ -2,21 +2,23 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../../services/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
 import { logActivity } from '../../services/activityLogger';
-import { useNotification } from '../../context/NotificationContext'; // <-- 1. IMPORT
-
+import { useNotification } from '../../context/NotificationContext';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+// import logo from '../../assets/logo.jpg'; // Uncomment if you have the logo
 
 // --- ICONS ---
-const DownloadIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v13"></path></svg>;
+const DownloadIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>;
 const ViewIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>;
 const SearchIcon = () => <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>;
 
-// --- Helper Functions ---
+// --- HELPER FUNCTIONS ---
 const getQuarterMonths = (q) => {
     return [
         [0, 1, 2],    // Q1: Jan, Feb, Mar
         [3, 4, 5],    // Q2: Apr, May, Jun
         [6, 7, 8],    // Q3: Jul, Aug, Sep
-        [9, 10, 11]  // Q4: Oct, Nov, Dec
+        [9, 10, 11]   // Q4: Oct, Nov, Dec
     ][q - 1];
 };
 
@@ -29,7 +31,7 @@ const formatBytes = (bytes, decimals = 2) => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
 };
 
-// --- Helper Components ---
+// --- WIDGETS ---
 const Calendar = () => {
     const [currentDate, setCurrentDate] = useState(new Date());
     const daysOfWeek = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
@@ -46,120 +48,100 @@ const Calendar = () => {
         const firstDay = new Date(year, month, 1).getDay();
         const daysInMonth = new Date(year, month + 1, 0).getDate();
         const dates = [];
-        for (let i = 0; i < firstDay; i++) { dates.push(<div key={`pad-${i}`}></div>); }
+        for (let i = 0; i < firstDay; i++) { dates.push(<div key={`pad-${i}`} className="p-2"></div>); }
         for (let i = 1; i <= daysInMonth; i++) {
             const isToday = new Date(year, month, i).toDateString() === new Date().toDateString();
-            dates.push(<div key={i} className={`p-2 rounded-full text-center text-sm cursor-pointer ${isToday ? 'bg-blue-500 text-white' : ''}`}>{i}</div>);
+            dates.push(<div key={i} className={`p-2 rounded-full text-center text-sm cursor-pointer ${isToday ? 'bg-blue-500 text-white font-bold' : 'hover:bg-gray-100'}`}>{i}</div>);
         }
         return dates;
     };
     return (
         <div className="bg-white p-4 rounded-lg shadow-sm border h-full">
             <div className="flex justify-between items-center mb-3">
-                <button onClick={() => changeMonth(-1)}>&lt;</button>
+                <button onClick={() => changeMonth(-1)} className="p-1 hover:bg-gray-100 rounded-full">&lt;</button>
                 <h3 className="font-bold text-gray-700">{currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}</h3>
-                <button onClick={() => changeMonth(1)}>&gt;</button>
+                <button onClick={() => changeMonth(1)} className="p-1 hover:bg-gray-100 rounded-full">&gt;</button>
             </div>
-            <div className="grid grid-cols-7 gap-1 text-center text-xs text-gray-500">{daysOfWeek.map(day => <div key={day}>{day}</div>)}</div>
+            <div className="grid grid-cols-7 gap-1 text-center text-xs text-gray-500 font-semibold">{daysOfWeek.map(day => <div key={day}>{day}</div>)}</div>
             <div className="grid grid-cols-7 gap-1 mt-2">{generateDates()}</div>
         </div>
     );
 };
 
-const ViewQuarterModal = ({ quarter, onClose, allData }) => {
-    const [loading, setLoading] = useState(false);
-
-    const generateMonthlyReports = (q) => {
-        const year = new Date().getFullYear();
-        const months = getQuarterMonths(q);
-        const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-
-        return months.flatMap(monthIndex => {
-            const monthName = monthNames[monthIndex];
-            const baseReport = { date: `${monthName} ${year}`, month: monthIndex, year: year };
-            
-            const reports = [
-                { id: `M${q}01-${monthIndex}`, name: "Maternity Patient Record", type: "Maternal Record", table: "patients" },
-                { id: `M${q}02-${monthIndex}`, name: "Inventory Stock Record", type: "Inventory Record", table: "inventory" },
-                { id: `M${q}03-${monthIndex}`, name: "Completed Appointment Record", type: "Appointment Record", table: "appointments", status: 'Completed' },
-                { id: `M${q}04-${monthIndex}`, name: "Cancelled Appointment Record", type: "Appointment Record", table: "appointments", status: 'Cancelled' },
-            ];
-
-            return reports.map(r => {
-                const data = allData[r.table].filter(item => {
-                    const itemDate = new Date(item.updated_at || item.created_at);
-                    if (itemDate.getMonth() !== monthIndex) return false;
-                    if (r.status) return item.status === r.status;
-                    return true;
-                });
-                const size = new TextEncoder().encode(JSON.stringify(data)).length;
-                return { ...r, ...baseReport, size: formatBytes(size), hasData: data.length > 0 };
-            });
-        });
-    };
-
-    const monthlyReports = generateMonthlyReports(quarter.id);
-
-    const handleDownload = async (report) => {
-        if (!report.hasData) {
-            alert(`No data available for ${report.name} in ${report.date}.`);
-            return;
-        }
-        setLoading(true);
-        const sourceData = allData[report.table] || [];
-
-        const dataToExport = sourceData.filter(item => {
-            const itemDate = new Date(item.updated_at || item.created_at);
-            if (itemDate.getMonth() !== report.month) return false;
-            if (report.status) return item.status === report.status;
-            return true;
-        });
-
-        const worksheet = window.XLSX.utils.json_to_sheet(dataToExport);
-        const workbook = window.XLSX.utils.book_new();
-        window.XLSX.utils.book_append_sheet(workbook, worksheet, "Report");
-        window.XLSX.writeFile(workbook, `${report.name} - ${report.date}.xlsx`);
-        setLoading(false);
-    };
+const ViewQuarterModal = ({ quarter, onClose, allData, onDownloadMonth }) => {
+    const months = getQuarterMonths(quarter.id);
+    const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    
+    // Filter Data for counts (Quarterly Summary)
+    const patients = allData.patients.filter(p => months.includes(new Date(p.created_at).getMonth()));
+    const appointments = allData.appointments.filter(a => months.includes(new Date(a.date).getMonth()));
+    const inventory = allData.inventory.filter(i => months.includes(new Date(i.updated_at || i.created_at).getMonth()));
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4">
-            <motion.div
-                className="bg-white rounded-lg shadow-2xl w-full max-w-4xl"
-                initial={{ opacity: 0, y: -30 }}
-                animate={{ opacity: 1, y: 0 }}
+            <motion.div 
+                className="bg-white rounded-lg shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]"
+                initial={{ opacity: 0, y: -30 }} 
+                animate={{ opacity: 1, y: 0 }} 
                 exit={{ opacity: 0, y: 30 }}
             >
-                <div className="p-6">
-                    <h2 className="text-xl font-bold text-gray-800 mb-4">{quarter.name} - {quarter.year}</h2>
-                    <div className="overflow-y-auto max-h-[60vh]">
-                        <table className="w-full text-sm">
-                            <thead className="sticky top-0 bg-gray-50">
-                                <tr className="text-left text-gray-600">
-                                    {['ID Report', 'Report Name', 'Date', 'Type', 'Size', 'Action'].map(h => <th key={h} className="p-3 font-semibold">{h}</th>)}
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y">
-                                {monthlyReports.map(report => (
-                                    <tr key={report.id} className="text-gray-700">
-                                        <td className="p-3">{report.id}</td>
-                                        <td className="p-3 font-semibold">{report.name}</td>
-                                        <td className="p-3">{report.date}</td>
-                                        <td className="p-3">{report.type}</td>
-                                        <td className="p-3">{report.size}</td>
-                                        <td className="p-3">
-                                            <button onClick={() => handleDownload(report)} disabled={loading || !report.hasData} className="text-blue-600 hover:text-blue-800 disabled:opacity-50 disabled:cursor-not-allowed">
-                                                <DownloadIcon />
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                <div className="p-6 border-b">
+                    <h2 className="text-xl font-bold text-gray-800">Quarterly Summary: {quarter.name}</h2>
+                    <p className="text-sm text-gray-500">Year: {quarter.year}</p>
+                </div>
+                
+                <div className="p-6 space-y-6 overflow-y-auto">
+                    {/* Stats Grid */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-blue-50 p-4 rounded-lg text-center">
+                            <p className="text-2xl font-bold text-blue-600">{patients.length}</p>
+                            <p className="text-xs text-gray-600 uppercase font-semibold">New Patients</p>
+                        </div>
+                        <div className="bg-green-50 p-4 rounded-lg text-center">
+                            <p className="text-2xl font-bold text-green-600">{appointments.filter(a => a.status === 'Completed').length}</p>
+                            <p className="text-xs text-gray-600 uppercase font-semibold">Completed Checkups</p>
+                        </div>
+                        <div className="bg-yellow-50 p-4 rounded-lg text-center">
+                            <p className="text-2xl font-bold text-yellow-600">{inventory.length}</p>
+                            <p className="text-xs text-gray-600 uppercase font-semibold">Items Updated</p>
+                        </div>
+                        <div className="bg-red-50 p-4 rounded-lg text-center">
+                            <p className="text-2xl font-bold text-red-600">{patients.filter(p => p.risk_level === 'HIGH RISK').length}</p>
+                            <p className="text-xs text-gray-600 uppercase font-semibold">High Risk Cases</p>
+                        </div>
                     </div>
-                    <div className="flex justify-end mt-4">
-                        <button onClick={onClose} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 font-semibold text-sm">Close</button>
+                    
+                    {/* Monthly Breakdown List */}
+                    <div>
+                        <h4 className="font-semibold text-gray-700 mb-3 text-sm border-b pb-2">Monthly Breakdown</h4>
+                        <div className="space-y-3">
+                            {months.map(m => {
+                                const mName = monthNames[m];
+                                const mPatients = allData.patients.filter(p => new Date(p.created_at).getMonth() === m).length;
+                                const mAppts = allData.appointments.filter(a => new Date(a.date).getMonth() === m).length;
+
+                                return (
+                                    <div key={m} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border hover:bg-gray-100 transition-colors">
+                                        <div>
+                                            <p className="font-bold text-gray-800 text-sm">{mName}</p>
+                                            <p className="text-xs text-gray-500">{mPatients} Patients • {mAppts} Appointments</p>
+                                        </div>
+                                        <button
+                                            onClick={() => onDownloadMonth(m, quarter.year)}
+                                            className="flex items-center space-x-2 text-xs bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-md hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300 transition-all shadow-sm"
+                                        >
+                                            <DownloadIcon />
+                                            <span>Download PDF</span>
+                                        </button>
+                                    </div>
+                                );
+                            })}
+                        </div>
                     </div>
+                </div>
+                
+                <div className="p-4 bg-gray-50 border-t flex justify-end">
+                    <button onClick={onClose} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 font-semibold text-sm">Close</button>
                 </div>
             </motion.div>
         </div>
@@ -168,22 +150,15 @@ const ViewQuarterModal = ({ quarter, onClose, allData }) => {
 
 const GeneratingModal = () => (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
-        <motion.div
-            className="bg-white rounded-lg shadow-2xl p-8 flex flex-col items-center"
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-        >
-            <svg className="animate-spin h-10 w-10 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            <p className="mt-4 text-gray-700 font-semibold">Generating Report...</p>
+        <motion.div className="bg-white rounded-lg shadow-2xl p-8 flex flex-col items-center" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}>
+            <svg className="animate-spin h-10 w-10 text-blue-600" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+            <p className="mt-4 text-gray-700 font-semibold">Generating PDF Report...</p>
+            <p className="text-xs text-gray-500 mt-1">Analyzing data & compiling analytics...</p>
         </motion.div>
     </div>
 );
 
-
+// --- MAIN COMPONENT ---
 export default function ReportsPage() {
     const [selectedQuarter, setSelectedQuarter] = useState(null);
     const [allData, setAllData] = useState({ patients: [], inventory: [], appointments: [] });
@@ -191,16 +166,14 @@ export default function ReportsPage() {
     const [isGenerating, setIsGenerating] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [showNoDataPop, setShowNoDataPop] = useState(false);
-    const { addNotification } = useNotification(); // <-- 2. GET THE FUNCTION
-
-    
+    const { addNotification } = useNotification();
 
     const fetchAllData = useCallback(async () => {
         setLoading(true);
         const [patientsRes, inventoryRes, appointmentsRes] = await Promise.all([
             supabase.from('patients').select('*'),
             supabase.from('inventory').select('*'),
-            supabase.from('appointments').select('*')
+            supabase.from('appointments').select('*, profiles(first_name, last_name)')
         ]);
         setAllData({
             patients: patientsRes.data || [],
@@ -210,79 +183,197 @@ export default function ReportsPage() {
         setLoading(false);
     }, []);
 
-    useEffect(() => {
-        fetchAllData();
-    }, [fetchAllData]);
+    useEffect(() => { fetchAllData(); }, [fetchAllData]);
 
-    const handleQuarterDownload = async (quarter) => {
-        const months = getQuarterMonths(quarter.id);
-        const hasDataForQuarter = allData.patients.some(p => months.includes(new Date(p.updated_at || p.created_at).getMonth())) ||
-                                allData.inventory.some(i => months.includes(new Date(i.updated_at || i.created_at).getMonth())) ||
-                                allData.appointments.some(a => months.includes(new Date(a.updated_at || a.created_at).getMonth()));
+    // --- REUSABLE PDF GENERATOR ---
+    const generateReport = async (fileName, periodLabel, targetMonths) => {
+        // 1. Filter Data for target months (Array of indices)
+        const patients = allData.patients.filter(p => targetMonths.includes(new Date(p.created_at).getMonth()));
+        const appointments = allData.appointments.filter(a => targetMonths.includes(new Date(a.date).getMonth()));
+        const inventory = allData.inventory; // Inventory is always current snapshot
 
-        if (!hasDataForQuarter) {
+        if (patients.length === 0 && appointments.length === 0) {
             setShowNoDataPop(true);
-            setTimeout(() => setShowNoDataPop(false), 2000); // hide after 2s
+            setTimeout(() => setShowNoDataPop(false), 2000);
             return;
         }
 
-        
-
         setIsGenerating(true);
-        await new Promise(resolve => setTimeout(resolve, 500)); 
-
-        const zip = new window.JSZip();
-        const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-
-        for (const monthIndex of months) {
-            const monthName = monthNames[monthIndex];
-            const generateSheet = (data, fileName) => {
-                if (data.length > 0) {
-                    const ws = window.XLSX.utils.json_to_sheet(data);
-                    const wb = window.XLSX.utils.book_new();
-                    window.XLSX.utils.book_append_sheet(wb, ws, "Data");
-                    const wbout = window.XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-                    zip.file(`${fileName}-${monthName}.xlsx`, wbout);
-                }
-            };
-
-            const patientsData = allData.patients.filter(p => new Date(p.updated_at || p.created_at).getMonth() === monthIndex);
-            const inventoryData = allData.inventory.filter(i => new Date(i.updated_at || i.created_at).getMonth() === monthIndex);
-            const completedAppointments = allData.appointments.filter(a => new Date(a.updated_at || a.created_at).getMonth() === monthIndex && a.status === 'Completed');
-            const cancelledAppointments = allData.appointments.filter(a => new Date(a.updated_at || a.created_at).getMonth() === monthIndex && a.status === 'Cancelled');
-
-            generateSheet(patientsData, "Maternity-Records");
-            generateSheet(inventoryData, "Inventory-Records");
-            generateSheet(completedAppointments, "Completed-Appointments");
-            generateSheet(cancelledAppointments, "Cancelled-Appointments");
-        }
-
-        zip.generateAsync({ type: "blob" }).then(content => {
-            window.saveAs(content, `${quarter.name}_${quarter.year}_Report.zip`);
-            setIsGenerating(false);
-            logActivity('Report Downloaded', `Generated ZIP file for ${quarter.name} ${quarter.year}`);
-            addNotification('Report has been downloaded.', 'success'); // <-- 3. SHOW NOTIFICATION
+        
+        // 2. Analytics Calculations
+        const totalPatients = patients.length;
+        const riskDist = { Normal: 0, Mid: 0, High: 0 };
+        patients.forEach(p => {
+            const r = p.risk_level?.toUpperCase() || 'NORMAL';
+            if (r.includes('HIGH')) riskDist.High++;
+            else if (r.includes('MID')) riskDist.Mid++;
+            else riskDist.Normal++;
         });
+
+        const totalAppts = appointments.length;
+        const completedAppts = appointments.filter(a => a.status === 'Completed').length;
+        
+        const lowStockItems = inventory.filter(i => i.quantity <= 20).length;
+        const criticalStockItems = inventory.filter(i => i.quantity <= 10).length;
+
+        // 3. Initialize PDF
+        const doc = new jsPDF();
+        const pageWidth = doc.internal.pageSize.width;
+        
+        // --- HEADER ---
+        // doc.addImage(logo, 'JPEG', 15, 10, 20, 20); // Uncomment if logo import works
+        doc.setFontSize(14).setFont(undefined, 'bold').text("Barangay San Miguel Health Center", pageWidth / 2, 20, { align: "center" });
+        doc.setFontSize(10).setFont(undefined, 'normal').text("Maternal Health Report", pageWidth / 2, 26, { align: "center" });
+        doc.line(15, 32, pageWidth - 15, 32);
+
+        // --- REPORT INFO ---
+        doc.setFontSize(11).setFont(undefined, 'bold');
+        doc.text(`Period: ${periodLabel}`, 15, 42);
+        doc.text(`Generated: ${new Date().toLocaleDateString()}`, pageWidth - 15, 42, { align: "right" });
+
+        // --- SECTION 1: ANALYTICS SUMMARY ---
+        doc.setFontSize(12).setTextColor(41, 128, 185).text("1. Executive Summary & Analytics", 15, 55);
+        doc.setTextColor(0, 0, 0);
+
+        const statsY = 62;
+        doc.setFontSize(10);
+        
+        // Box 1: Patients
+        doc.setDrawColor(200); doc.setFillColor(245, 247, 250); doc.rect(15, statsY, 55, 25, 'F'); doc.rect(15, statsY, 55, 25, 'S');
+        doc.setFont(undefined, 'bold').text(`${totalPatients}`, 25, statsY + 10);
+        doc.setFont(undefined, 'normal').text("New Patients Registered", 25, statsY + 18);
+
+        // Box 2: Appointments
+        doc.setFillColor(240, 253, 244); doc.rect(75, statsY, 55, 25, 'F'); doc.rect(75, statsY, 55, 25, 'S');
+        doc.setFont(undefined, 'bold').text(`${completedAppts} / ${totalAppts}`, 85, statsY + 10);
+        doc.setFont(undefined, 'normal').text("Appointments Completed", 85, statsY + 18);
+
+        // Box 3: Inventory Health
+        doc.setFillColor(255, 247, 237); doc.rect(135, statsY, 55, 25, 'F'); doc.rect(135, statsY, 55, 25, 'S');
+        doc.setFont(undefined, 'bold').text(`${lowStockItems} Low / ${criticalStockItems} Critical`, 145, statsY + 10);
+        doc.setFont(undefined, 'normal').text("Inventory Alerts", 145, statsY + 18);
+
+        // Analytics Text
+        doc.text("Risk Assessment Overview:", 15, statsY + 35);
+        doc.setFontSize(9).setTextColor(100);
+        doc.text(`- High Risk Patients: ${riskDist.High} (${totalPatients > 0 ? ((riskDist.High/totalPatients)*100).toFixed(1) : 0}%)`, 20, statsY + 42);
+        doc.text(`- Mid Risk Patients: ${riskDist.Mid}`, 20, statsY + 48);
+        doc.text(`- Normal Risk Patients: ${riskDist.Normal}`, 20, statsY + 54);
+        doc.setTextColor(0);
+
+        // --- SECTION 2: PATIENT REGISTRY ---
+        let currentY = statsY + 65;
+        doc.setFontSize(12).setTextColor(41, 128, 185).text("2. Detailed Patient Registry", 15, currentY);
+        
+        const patientRows = patients.map(p => [
+            p.patient_id,
+            `${p.last_name}, ${p.first_name}`,
+            p.age,
+            p.purok,
+            p.risk_level,
+            new Date(p.created_at).toLocaleDateString()
+        ]);
+
+        autoTable(doc, {
+            startY: currentY + 5,
+            head: [['ID', 'Name', 'Age', 'Purok', 'Risk Level', 'Reg. Date']],
+            body: patientRows,
+            theme: 'striped',
+            headStyles: { fillColor: [41, 128, 185] },
+            styles: { fontSize: 8 },
+        });
+
+        // --- SECTION 3: APPOINTMENTS ---
+        currentY = doc.lastAutoTable.finalY + 15;
+        if (currentY > 250) { doc.addPage(); currentY = 20; }
+        
+        doc.setFontSize(12).setTextColor(41, 128, 185).text("3. Appointment Log", 15, currentY);
+        
+        const apptRows = appointments.map(a => [
+            new Date(a.date).toLocaleDateString(),
+            a.patient_name,
+            a.reason,
+            a.status,
+            a.profiles ? `${a.profiles.first_name} ${a.profiles.last_name}` : 'N/A'
+        ]);
+
+        autoTable(doc, {
+            startY: currentY + 5,
+            head: [['Date', 'Patient', 'Purpose', 'Status', 'Assigned BHW']],
+            body: apptRows,
+            theme: 'striped',
+            headStyles: { fillColor: [39, 174, 96] }, 
+            styles: { fontSize: 8 },
+        });
+
+        // --- SECTION 4: INVENTORY ---
+        currentY = doc.lastAutoTable.finalY + 15;
+        if (currentY > 250) { doc.addPage(); currentY = 20; }
+
+        doc.setFontSize(12).setTextColor(41, 128, 185).text("4. Current Inventory Snapshot", 15, currentY);
+
+        const inventoryRows = inventory.map(i => [
+            i.item_name,
+            i.category,
+            `${i.quantity} ${i.unit || 'units'}`,
+            i.status,
+            i.expiry_date || 'N/A'
+        ]);
+
+        autoTable(doc, {
+            startY: currentY + 5,
+            head: [['Item Name', 'Category', 'Stock Level', 'Status', 'Expiry']],
+            body: inventoryRows,
+            theme: 'grid',
+            headStyles: { fillColor: [230, 126, 34] },
+            styles: { fontSize: 8 },
+        });
+
+        doc.save(`${fileName}.pdf`);
+        
+        setIsGenerating(false);
+        logActivity('Report Generated', `Created PDF report for ${periodLabel}`);
+        addNotification('PDF Report generated successfully.', 'success');
+    };
+
+    // Handler for Quarterly Button
+    const handleQuarterDownload = (quarter) => {
+        const months = getQuarterMonths(quarter.id);
+        generateReport(
+            `BHW_Quarterly_Report_${quarter.name}_${quarter.year}`,
+            `${quarter.name} ${quarter.year}`,
+            months
+        );
+    };
+
+    // Handler for Monthly Button
+    const handleMonthlyDownload = (monthIndex, year) => {
+        const monthName = new Date(year, monthIndex).toLocaleString('default', { month: 'long' });
+        generateReport(
+            `BHW_Monthly_Report_${monthName}_${year}`,
+            `${monthName} ${year}`,
+            [monthIndex] // Pass single month as array
+        );
     };
 
     const quarterlyReports = useMemo(() => {
         const year = new Date().getFullYear();
         return [1, 2, 3, 4].map(q => {
             const months = getQuarterMonths(q);
-            let totalSize = 0;
-            const patientsData = allData.patients.filter(p => months.includes(new Date(p.updated_at || p.created_at).getMonth()));
-            const inventoryData = allData.inventory.filter(i => months.includes(new Date(i.updated_at || i.created_at).getMonth()));
-            const appointmentsData = allData.appointments.filter(a => months.includes(new Date(a.updated_at || a.created_at).getMonth()));
+            const pCount = allData.patients.filter(p => months.includes(new Date(p.created_at).getMonth())).length;
+            const aCount = allData.appointments.filter(a => months.includes(new Date(a.date).getMonth())).length;
             
-            totalSize += new TextEncoder().encode(JSON.stringify(patientsData)).length;
-            totalSize += new TextEncoder().encode(JSON.stringify(inventoryData)).length;
-            totalSize += new TextEncoder().encode(JSON.stringify(appointmentsData)).length;
-
-            return { id: q, name: `${q}${q === 1 ? 'st' : q === 2 ? 'nd' : q === 3 ? 'rd' : 'th'} Quarter`, year, type: "Maternal Record", size: formatBytes(totalSize) };
+            return { 
+                id: q, 
+                name: `${q}${q === 1 ? 'st' : q === 2 ? 'nd' : q === 3 ? 'rd' : 'th'} Quarter`, 
+                year, 
+                type: "Analytics PDF", 
+                size: `${pCount + aCount} Records`
+            };
         });
     }, [allData]);
 
-    const filteredQuarterlyReports = useMemo(() => {
+    const filteredReports = useMemo(() => {
         if (!searchTerm) return quarterlyReports;
         return quarterlyReports.filter(r => r.name.toLowerCase().includes(searchTerm.toLowerCase()));
     }, [searchTerm, quarterlyReports]);
@@ -290,57 +381,52 @@ export default function ReportsPage() {
     return (
         <>
             <AnimatePresence>
-                {selectedQuarter && <ViewQuarterModal quarter={selectedQuarter} onClose={() => setSelectedQuarter(null)} allData={allData} />}
+                {selectedQuarter && (
+                    <ViewQuarterModal 
+                        quarter={selectedQuarter} 
+                        onClose={() => setSelectedQuarter(null)} 
+                        allData={allData}
+                        onDownloadMonth={handleMonthlyDownload} // Pass function to modal
+                    />
+                )}
                 {isGenerating && <GeneratingModal />}
                 {showNoDataPop && (
-                    <motion.div
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.8 }}
-                    className="fixed bottom-6 right-6 bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg font-semibold z-50"
-                    >
-                    ❌ No data available for this quarter
+                    <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }} className="fixed bottom-6 right-6 bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg font-semibold z-50">
+                        ❌ No data available for this period
                     </motion.div>
                 )}
             </AnimatePresence>
+
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 bg-white p-6 rounded-lg shadow-sm border">
                     <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
-                        <h2 className="text-2xl font-bold text-gray-800">Reports</h2>
+                        <h2 className="text-2xl font-bold text-gray-800">Reports Generation</h2>
                         <div className="relative w-full md:w-auto">
                             <span className="absolute inset-y-0 left-0 flex items-center pl-3"><SearchIcon /></span>
-                            <input
-                                type="text"
-                                placeholder="Search Report..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full pl-10 pr-4 py-2 form-input rounded-md border-gray-300 shadow-sm text-sm"
-                            />
+                            <input type="text" placeholder="Search Quarter..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 form-input rounded-md border-gray-300 shadow-sm text-sm" />
                         </div>
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead className="bg-gray-50">
                                 <tr className="text-left text-gray-600">
-                                    {['ID Report', 'Report Name', 'Year', 'Type', 'Size', 'Action'].map(h => <th key={h} className="p-3 font-semibold">{h}</th>)}
+                                    {['Report ID', 'Report Name', 'Year', 'Format', 'Data Volume', 'Actions'].map(h => <th key={h} className="p-3 font-semibold">{h}</th>)}
                                 </tr>
                             </thead>
                             <tbody className="divide-y">
-                                {loading ? ( <tr><td colSpan="6" className="text-center p-4">Loading...</td></tr> ) : (
-                                    filteredQuarterlyReports.map(report => (
-                                        <tr key={report.id} className="text-gray-700">
-                                            <td className="p-3">Q00{report.id}</td>
-                                            <td className="p-3 font-semibold">{report.name}</td>
-                                            <td className="p-3">{report.year}</td>
-                                            <td className="p-3">{report.type}</td>
-                                            <td className="p-3">{report.size}</td>
-                                            <td className="p-3 flex items-center space-x-2">
-                                                <button onClick={() => handleQuarterDownload(report)} className="text-gray-500 hover:text-blue-600"><DownloadIcon /></button>
-                                                <button onClick={() => setSelectedQuarter(report)} className="text-gray-500 hover:text-blue-600"><ViewIcon /></button>
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
+                                {loading ? <tr><td colSpan="6" className="text-center p-4">Loading...</td></tr> : filteredReports.map(report => (
+                                    <tr key={report.id} className="text-gray-700 hover:bg-gray-50 transition-colors">
+                                        <td className="p-3">RPT-Q{report.id}</td>
+                                        <td className="p-3 font-semibold text-gray-800">{report.name}</td>
+                                        <td className="p-3">{report.year}</td>
+                                        <td className="p-3"><span className="bg-red-100 text-red-700 px-2 py-0.5 rounded text-xs font-bold">PDF</span></td>
+                                        <td className="p-3">{report.size}</td>
+                                        <td className="p-3 flex items-center space-x-2">
+                                            <button onClick={() => handleQuarterDownload(report)} className="text-blue-600 hover:text-blue-800 bg-blue-50 p-2 rounded-full hover:bg-blue-100 transition-colors" title="Download Quarterly Report"><DownloadIcon /></button>
+                                            <button onClick={() => setSelectedQuarter(report)} className="text-gray-500 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors" title="View & Monthly Downloads"><ViewIcon /></button>
+                                        </td>
+                                    </tr>
+                                ))}
                             </tbody>
                         </table>
                     </div>
