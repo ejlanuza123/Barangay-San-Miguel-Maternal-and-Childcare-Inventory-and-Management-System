@@ -5,18 +5,144 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import { useNotification } from '../../context/NotificationContext';
 
-// --- WIDGETS & SUB-COMPONENTS ---
+// --- ANALYTICS COMPONENTS ---
+const AnalyticsOverview = ({ analytics }) => (
+  <div className="bg-white p-4 rounded-lg shadow border h-full">
+    <h3 className="font-bold text-gray-700 text-base mb-4">Nutrition Overview</h3>
+    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
+        <p className="text-xs text-blue-600 font-semibold">Total Children</p>
+        <p className="text-xl font-bold text-blue-700">{analytics.totalChildren}</p>
+      </div>
+      <div className="bg-green-50 p-3 rounded-lg border border-green-100">
+        <p className="text-xs text-green-600 font-semibold">Healthy</p>
+        <p className="text-xl font-bold text-green-700">{analytics.healthyCount}</p>
+      </div>
+      <div className="bg-orange-50 p-3 rounded-lg border border-orange-100">
+        <p className="text-xs text-orange-600 font-semibold">Underweight</p>
+        <p className="text-xl font-bold text-orange-700">{analytics.underweightCount}</p>
+      </div>
+      <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-100">
+        <p className="text-xs text-yellow-600 font-semibold">Overweight</p>
+        <p className="text-xl font-bold text-yellow-700">{analytics.overweightCount}</p>
+      </div>
+      <div className="bg-red-50 p-3 rounded-lg border border-red-100">
+        <p className="text-xs text-red-600 font-semibold">Obese</p>
+        <p className="text-xl font-bold text-red-700">{analytics.obeseCount}</p>
+      </div>
+    </div>
+  </div>
+);
+
+const NutritionStatusChart = ({ nutritionData }) => {
+  // FIX: Handle undefined/null nutritionData
+  const data = nutritionData || {};
+  const total = Object.values(data).reduce((sum, count) => sum + count, 0);
+  
+  return (
+    <div className="bg-white p-4 rounded-lg shadow border h-full">
+      <h3 className="font-bold text-gray-700 text-base mb-4">Nutrition Status</h3>
+      <div className="space-y-3">
+        {Object.entries(data).length > 0 ? Object.entries(data).map(([status, count]) => {
+          const percentage = total > 0 ? ((count / total) * 100).toFixed(1) : 0;
+          const getColor = (status) => {
+            switch(status) {
+              case 'Healthy': return 'bg-green-500';
+              case 'Underweight': return 'bg-orange-500';
+              case 'Overweight': return 'bg-yellow-500';
+              case 'Obese': return 'bg-red-500';
+              default: return 'bg-gray-500';
+            }
+          };
+          
+          return (
+            <div key={status} className="space-y-1">
+              <div className="flex justify-between text-sm">
+                <span className="font-semibold text-gray-700">{status}</span>
+                <span className="text-gray-500">{count} ({percentage}%)</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className={`h-2 rounded-full ${getColor(status)}`}
+                  style={{ width: `${percentage}%` }}
+                ></div>
+              </div>
+            </div>
+          );
+        }) : (
+          <p className="text-sm text-gray-500 text-center py-4">No nutrition data available</p>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const MonthlyTrends = ({ monthlyData }) => (
+  <div className="bg-white p-4 rounded-lg shadow border h-full">
+    <h3 className="font-bold text-gray-700 text-base mb-4">Monthly Checkups</h3>
+    <div className="space-y-2">
+      {monthlyData && monthlyData.length > 0 ? monthlyData.map((month, index) => (
+        <div key={index} className="flex items-center justify-between">
+          <span className="text-sm text-gray-600 font-medium">{month.month}</span>
+          <div className="flex items-center space-x-2">
+            <div className="w-24 bg-gray-200 rounded-full h-2">
+              <div 
+                className="bg-green-500 h-2 rounded-full"
+                style={{ width: `${(month.count / Math.max(...monthlyData.map(m => m.count || 1)) * 100)}%` }}
+              ></div>
+            </div>
+            <span className="text-sm font-semibold text-gray-700 w-8">{month.count}</span>
+          </div>
+        </div>
+      )) : (
+        <p className="text-sm text-gray-500 text-center py-4">No monthly data available</p>
+      )}
+    </div>
+  </div>
+);
+
+const AgeDistributionChart = ({ ageData }) => {
+  // FIX: Handle undefined/null ageData
+  const data = ageData || {};
+  const total = Object.values(data).reduce((sum, count) => sum + count, 0);
+  
+  return (
+    <div className="bg-white p-4 rounded-lg shadow border h-full">
+      <h3 className="font-bold text-gray-700 text-base mb-4">Age Distribution</h3>
+      <div className="space-y-3">
+        {Object.entries(data).length > 0 ? Object.entries(data).map(([ageGroup, count]) => {
+          const percentage = total > 0 ? ((count / total) * 100).toFixed(1) : 0;
+          
+          return (
+            <div key={ageGroup} className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                <span className="text-sm font-medium text-gray-700">{ageGroup}</span>
+              </div>
+              <span className="text-sm text-gray-500">{count} ({percentage}%)</span>
+            </div>
+          );
+        }) : (
+          <p className="text-sm text-gray-500 text-center py-4">No age data available</p>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// --- EXISTING WIDGETS & SUB-COMPONENTS ---
 const getDotColor = (role) => {
     switch (role) {
         case 'BNS':
-            return 'bg-green-500'; // Green for BNS
+            return 'bg-green-500';
         case 'Admin':
-            return 'bg-orange-500'; // Orange for Admin
+            return 'bg-orange-500';
         case 'BHW':
         default:
-            return 'bg-blue-500'; // Blue for BHW and others
+            return 'bg-blue-500';
     }
 };
+
 const Calendar = () => {
     const [currentDate, setCurrentDate] = useState(new Date());
     const daysOfWeek = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
@@ -69,7 +195,6 @@ const Calendar = () => {
     );
 };
 
-// MODIFIED: Quick Access links now point to BNS routes
 const QuickAccess = () => (
     <div className="bg-white p-4 rounded-lg shadow border flex flex-col space-y-3 h-full justify-center">
         <h3 className="font-bold text-gray-700 text-base text-center mb-2">Quick Access</h3>
@@ -91,7 +216,6 @@ const RecentActivity = ({ activities, onViewAll }) => (
         <div className="space-y-3">
             {activities.length > 0 ? activities.slice(0, 4).map((item) => (
                 <div key={item.id} className="flex items-start space-x-2">
-                    {/* MODIFIED: Now uses the shared getDotColor function */}
                     <div className={`w-1.5 h-1.5 rounded-full mt-1.5 ${getDotColor(item.profiles?.role)}`}></div>
                     <div>
                         <p className="font-semibold text-gray-700 text-sm">
@@ -180,10 +304,8 @@ const ViewAllActivityModal = ({ activities, onClose }) => (
                 <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-3">
                     {activities.length > 0 ? activities.map((item) => (
                         <div key={item.id} className="flex items-start space-x-3 pb-3 border-b last:border-b-0">
-                            {/* MODIFIED: Dot color is now dynamic */}
                             <div className={`w-1.5 h-1.5 rounded-full mt-1.5 ${getDotColor(item.profiles?.role)} flex-shrink-0`}></div>
                             <div className="flex-grow">
-                                {/* MODIFIED: Added user's role and name */}
                                 <p className="font-semibold text-gray-700 text-sm">
                                     <span className="font-bold">{item.profiles?.role || 'System'} {item.profiles?.last_name || ''}</span> {item.action}
                                 </p>
@@ -202,74 +324,207 @@ const ViewAllActivityModal = ({ activities, onClose }) => (
         </motion.div>
     </div>
 );
+
 // --- Main BNS Dashboard Component ---
 export default function BnsDashboard() {
     const [upcomingAppointments, setUpcomingAppointments] = useState([]);
     const [recentActivities, setRecentActivities] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
+    const [analytics, setAnalytics] = useState({
+        totalChildren: 0,
+        healthyCount: 0,
+        underweightCount: 0,
+        overweightCount: 0,
+        obeseCount: 0,
+        nutritionData: {},
+        monthlyTrends: [],
+        ageData: {}
+    });
 
-    const { user } = useAuth(); // Import useAuth at the top of your component
+    const { user } = useAuth();
     const { addNotification } = useNotification();
 
+    const fetchAnalyticsData = useCallback(async () => {
+        if (!user) return;
+
+        try {
+            // Fetch child records statistics
+            const { data: childrenData, error: childrenError } = await supabase
+                .from('child_records')
+                .select('nutrition_status, weight_kg, height_cm, dob, last_checkup, bmi');
+
+            if (childrenError) throw childrenError;
+
+            // Fetch appointment statistics for BNS
+            const currentMonth = new Date().toISOString().slice(0, 7);
+            const { data: appointmentsData, error: appointmentsError } = await supabase
+                .from('appointments')
+                .select('date, created_at')
+                .eq('created_by', user.id)
+                .gte('created_at', new Date(new Date().getFullYear(), 0, 1).toISOString());
+
+            if (appointmentsError) throw appointmentsError;
+
+            console.log('Raw children data:', childrenData); // Debug log
+
+            // Calculate analytics for BNS
+            const totalChildren = childrenData?.length || 0;
+
+            // FIRST: Check what nutrition_status values actually exist in your database
+            const nutritionStatuses = childrenData?.map(child => child.nutrition_status) || [];
+            console.log('All nutrition_status values:', nutritionStatuses); // Debug log
+
+            // Count nutrition status - check what values actually exist
+            const healthyCount = childrenData?.filter(
+                child => child.nutrition_status === 'Normal' || 
+                        child.nutrition_status === 'Healthy' ||
+                        child.nutrition_status === 'H'
+            ).length || 0;
+
+            const underweightCount = childrenData?.filter(
+                child => child.nutrition_status === 'Underweight' || 
+                        child.nutrition_status === 'Severely Underweight' ||
+                        child.nutrition_status === 'UW'
+            ).length || 0;
+
+            const overweightCount = childrenData?.filter(
+                child => child.nutrition_status === 'Overweight' || 
+                        child.nutrition_status === 'OW'
+            ).length || 0;
+
+            const obeseCount = childrenData?.filter(
+                child => child.nutrition_status === 'Obese' || 
+                        child.nutrition_status === 'O'
+            ).length || 0;
+
+            console.log('Counts - Healthy:', healthyCount, 'UW:', underweightCount, 'OW:', overweightCount, 'Obese:', obeseCount); // Debug log
+
+            // Nutrition status distribution - map all possible values to standard categories
+            const nutritionData = childrenData?.reduce((acc, child) => {
+                let status = child.nutrition_status || 'Unknown';
+                
+                // Map all possible values to standard categories
+                if (status === 'Normal' || status === 'Healthy' || status === 'H') {
+                    status = 'Healthy';
+                } else if (status === 'Underweight' || status === 'Severely Underweight' || status === 'UW') {
+                    status = 'Underweight';
+                } else if (status === 'Overweight' || status === 'OW') {
+                    status = 'Overweight';
+                } else if (status === 'Obese' || status === 'O') {
+                    status = 'Obese';
+                }
+                // If it doesn't match any, leave as is
+                
+                acc[status] = (acc[status] || 0) + 1;
+                return acc;
+            }, {});
+
+            console.log('Processed nutrition data:', nutritionData);
+
+            // ADDED: Monthly trends calculation
+            const monthlyTrends = [];
+            for (let i = 5; i >= 0; i--) {
+                const date = new Date();
+                date.setMonth(date.getMonth() - i);
+                const monthYear = date.toLocaleString('default', { month: 'short', year: 'numeric' });
+                const monthStr = date.toISOString().slice(0, 7);
+                
+                const count = appointmentsData?.filter(apt => 
+                    apt.date?.startsWith(monthStr)
+                ).length || 0;
+                
+                monthlyTrends.push({ month: monthYear, count });
+            }
+
+            // ADDED: Age distribution calculation
+            const ageData = childrenData?.reduce((acc, child) => {
+                if (!child.dob) return acc;
+                
+                const birthDate = new Date(child.dob);
+                const today = new Date();
+                const ageInMonths = (today.getFullYear() - birthDate.getFullYear()) * 12 + 
+                                (today.getMonth() - birthDate.getMonth());
+                
+                let ageGroup;
+                if (ageInMonths <= 12) ageGroup = '0-1 years';
+                else if (ageInMonths <= 36) ageGroup = '1-3 years';
+                else if (ageInMonths <= 60) ageGroup = '3-5 years';
+                else ageGroup = '5+ years';
+                
+                acc[ageGroup] = (acc[ageGroup] || 0) + 1;
+                return acc;
+            }, {});
+
+            setAnalytics({
+                totalChildren,
+                healthyCount,
+                underweightCount,
+                overweightCount,
+                obeseCount,
+                nutritionData: nutritionData || {},
+                monthlyTrends: monthlyTrends || [],
+                ageData: ageData || {}
+            });
+
+        } catch (error) {
+            console.error('Error fetching analytics:', error);
+            addNotification(`Error loading analytics: ${error.message}`, 'error');
+        }
+    }, [user, addNotification]);
+
     const fetchDashboardData = useCallback(async () => {
-        if (!user) return; // Wait until the user object is available
+        if (!user) return;
 
         setLoading(true);
 
-        const [appointmentsRes, activityRes] = await Promise.all([
-            // MODIFIED: This query now filters appointments by the logged-in user's ID
-            supabase
-                .from('appointments')
-                .select('*, profiles(first_name, last_name)')
-                .eq('created_by', user.id) // Only get appointments created by the current user
-                .order('created_at', { ascending: false })
-                .limit(10),
+        try {
+            await fetchAnalyticsData();
 
-            // This query for activity remains the same, as the feed shows all activities
-            supabase
-                .from('activity_log')
-                .select('*, profiles(role, last_name)')
-                .order('created_at', { ascending: false })
-        ]);
+            const [appointmentsRes, activityRes] = await Promise.all([
+                supabase
+                    .from('appointments')
+                    .select('*, profiles(first_name, last_name)')
+                    .eq('created_by', user.id)
+                    .order('created_at', { ascending: false })
+                    .limit(10),
 
-        if (appointmentsRes.error) {
-            addNotification(`Error fetching appointments: ${appointmentsRes.error.message}`, 'error');
-        } else {
+                supabase
+                    .from('activity_log')
+                    .select('*, profiles(role, last_name)')
+                    .order('created_at', { ascending: false })
+            ]);
+
+            if (appointmentsRes.error) throw appointmentsRes.error;
+            if (activityRes.error) throw activityRes.error;
+
             setUpcomingAppointments(appointmentsRes.data || []);
-        }
-        
-        if (activityRes.error) {
-            addNotification(`Error fetching activity: ${activityRes.error.message}`, 'error');
-        } else {
             setRecentActivities(activityRes.data || []);
-        }
 
-        setLoading(false);
-    }, [user, addNotification]); // Add 'user' to the dependency array
+        } catch (error) {
+            addNotification(`Error fetching dashboard data: ${error.message}`, 'error');
+        } finally {
+            setLoading(false);
+        }
+    }, [user, addNotification, fetchAnalyticsData]);
 
     useEffect(() => {
-        // 1. Fetch the initial data when the component loads
         fetchDashboardData();
 
-        // 2. Set up a real-time subscription to the activity_log table
         const channel = supabase.channel('activity-log-channel')
             .on(
                 'postgres_changes',
                 { event: 'INSERT', schema: 'public', table: 'activity_log' },
                 (payload) => {
-                    // 3. When a new activity is inserted, re-fetch all dashboard data
-                    // This will make the new activity appear instantly.
                     fetchDashboardData();
                 }
             )
             .subscribe();
 
-        // 4. Cleanup function to remove the subscription when the component unmounts
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [fetchDashboardData]); // The dependency array should contain the fetch function
+    }, [fetchDashboardData]);
 
     if (loading) {
         return <div className="flex h-full items-center justify-center">Loading Dashboard...</div>;
@@ -285,21 +540,42 @@ export default function BnsDashboard() {
                     />
                 )}
             </AnimatePresence>
+            
             <div className="space-y-4">
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                    <div className="lg:col-span-1">
-                        <RecentActivity activities={recentActivities} onViewAll={() => setIsActivityModalOpen(true)} />
+                {/* --- ANALYTICS SECTION --- */}
+                <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+                    <div className="lg:col-span-2">
+                        <AnalyticsOverview analytics={analytics} />
                     </div>
                     <div className="lg:col-span-1">
-                        <Calendar />
+                        <NutritionStatusChart nutritionData={analytics.nutritionData} />
+                    </div>
+                    <div className="lg:col-span-1">
+                        <AgeDistributionChart ageData={analytics.ageData} />
+                    </div>
+                </div>
+
+                {/* --- MAIN DASHBOARD CONTENT --- */}
+                <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+                    <div className="lg:col-span-1">
+                        <MonthlyTrends monthlyData={analytics.monthlyTrends} />
+                    </div>
+                    <div className="lg:col-span-2">
+                        <RecentActivity activities={recentActivities} onViewAll={() => setIsActivityModalOpen(true)} />
                     </div>
                     <div className="lg:col-span-1">
                         <QuickAccess />
                     </div>
                 </div>
-                
-                <div>
-                    <UpcomingAppointments appointments={upcomingAppointments} />
+
+                {/* --- BOTTOM SECTION --- */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    <div className="lg:col-span-2">
+                        <UpcomingAppointments appointments={upcomingAppointments} />
+                    </div>
+                    <div className="lg:col-span-1">
+                        <Calendar />
+                    </div>
                 </div>
             </div>
         </>

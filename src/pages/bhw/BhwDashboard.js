@@ -6,17 +6,137 @@ import { useAuth } from "../../context/AuthContext";
 import { useNotification } from "../../context/NotificationContext";
 
 // --- WIDGETS & SUB-COMPONENTS ---
+const AnalyticsOverview = ({ analytics }) => (
+  <div className="bg-white p-4 rounded-lg shadow border h-full">
+    <h3 className="font-bold text-gray-700 text-base mb-4">Analytics Overview</h3>
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
+        <p className="text-xs text-blue-600 font-semibold">Total Patients</p>
+        <p className="text-xl font-bold text-blue-700">{analytics.totalPatients}</p>
+      </div>
+      <div className="bg-green-50 p-3 rounded-lg border border-green-100">
+        <p className="text-xs text-green-600 font-semibold">This Month</p>
+        <p className="text-xl font-bold text-green-700">{analytics.monthlyAppointments}</p>
+      </div>
+      <div className="bg-orange-50 p-3 rounded-lg border border-orange-100">
+        <p className="text-xs text-orange-600 font-semibold">High Risk</p>
+        <p className="text-xl font-bold text-orange-700">{analytics.highRiskPatients}</p>
+      </div>
+      <div className="bg-purple-50 p-3 rounded-lg border border-purple-100">
+        <p className="text-xs text-purple-600 font-semibold">Completion Rate</p>
+        <p className="text-xl font-bold text-purple-700">{analytics.completionRate}%</p>
+      </div>
+    </div>
+  </div>
+);
+
+const RiskLevelChart = ({ riskLevels }) => {
+  const total = Object.values(riskLevels).reduce((sum, count) => sum + count, 0);
+  
+  return (
+    <div className="bg-white p-4 rounded-lg shadow border h-full">
+      <h3 className="font-bold text-gray-700 text-base mb-4">Risk Level Distribution</h3>
+      <div className="space-y-3">
+        {Object.entries(riskLevels).map(([risk, count]) => {
+          const percentage = total > 0 ? ((count / total) * 100).toFixed(1) : 0;
+          const getColor = (risk) => {
+            switch(risk) {
+              case 'High': return 'bg-red-500';
+              case 'Medium': return 'bg-orange-500';
+              case 'Low': return 'bg-green-500';
+              default: return 'bg-gray-500';
+            }
+          };
+          
+          return (
+            <div key={risk} className="space-y-1">
+              <div className="flex justify-between text-sm">
+                <span className="font-semibold text-gray-700">{risk} Risk</span>
+                <span className="text-gray-500">{count} ({percentage}%)</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className={`h-2 rounded-full ${getColor(risk)}`}
+                  style={{ width: `${percentage}%` }}
+                ></div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+const MonthlyTrends = ({ monthlyData }) => (
+  <div className="bg-white p-4 rounded-lg shadow border h-full">
+    <h3 className="font-bold text-gray-700 text-base mb-4">Monthly Appointments</h3>
+    <div className="space-y-2">
+      {monthlyData.map((month, index) => (
+        <div key={index} className="flex items-center justify-between">
+          <span className="text-sm text-gray-600 font-medium">{month.month}</span>
+          <div className="flex items-center space-x-2">
+            <div className="w-24 bg-gray-200 rounded-full h-2">
+              <div 
+                className="bg-blue-500 h-2 rounded-full"
+                style={{ width: `${(month.count / Math.max(...monthlyData.map(m => m.count))) * 100}%` }}
+              ></div>
+            </div>
+            <span className="text-sm font-semibold text-gray-700 w-8">{month.count}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+const AppointmentStatusChart = ({ statusData }) => {
+  const total = Object.values(statusData).reduce((sum, count) => sum + count, 0);
+  
+  return (
+    <div className="bg-white p-4 rounded-lg shadow border h-full">
+      <h3 className="font-bold text-gray-700 text-base mb-4">Appointment Status</h3>
+      <div className="space-y-3">
+        {Object.entries(statusData).map(([status, count]) => {
+          const percentage = total > 0 ? ((count / total) * 100).toFixed(1) : 0;
+          const getStatusColor = (status) => {
+            switch(status) {
+              case 'Scheduled': return 'bg-blue-500';
+              case 'Completed': return 'bg-green-500';
+              case 'Cancelled': return 'bg-red-500';
+              case 'Missed': return 'bg-orange-500';
+              default: return 'bg-gray-500';
+            }
+          };
+          
+          return (
+            <div key={status} className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <div className={`w-3 h-3 rounded-full ${getStatusColor(status)}`}></div>
+                <span className="text-sm font-medium text-gray-700">{status}</span>
+              </div>
+              <span className="text-sm text-gray-500">{count} ({percentage}%)</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+// --- EXISTING WIDGETS & SUB-COMPONENTS (unchanged) ---
 const getDotColor = (role) => {
   switch (role) {
     case "BNS":
-      return "bg-green-500"; // Green for BNS
+      return "bg-green-500";
     case "Admin":
-      return "bg-orange-500"; // Orange for Admin
+      return "bg-orange-500";
     case "BHW":
     default:
-      return "bg-blue-500"; // Blue for BHW and others
+      return "bg-blue-500";
   }
 };
+
 const Calendar = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const daysOfWeek = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
@@ -350,76 +470,159 @@ export default function BhwDashboard() {
   const [loading, setLoading] = useState(true);
   const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
   const [pendingRequests, setPendingRequests] = useState([]);
+  const [analytics, setAnalytics] = useState({
+    totalPatients: 0,
+    monthlyAppointments: 0,
+    highRiskPatients: 0,
+    completionRate: 0,
+    riskLevels: {},
+    monthlyTrends: [],
+    appointmentStatus: {}
+  });
 
   const { user, profile } = useAuth();
   const { addNotification } = useNotification();
 
+  const fetchAnalyticsData = useCallback(async () => {
+    if (!user) return;
+
+    try {
+      // Fetch patient statistics
+      const { data: patientsData, error: patientsError } = await supabase
+        .from('patients')
+        .select('risk_level, created_at');
+
+      if (patientsError) throw patientsError;
+
+      // Fetch appointment statistics
+      const currentMonth = new Date().toISOString().slice(0, 7);
+      const { data: appointmentsData, error: appointmentsError } = await supabase
+        .from('appointments')
+        .select('status, date, created_at')
+        .gte('created_at', new Date(new Date().getFullYear(), 0, 1).toISOString());
+
+      if (appointmentsError) throw appointmentsError;
+
+      // Calculate analytics
+      const totalPatients = patientsData?.length || 0;
+      
+      const monthlyAppointments = appointmentsData?.filter(apt => 
+        apt.date?.startsWith(currentMonth)
+      ).length || 0;
+
+      const highRiskPatients = patientsData?.filter(
+        patient => patient.risk_level === 'High'
+      ).length || 0;
+
+      const completedAppointments = appointmentsData?.filter(
+        apt => apt.status === 'Completed'
+      ).length || 0;
+      
+      const totalAppointments = appointmentsData?.length || 0;
+      const completionRate = totalAppointments > 0 ? 
+        Math.round((completedAppointments / totalAppointments) * 100) : 0;
+
+      // Risk level distribution
+      const riskLevels = patientsData?.reduce((acc, patient) => {
+        const risk = patient.risk_level || 'Unknown';
+        acc[risk] = (acc[risk] || 0) + 1;
+        return acc;
+      }, {});
+
+      // Monthly trends (last 6 months)
+      const monthlyTrends = [];
+      for (let i = 5; i >= 0; i--) {
+        const date = new Date();
+        date.setMonth(date.getMonth() - i);
+        const monthYear = date.toLocaleString('default', { month: 'short', year: 'numeric' });
+        const monthStr = date.toISOString().slice(0, 7);
+        
+        const count = appointmentsData?.filter(apt => 
+          apt.date?.startsWith(monthStr)
+        ).length || 0;
+        
+        monthlyTrends.push({ month: monthYear, count });
+      }
+
+      // Appointment status distribution
+      const appointmentStatus = appointmentsData?.reduce((acc, apt) => {
+        const status = apt.status || 'Unknown';
+        acc[status] = (acc[status] || 0) + 1;
+        return acc;
+      }, {});
+
+      setAnalytics({
+        totalPatients,
+        monthlyAppointments,
+        highRiskPatients,
+        completionRate,
+        riskLevels: riskLevels || {},
+        monthlyTrends,
+        appointmentStatus: appointmentStatus || {}
+      });
+
+    } catch (error) {
+      console.error('Error fetching analytics:', error);
+      addNotification(`Error loading analytics: ${error.message}`, 'error');
+    }
+  }, [user, addNotification]);
+
   const fetchDashboardData = useCallback(async () => {
-    if (!user) return; // Wait until the user object is available
+    if (!user) return;
 
     setLoading(true);
 
-    const [appointmentsRes, activityRes] = await Promise.all([
-      // MODIFIED: This query now filters appointments by the logged-in user's ID
-      supabase
-        .from("appointments")
-        .select("*, profiles(first_name, last_name)")
-        .eq("created_by", user.id) // Only get appointments created by the current user
-        .order("created_at", { ascending: false })
-        .limit(10),
+    try {
+      await fetchAnalyticsData();
 
-      // This query for activity remains the same, as the feed shows all activities
-      supabase
-        .from("activity_log")
-        .select("*, profiles(role, last_name)")
-        .order("created_at", { ascending: false }),
-    ]);
+      const [appointmentsRes, activityRes, requestsRes] = await Promise.all([
+        supabase
+          .from("appointments")
+          .select("*, profiles(first_name, last_name)")
+          .eq("created_by", user.id)
+          .order("created_at", { ascending: false })
+          .limit(10),
 
-    if (appointmentsRes.error) {
-      addNotification(
-        `Error fetching appointments: ${appointmentsRes.error.message}`,
-        "error"
-      );
-    } else {
+        supabase
+          .from("activity_log")
+          .select("*, profiles(role, last_name)")
+          .order("created_at", { ascending: false }),
+
+        supabase
+          .from("appointments")
+          .select("*")
+          .eq("status", "Pending")
+      ]);
+
+      if (appointmentsRes.error) throw appointmentsRes.error;
+      if (activityRes.error) throw activityRes.error;
+      if (requestsRes.error) throw requestsRes.error;
+
       setUpcomingAppointments(appointmentsRes.data || []);
-    }
-
-    if (activityRes.error) {
-      addNotification(
-        `Error fetching activity: ${activityRes.error.message}`,
-        "error"
-      );
-    } else {
       setRecentActivities(activityRes.data || []);
+      setPendingRequests(requestsRes.data || []);
+
+    } catch (error) {
+      addNotification(`Error fetching dashboard data: ${error.message}`, 'error');
+    } finally {
+      setLoading(false);
     }
-
-    const { data: requestsData } = await supabase
-      .from("appointments")
-      .select("*")
-      .eq("status", "Pending");
-    setPendingRequests(requestsData || []);
-
-    setLoading(false);
-  }, [user, addNotification]);
+  }, [user, addNotification, fetchAnalyticsData]);
 
   const handleApprove = async (appointmentId) => {
-    // --- MODIFICATION: Call fetchDashboardData() after the await ---
     await supabase.rpc("approve_appointment_and_notify_user", {
       appointment_id_param: appointmentId,
-      approver_name_param: profile.full_name, // Send the BHW's name
+      approver_name_param: profile.full_name,
     });
-    // This will refresh the list of pending requests and other dashboard data
     fetchDashboardData();
-    // --- END MODIFICATION ---
   };
 
-  // You would create a similar RPC for denying/cancelling
   const handleDeny = async (appointmentId) => {
     await supabase
       .from("appointments")
       .update({ status: "Cancelled" })
       .eq("id", appointmentId);
-    fetchDashboardData(); // Refresh list
+    fetchDashboardData();
   };
 
   useEffect(() => {
@@ -444,17 +647,27 @@ export default function BhwDashboard() {
           />
         )}
       </AnimatePresence>
+      
       <div className="space-y-4">
-        {/* --- RESTRUCTURED LAYOUT: A balanced 2x2 grid for widgets --- */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* --- ANALYTICS SECTION --- */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
           <div className="lg:col-span-2">
-            <AppointmentRequests
-              requests={pendingRequests}
-              onApprove={handleApprove}
-              onDeny={handleDeny}
-            />
+            <AnalyticsOverview analytics={analytics} />
           </div>
           <div className="lg:col-span-1">
+            <RiskLevelChart riskLevels={analytics.riskLevels} />
+          </div>
+          <div className="lg:col-span-1">
+            <AppointmentStatusChart statusData={analytics.appointmentStatus} />
+          </div>
+        </div>
+
+        {/* --- MAIN DASHBOARD CONTENT --- */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+          <div className="lg:col-span-1">
+            <MonthlyTrends monthlyData={analytics.monthlyTrends} />
+          </div>
+          <div className="lg:col-span-2">
             <RecentActivity
               activities={recentActivities}
               onViewAll={() => setIsActivityModalOpen(true)}
@@ -465,7 +678,7 @@ export default function BhwDashboard() {
           </div>
         </div>
 
-        {/* --- The calendar and appointments table are now below the main grid --- */}
+        {/* --- BOTTOM SECTION --- */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="lg:col-span-2">
             <UpcomingAppointments appointments={upcomingAppointments} />
