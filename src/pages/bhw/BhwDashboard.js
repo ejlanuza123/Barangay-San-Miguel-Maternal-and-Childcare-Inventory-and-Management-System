@@ -18,9 +18,9 @@ const AnalyticsOverview = ({ analytics }) => (
         <p className="text-xs text-green-600 font-semibold">This Month</p>
         <p className="text-xl font-bold text-green-700">{analytics.monthlyAppointments}</p>
       </div>
-      <div className="bg-orange-50 p-3 rounded-lg border border-orange-100">
-        <p className="text-xs text-orange-600 font-semibold">High Risk</p>
-        <p className="text-xl font-bold text-orange-700">{analytics.highRiskPatients}</p>
+      <div className="bg-red-50 p-3 rounded-lg border border-red-100">
+        <p className="text-xs text-red-600 font-semibold">High Risk</p>
+        <p className="text-xl font-bold text-red-700">{analytics.highRiskPatients}</p>
       </div>
       <div className="bg-purple-50 p-3 rounded-lg border border-purple-100">
         <p className="text-xs text-purple-600 font-semibold">Completion Rate</p>
@@ -40,18 +40,17 @@ const RiskLevelChart = ({ riskLevels }) => {
         {Object.entries(riskLevels).map(([risk, count]) => {
           const percentage = total > 0 ? ((count / total) * 100).toFixed(1) : 0;
           const getColor = (risk) => {
-            switch(risk) {
-              case 'High': return 'bg-red-500';
-              case 'Medium': return 'bg-orange-500';
-              case 'Low': return 'bg-green-500';
-              default: return 'bg-gray-500';
-            }
+            const r = risk.toUpperCase(); // Normalize case
+            if (r.includes('HIGH')) return 'bg-red-500';
+            if (r.includes('MID') || r.includes('MEDIUM')) return 'bg-yellow-500'; // Changed to yellow for better visibility
+            if (r.includes('NORMAL') || r.includes('LOW')) return 'bg-green-500';
+            return 'bg-gray-500';
           };
           
           return (
             <div key={risk} className="space-y-1">
               <div className="flex justify-between text-sm">
-                <span className="font-semibold text-gray-700">{risk} Risk</span>
+                <span className="font-semibold text-gray-700 capitalize">{risk.toLowerCase()}</span>
                 <span className="text-gray-500">{count} ({percentage}%)</span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
@@ -63,6 +62,7 @@ const RiskLevelChart = ({ riskLevels }) => {
             </div>
           );
         })}
+        {total === 0 && <p className="text-xs text-gray-400 text-center">No patient data available.</p>}
       </div>
     </div>
   );
@@ -72,20 +72,23 @@ const MonthlyTrends = ({ monthlyData }) => (
   <div className="bg-white p-4 rounded-lg shadow border h-full">
     <h3 className="font-bold text-gray-700 text-base mb-4">Monthly Appointments</h3>
     <div className="space-y-2">
-      {monthlyData.map((month, index) => (
-        <div key={index} className="flex items-center justify-between">
-          <span className="text-sm text-gray-600 font-medium">{month.month}</span>
-          <div className="flex items-center space-x-2">
-            <div className="w-24 bg-gray-200 rounded-full h-2">
-              <div 
-                className="bg-blue-500 h-2 rounded-full"
-                style={{ width: `${(month.count / Math.max(...monthlyData.map(m => m.count))) * 100}%` }}
-              ></div>
+      {monthlyData.map((month, index) => {
+         const maxVal = Math.max(...monthlyData.map(m => m.count)) || 1;
+         return (
+            <div key={index} className="flex items-center justify-between">
+              <span className="text-sm text-gray-600 font-medium w-10">{month.month}</span>
+              <div className="flex items-center space-x-2 flex-1 ml-2">
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div 
+                    className="bg-blue-500 h-2 rounded-full transition-all duration-500"
+                    style={{ width: `${(month.count / maxVal) * 100}%` }}
+                  ></div>
+                </div>
+                <span className="text-sm font-semibold text-gray-700 w-6 text-right">{month.count}</span>
+              </div>
             </div>
-            <span className="text-sm font-semibold text-gray-700 w-8">{month.count}</span>
-          </div>
-        </div>
-      ))}
+         );
+      })}
     </div>
   </div>
 );
@@ -97,7 +100,7 @@ const AppointmentStatusChart = ({ statusData }) => {
     <div className="bg-white p-4 rounded-lg shadow border h-full">
       <h3 className="font-bold text-gray-700 text-base mb-4">Appointment Status</h3>
       <div className="space-y-3">
-        {Object.entries(statusData).map(([status, count]) => {
+        {Object.keys(statusData).length > 0 ? Object.entries(statusData).map(([status, count]) => {
           const percentage = total > 0 ? ((count / total) * 100).toFixed(1) : 0;
           const getStatusColor = (status) => {
             switch(status) {
@@ -118,13 +121,13 @@ const AppointmentStatusChart = ({ statusData }) => {
               <span className="text-sm text-gray-500">{count} ({percentage}%)</span>
             </div>
           );
-        })}
+        }) : <p className="text-xs text-gray-400 text-center">No appointment data available.</p>}
       </div>
     </div>
   );
 };
 
-// --- EXISTING WIDGETS & SUB-COMPONENTS (unchanged) ---
+// --- EXISTING WIDGETS & SUB-COMPONENTS ---
 const getDotColor = (role) => {
   switch (role) {
     case "BNS":
@@ -216,7 +219,7 @@ const QuickAccess = () => (
       to="/bhw/maternity-management"
       className="w-full text-center bg-blue-600 text-white font-semibold py-2 px-3 rounded-md shadow-sm hover:bg-blue-700 text-sm"
     >
-      + Add New Patient
+      + New Mother Patient
     </Link>
     <Link
       to="/bhw/reports"
@@ -242,7 +245,6 @@ const RecentActivity = ({ activities, onViewAll }) => (
       {activities.length > 0 ? (
         activities.slice(0, 4).map((item) => (
           <div key={item.id} className="flex items-start space-x-2">
-            {/* MODIFIED: Now uses the shared getDotColor function */}
             <div
               className={`w-1.5 h-1.5 rounded-full mt-1.5 ${getDotColor(
                 item.profiles?.role
@@ -304,10 +306,7 @@ const UpcomingAppointments = ({ appointments }) => {
         </Link>
       </div>
 
-      {/* --- UPDATED: Added a container with fixed height and scrolling --- */}
       <div className="overflow-y-auto h-48">
-        {" "}
-        {/* You can adjust the h-48 (192px) to your preferred height */}
         <table className="w-full text-xs">
           <thead className="sticky top-0 bg-white">
             <tr className="text-left text-gray-500">
@@ -320,7 +319,6 @@ const UpcomingAppointments = ({ appointments }) => {
             </tr>
           </thead>
           <tbody className="divide-y">
-            {/* --- UPDATED: Removed .slice(0, 3) to show all appointments --- */}
             {appointments.length > 0 ? (
               appointments.map((app) => (
                 <tr key={app.id} className="text-gray-600">
@@ -379,14 +377,12 @@ const ViewAllActivityModal = ({ activities, onClose }) => (
                 key={item.id}
                 className="flex items-start space-x-3 pb-3 border-b last:border-b-0"
               >
-                {/* MODIFIED: Dot color is now dynamic */}
                 <div
                   className={`w-1.5 h-1.5 rounded-full mt-1.5 ${getDotColor(
                     item.profiles?.role
                   )} flex-shrink-0`}
                 ></div>
                 <div className="flex-grow">
-                  {/* MODIFIED: Added user's role and name */}
                   <p className="font-semibold text-gray-700 text-sm">
                     <span className="font-bold">
                       {item.profiles?.role || "System"}{" "}
@@ -421,7 +417,6 @@ const ViewAllActivityModal = ({ activities, onClose }) => (
 );
 
 const AppointmentRequests = ({ requests, onApprove, onDeny }) => (
-  // MODIFIED: Added a fixed height and scrollbar to prevent layout shifts
   <div className="bg-white p-4 rounded-lg shadow border flex flex-col h-full">
     <h3 className="font-bold text-gray-700 text-base mb-3 flex-shrink-0">
       Appointment Requests
@@ -462,7 +457,6 @@ const AppointmentRequests = ({ requests, onApprove, onDeny }) => (
   </div>
 );
 
-
 export default function BhwDashboard() {
   const [stats, setStats] = useState({ total: 0, active: 0, today: 0 });
   const [upcomingAppointments, setUpcomingAppointments] = useState([]);
@@ -470,6 +464,7 @@ export default function BhwDashboard() {
   const [loading, setLoading] = useState(true);
   const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
   const [pendingRequests, setPendingRequests] = useState([]);
+  const [patientsData, setPatientsData] = useState([]); // Store patient data for consistency
   const [analytics, setAnalytics] = useState({
     totalPatients: 0,
     monthlyAppointments: 0,
@@ -487,12 +482,13 @@ export default function BhwDashboard() {
     if (!user) return;
 
     try {
-      // Fetch patient statistics
+      // Fetch patient statistics - store for reuse
       const { data: patientsData, error: patientsError } = await supabase
         .from('patients')
         .select('risk_level, created_at');
 
       if (patientsError) throw patientsError;
+      setPatientsData(patientsData || []);
 
       // Fetch appointment statistics
       const currentMonth = new Date().toISOString().slice(0, 7);
@@ -503,15 +499,26 @@ export default function BhwDashboard() {
 
       if (appointmentsError) throw appointmentsError;
 
-      // Calculate analytics
+      // Calculate analytics from the SAME patient data
       const totalPatients = patientsData?.length || 0;
       
       const monthlyAppointments = appointmentsData?.filter(apt => 
         apt.date?.startsWith(currentMonth)
       ).length || 0;
 
+      // Normalize risk level matching for consistency
+      const normalizeRiskLevel = (risk) => {
+        if (!risk) return 'Unknown';
+        const riskLower = risk.toLowerCase();
+        if (riskLower.includes('high')) return 'High';
+        if (riskLower.includes('medium') || riskLower.includes('mid')) return 'Medium';
+        if (riskLower.includes('low') || riskLower.includes('normal')) return 'Low';
+        return risk;
+      };
+
+      // Calculate high risk patients - using normalized risk level
       const highRiskPatients = patientsData?.filter(
-        patient => patient.risk_level === 'High'
+        patient => normalizeRiskLevel(patient.risk_level) === 'High'
       ).length || 0;
 
       const completedAppointments = appointmentsData?.filter(
@@ -522,9 +529,9 @@ export default function BhwDashboard() {
       const completionRate = totalAppointments > 0 ? 
         Math.round((completedAppointments / totalAppointments) * 100) : 0;
 
-      // Risk level distribution
+      // Risk level distribution - using normalized risk levels
       const riskLevels = patientsData?.reduce((acc, patient) => {
-        const risk = patient.risk_level || 'Unknown';
+        const risk = normalizeRiskLevel(patient.risk_level);
         acc[risk] = (acc[risk] || 0) + 1;
         return acc;
       }, {});
@@ -550,6 +557,13 @@ export default function BhwDashboard() {
         acc[status] = (acc[status] || 0) + 1;
         return acc;
       }, {});
+
+      // Log for debugging
+      console.log('Analytics calculated:');
+      console.log('Total patients:', totalPatients);
+      console.log('High risk patients:', highRiskPatients);
+      console.log('Risk levels distribution:', riskLevels);
+      console.log('High risk from distribution:', riskLevels?.['High'] || 0);
 
       setAnalytics({
         totalPatients,

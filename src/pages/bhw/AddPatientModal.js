@@ -954,7 +954,7 @@ export default function AddPatientModal({
       middle_name: formData.middle_name,
       last_name: formData.last_name,
       age: formData.age, // Age is now set from state
-      // dob: formData.dob, <-- REMOVED! This was the error.
+      // dob: formData.dob, <-- REMOVED to avoid error, it's inside medical_history
       contact_no: formData.contact_no,
       risk_level: formData.risk_level,
       weeks: formData.weeks,
@@ -970,29 +970,24 @@ export default function AddPatientModal({
     try {
       let result;
       if (mode === "edit") {
-        // --- MODIFIED LOGIC: INSTEAD OF UPDATING, INSERT A REQUEST ---
-        result = await supabase.from("requestions").insert([
-          {
-            worker_id: user.id,
-            request_type: "Update",
-            target_table: "patients",
-            target_record_id: initialData.id,
-            request_data: patientData, // This patientData object is now correct
-            status: "Pending",
-          },
-        ]);
+        // --- MODIFIED LOGIC: DIRECT UPDATE INSTEAD OF REQUEST ---
+        result = await supabase
+          .from("patients")
+          .update(patientData)
+          .eq("id", initialData.id);
       } else {
         // Add mode remains the same
         result = await supabase.from("patients").insert([patientData]);
       }
+      
       if (result.error) {
         throw result.error;
       } else {
         if (mode === "edit") {
-          addNotification("Update request submitted for approval.", "success");
+          addNotification("Patient record updated successfully.", "success");
           logActivity(
-            "Patient Update Request",
-            `Submitted for ${formData.first_name} ${formData.last_name}`
+            "Patient Record Updated",
+            `Updated record for ${formData.first_name} ${formData.last_name}`
           );
         } else {
           addNotification("New patient added successfully.", "success");

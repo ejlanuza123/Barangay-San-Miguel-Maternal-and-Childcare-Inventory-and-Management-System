@@ -7,9 +7,26 @@ import { useNotification } from "../../context/NotificationContext";
 import { useAuth } from "../../context/AuthContext";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import * as XLSX from 'xlsx';
 import PatientQRCodeModal from "../../components/reusables/PatientQRCodeModal";
 
 // --- ICONS ---
+const ExportIcon = () => (
+  <svg
+    className="w-5 h-5 text-gray-500"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+    ></path>
+  </svg>
+);
+
 const SearchIcon = () => (
   <svg
     className="w-5 h-5 text-gray-400"
@@ -108,6 +125,8 @@ const CalendarIcon = () => (
 );
 
 // --- WIDGETS & HELPER COMPONENTS ---
+
+
 const StatusBadge = ({ status }) => {
   const styles = {
     H: "bg-green-100 text-green-700",
@@ -537,6 +556,171 @@ export default function ChildHealthRecords() {
   const [selectedChildForQR, setSelectedChildForQR] = useState(null);
   const { user } = useAuth();
   const { addNotification } = useNotification();
+  const [isExportOpen, setIsExportOpen] = useState(false);
+
+  // Export functions
+  const exportToPDF = async (filename = 'child_records') => {
+    try {
+      // Fetch ALL child records
+      const { data: allChildren, error } = await supabase
+        .from('child_records')
+        .select('*')
+        .order('child_id', { ascending: true });
+
+      if (error) throw error;
+
+      const doc = new jsPDF();
+      
+      // Header
+      doc.setFontSize(16);
+      doc.text('Child Health Records', 105, 15, { align: 'center' });
+      doc.setFontSize(10);
+      doc.text(`Total Records: ${allChildren.length}`, 105, 22, { align: 'center' });
+      doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 105, 28, { align: 'center' });
+      
+      // Table headers
+      const headers = [
+        ['Child ID', 'Last Name', 'First Name', 'Age', 'Sex', 'Weight (kg)', 
+        'Height (cm)', 'BMI', 'Nutrition Status', 'Last Checkup', 'Mother Name']
+      ];
+      
+      // Helper function for age calculation
+      const calculateAgeForExport = (dob) => {
+        if (!dob) return "";
+        const age = new Date().getFullYear() - new Date(dob).getFullYear();
+        return age > 0 ? age : "< 1";
+      };
+      
+      // Table data
+      const tableData = allChildren.map(child => [
+        child.child_id,
+        child.last_name || '',
+        child.first_name || '',
+        calculateAgeForExport(child.dob),
+        child.sex || '',
+        child.weight_kg || '',
+        child.height_cm || '',
+        child.bmi || '',
+        child.nutrition_status || '',
+        child.last_checkup || '',
+        child.mother_name || ''
+      ]);
+      
+      // Create table
+      autoTable(doc, {
+        startY: 35,
+        head: headers,
+        body: tableData,
+        theme: 'grid',
+        styles: { fontSize: 7, cellPadding: 1.5 },
+        headStyles: { fillColor: [41, 128, 185], textColor: [255, 255, 255] },
+        margin: { left: 10, right: 10 }
+      });
+      
+      // Footer
+      const pageCount = doc.getNumberOfPages();
+      for(let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.text(`Page ${i} of ${pageCount}`, 105, doc.internal.pageSize.height - 10, { align: 'center' });
+      }
+      
+      // Save PDF
+      doc.save(`${filename}_${new Date().toISOString().slice(0, 10)}.pdf`);
+      logActivity('Exported Records', `Exported ${allChildren.length} child records to PDF`);
+    } catch (error) {
+      console.error('Error exporting to PDF:', error);
+      addNotification('Error exporting to PDF: ' + error.message, 'error');
+    }
+  };
+
+  const exportToExcel = async (filename = 'child_records') => {
+    try {
+      // Fetch ALL child records
+      const { data: allChildren, error } = await supabase
+        .from('child_records')
+        .select('*')
+        .order('child_id', { ascending: true });
+
+      if (error) throw error;
+      
+      // Helper function for age calculation
+      const calculateAgeForExport = (dob) => {
+        if (!dob) return "";
+        const age = new Date().getFullYear() - new Date(dob).getFullYear();
+        return age > 0 ? age : "< 1";
+      };
+      
+      // Prepare data for Excel
+      const worksheetData = [
+        ['Child ID', 'Last Name', 'First Name', 'Date of Birth', 'Age', 'Sex', 
+        'Place of Birth', 'Weight (kg)', 'Height (cm)', 'BMI', 'Nutrition Status', 
+        'Last Checkup', 'Mother Name', 'Father Name', 'Guardian Name', 
+        'NHTS No.', 'PhilHealth No.', 'Created At']
+      ];
+      
+      allChildren.forEach(child => {
+        const healthDetails = child.health_details || {};
+        worksheetData.push([
+          child.child_id,
+          child.last_name,
+          child.first_name,
+          child.dob,
+          calculateAgeForExport(child.dob),
+          child.sex,
+          healthDetails.place_of_birth || '',
+          child.weight_kg,
+          child.height_cm,
+          child.bmi,
+          child.nutrition_status,
+          child.last_checkup,
+          child.mother_name,
+          child.father_name,
+          child.guardian_name,
+          healthDetails.nhts_no || '',
+          healthDetails.philhealth_no || '',
+          new Date(child.created_at).toLocaleDateString()
+        ]);
+      });
+      
+      // Create workbook and worksheet
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet(worksheetData);
+      
+      // Set column widths
+      const colWidths = [
+        {wch: 12}, // Child ID
+        {wch: 15}, // Last Name
+        {wch: 15}, // First Name
+        {wch: 12}, // DOB
+        {wch: 6},  // Age
+        {wch: 8},  // Sex
+        {wch: 15}, // Place of Birth
+        {wch: 10}, // Weight
+        {wch: 10}, // Height
+        {wch: 10}, // BMI
+        {wch: 15}, // Nutrition Status
+        {wch: 12}, // Last Checkup
+        {wch: 15}, // Mother Name
+        {wch: 15}, // Father Name
+        {wch: 15}, // Guardian Name
+        {wch: 12}, // NHTS No.
+        {wch: 12}, // PhilHealth No.
+        {wch: 12}  // Created At
+      ];
+      ws['!cols'] = colWidths;
+      
+      // Add worksheet to workbook
+      XLSX.utils.book_append_sheet(wb, ws, 'Child Records');
+      
+      // Generate Excel file
+      XLSX.writeFile(wb, `${filename}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      logActivity('Exported Records', `Exported ${allChildren.length} child records to Excel`);
+    } catch (error) {
+      console.error('Error exporting to Excel:', error);
+      addNotification('Error exporting to Excel: ' + error.message, 'error');
+    }
+  };
 
   const fetchPageData = useCallback(async () => {
     if (!user) return;
@@ -665,16 +849,12 @@ export default function ChildHealthRecords() {
             />
         )}
       </AnimatePresence>
-      <div className="p-6 bg-gray-50 min-h-screen">
-        <h1 className="text-2xl font-bold text-gray-800 mb-6">
-          Child Health Management
-        </h1>
-        <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
+         <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
           <div className="xl:col-span-3">
             <div className="bg-white p-4 rounded-lg shadow-sm border">
               <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-3">
                 <h2 className="text-xl font-bold text-gray-700">
-                  Patient List
+                  Children Records
                 </h2>
                 <div className="flex items-center space-x-2">
                   <div className="relative">
@@ -689,6 +869,8 @@ export default function ChildHealthRecords() {
                       className="pl-8 pr-2 py-1.5 w-full sm:w-auto text-sm rounded-md border bg-gray-50 focus:bg-white"
                     />
                   </div>
+                  
+                  {/* Filter Button */}
                   <div className="relative">
                     <button
                       onClick={() => setIsFilterOpen(!isFilterOpen)}
@@ -732,16 +914,57 @@ export default function ChildHealthRecords() {
                       )}
                     </AnimatePresence>
                   </div>
+                  
+                  {/* Export Button */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setIsExportOpen(!isExportOpen)}
+                      className="flex items-center space-x-2 px-3 py-1.5 text-sm border rounded-md bg-white hover:bg-gray-50"
+                    >
+                      <ExportIcon /> <span>Export</span>
+                    </button>
+                    <AnimatePresence>
+                      {isExportOpen && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -5 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -5 }}
+                          className="absolute right-0 mt-2 w-40 bg-white rounded-lg shadow-xl z-20 border"
+                        >
+                          <div className="p-2 text-xs font-semibold text-gray-600 border-b">
+                            Export Format
+                          </div>
+                          <div className="p-1">
+                            <button
+                              onClick={() => {
+                                exportToPDF('child_records'); // Just pass the filename
+                                setIsExportOpen(false);
+                              }}
+                              className="flex items-center w-full px-3 py-2 text-sm text-left rounded hover:bg-red-50 text-red-600 hover:text-red-700"
+                            >
+                              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                              </svg>
+                              Export as PDF
+                            </button>
+                            <button
+                              onClick={() => {
+                                exportToExcel('child_records'); // Just pass the filename
+                                setIsExportOpen(false);
+                              }}
+                              className="flex items-center w-full px-3 py-2 text-sm text-left rounded hover:bg-green-50 text-green-600 hover:text-green-700"
+                            >
+                              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                              Export as Excel
+                            </button>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
                 </div>
-                <button
-                  onClick={() => {
-                    setSelectedChild(null);
-                    setModalMode("add");
-                  }}
-                  className="w-full sm:w-auto bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-blue-700 text-sm whitespace-nowrap"
-                >
-                  + Add New Patient
-                </button>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
@@ -838,11 +1061,19 @@ export default function ChildHealthRecords() {
             </div>
           </div>
           <div className="xl:col-span-1 space-y-4">
+            <button
+              onClick={() => {
+                setSelectedChild(null);
+                setModalMode("add");
+              }}
+              className="w-full bg-blue-600 text-white font-bold py-2.5 px-4 rounded-lg shadow-md hover:bg-blue-700 text-sm"
+            >
+              + New Child Patient
+            </button>
             <StatusLegend />
             <UpcomingAppointmentsWidget appointments={upcomingAppointments} />
           </div>
         </div>
-      </div>
     </>
   );
 }

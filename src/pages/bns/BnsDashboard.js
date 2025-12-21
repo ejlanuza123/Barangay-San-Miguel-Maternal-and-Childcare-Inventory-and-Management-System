@@ -35,15 +35,46 @@ const AnalyticsOverview = ({ analytics }) => (
 );
 
 const NutritionStatusChart = ({ nutritionData }) => {
-  const data = nutritionData || {};
-  const total = Object.values(data).reduce((sum, count) => sum + count, 0);
+  // Normalize data to ensure consistency
+  const normalizeNutritionStatus = (status) => {
+    if (!status) return 'Unknown';
+    
+    const statusLower = status.toLowerCase();
+    if (statusLower.includes('normal') || statusLower.includes('healthy') || statusLower === 'h') {
+      return 'Healthy';
+    }
+    if (statusLower.includes('underweight') || statusLower.includes('severely') || statusLower === 'uw') {
+      return 'Underweight';
+    }
+    if (statusLower.includes('overweight') || statusLower === 'ow') {
+      return 'Overweight';
+    }
+    if (statusLower.includes('obese') || statusLower === 'o') {
+      return 'Obese';
+    }
+    return status;
+  };
+
+  // Group and normalize nutrition data
+  const normalizedData = Object.entries(nutritionData || {}).reduce((acc, [status, count]) => {
+    const normalizedStatus = normalizeNutritionStatus(status);
+    acc[normalizedStatus] = (acc[normalizedStatus] || 0) + count;
+    return acc;
+  }, {});
+
+  const total = Object.values(normalizedData).reduce((sum, count) => sum + count, 0);
+  
+  // Define display order
+  const displayOrder = ['Healthy', 'Underweight', 'Overweight', 'Obese', 'Unknown'];
   
   return (
     <div className="bg-white p-4 rounded-lg shadow border h-full">
       <h3 className="font-bold text-gray-700 text-base mb-4">Nutrition Status</h3>
       <div className="space-y-3">
-        {Object.entries(data).length > 0 ? Object.entries(data).map(([status, count]) => {
+        {displayOrder.map((status) => {
+          const count = normalizedData[status] || 0;
           const percentage = total > 0 ? ((count / total) * 100).toFixed(1) : 0;
+          
           const getColor = (status) => {
             switch(status) {
               case 'Healthy': return 'bg-green-500';
@@ -53,6 +84,8 @@ const NutritionStatusChart = ({ nutritionData }) => {
               default: return 'bg-gray-500';
             }
           };
+          
+          if (count === 0 && status !== 'Unknown') return null;
           
           return (
             <div key={status} className="space-y-1">
@@ -68,7 +101,8 @@ const NutritionStatusChart = ({ nutritionData }) => {
               </div>
             </div>
           );
-        }) : (
+        })}
+        {total === 0 && (
           <p className="text-sm text-gray-500 text-center py-4">No nutrition data available</p>
         )}
       </div>
@@ -80,20 +114,23 @@ const MonthlyTrends = ({ monthlyData }) => (
   <div className="bg-white p-4 rounded-lg shadow border h-full">
     <h3 className="font-bold text-gray-700 text-base mb-4">Monthly Checkups</h3>
     <div className="space-y-2">
-      {monthlyData && monthlyData.length > 0 ? monthlyData.map((month, index) => (
-        <div key={index} className="flex items-center justify-between">
-          <span className="text-sm text-gray-600 font-medium">{month.month}</span>
-          <div className="flex items-center space-x-2">
-            <div className="w-24 bg-gray-200 rounded-full h-2">
-              <div 
-                className="bg-green-500 h-2 rounded-full"
-                style={{ width: `${(month.count / Math.max(...monthlyData.map(m => m.count || 1)) * 100)}%` }}
-              ></div>
+      {monthlyData && monthlyData.length > 0 ? monthlyData.map((month, index) => {
+        const maxVal = Math.max(...monthlyData.map(m => m.count || 1));
+        return (
+          <div key={index} className="flex items-center justify-between">
+            <span className="text-sm text-gray-600 font-medium">{month.month}</span>
+            <div className="flex items-center space-x-2">
+              <div className="w-24 bg-gray-200 rounded-full h-2">
+                <div 
+                  className="bg-green-500 h-2 rounded-full"
+                  style={{ width: `${(month.count / maxVal) * 100}%` }}
+                ></div>
+              </div>
+              <span className="text-sm font-semibold text-gray-700 w-8">{month.count}</span>
             </div>
-            <span className="text-sm font-semibold text-gray-700 w-8">{month.count}</span>
           </div>
-        </div>
-      )) : (
+        );
+      }) : (
         <p className="text-sm text-gray-500 text-center py-4">No monthly data available</p>
       )}
     </div>
@@ -101,15 +138,18 @@ const MonthlyTrends = ({ monthlyData }) => (
 );
 
 const AgeDistributionChart = ({ ageData }) => {
-  // FIX: Handle undefined/null ageData
   const data = ageData || {};
   const total = Object.values(data).reduce((sum, count) => sum + count, 0);
+  
+  // Define display order for age groups
+  const displayOrder = ['0-1 years', '1-3 years', '3-5 years', '5+ years'];
   
   return (
     <div className="bg-white p-4 rounded-lg shadow border h-full">
       <h3 className="font-bold text-gray-700 text-base mb-4">Age Distribution</h3>
       <div className="space-y-3">
-        {Object.entries(data).length > 0 ? Object.entries(data).map(([ageGroup, count]) => {
+        {Object.keys(data).length > 0 ? displayOrder.map((ageGroup) => {
+          const count = data[ageGroup] || 0;
           const percentage = total > 0 ? ((count / total) * 100).toFixed(1) : 0;
           
           return (
@@ -198,7 +238,7 @@ const QuickAccess = () => (
     <div className="bg-white p-4 rounded-lg shadow border flex flex-col space-y-3 h-full justify-center">
         <h3 className="font-bold text-gray-700 text-base text-center mb-2">Quick Access</h3>
         <Link to="/bns/child-records" className="w-full text-center bg-blue-600 text-white font-semibold py-2 px-3 rounded-md shadow-sm hover:bg-blue-700 text-sm">
-            + Add New Patient
+            + New Child Patient
         </Link>
         <Link to="/bns/reports" className="w-full text-center bg-orange-400 text-white font-semibold py-2 px-3 rounded-md shadow-sm hover:bg-orange-500 text-sm">
             Generate Reports
@@ -330,6 +370,7 @@ export default function BnsDashboard() {
     const [recentActivities, setRecentActivities] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
+    const [childrenData, setChildrenData] = useState([]); // Store children data for consistency
     const [analytics, setAnalytics] = useState({
         totalChildren: 0,
         healthyCount: 0,
@@ -354,6 +395,8 @@ export default function BnsDashboard() {
                 .select('nutrition_status, weight_kg, height_cm, dob, last_checkup, bmi');
 
             if (childrenError) throw childrenError;
+            
+            setChildrenData(childrenData || []);
 
             // Fetch appointment statistics for BNS
             const currentMonth = new Date().toISOString().slice(0, 7);
@@ -365,63 +408,54 @@ export default function BnsDashboard() {
 
             if (appointmentsError) throw appointmentsError;
 
-            console.log('Raw children data:', childrenData); // Debug log
+            // Helper function to normalize nutrition status
+            const normalizeNutritionStatus = (status) => {
+                if (!status) return 'Unknown';
+                
+                const statusLower = status.toLowerCase();
+                if (statusLower.includes('normal') || statusLower.includes('healthy') || statusLower === 'h') {
+                    return 'Healthy';
+                }
+                if (statusLower.includes('underweight') || statusLower.includes('severely') || statusLower === 'uw') {
+                    return 'Underweight';
+                }
+                if (statusLower.includes('overweight') || statusLower === 'ow') {
+                    return 'Overweight';
+                }
+                if (statusLower.includes('obese') || statusLower === 'o') {
+                    return 'Obese';
+                }
+                return status;
+            };
 
-            // Calculate analytics for BNS
+            // Calculate analytics for BNS using the SAME normalization
             const totalChildren = childrenData?.length || 0;
 
-            // FIRST: Check what nutrition_status values actually exist in your database
-            const nutritionStatuses = childrenData?.map(child => child.nutrition_status) || [];
-            console.log('All nutrition_status values:', nutritionStatuses); // Debug log
-
-            // Count nutrition status - check what values actually exist
+            // Count nutrition status using normalized values
             const healthyCount = childrenData?.filter(
-                child => child.nutrition_status === 'Normal' || 
-                        child.nutrition_status === 'Healthy' ||
-                        child.nutrition_status === 'H'
+                child => normalizeNutritionStatus(child.nutrition_status) === 'Healthy'
             ).length || 0;
 
             const underweightCount = childrenData?.filter(
-                child => child.nutrition_status === 'Underweight' || 
-                        child.nutrition_status === 'Severely Underweight' ||
-                        child.nutrition_status === 'UW'
+                child => normalizeNutritionStatus(child.nutrition_status) === 'Underweight'
             ).length || 0;
 
             const overweightCount = childrenData?.filter(
-                child => child.nutrition_status === 'Overweight' || 
-                        child.nutrition_status === 'OW'
+                child => normalizeNutritionStatus(child.nutrition_status) === 'Overweight'
             ).length || 0;
 
             const obeseCount = childrenData?.filter(
-                child => child.nutrition_status === 'Obese' || 
-                        child.nutrition_status === 'O'
+                child => normalizeNutritionStatus(child.nutrition_status) === 'Obese'
             ).length || 0;
 
-            console.log('Counts - Healthy:', healthyCount, 'UW:', underweightCount, 'OW:', overweightCount, 'Obese:', obeseCount); // Debug log
-
-            // Nutrition status distribution - map all possible values to standard categories
+            // Nutrition status distribution - using normalized values
             const nutritionData = childrenData?.reduce((acc, child) => {
-                let status = child.nutrition_status || 'Unknown';
-                
-                // Map all possible values to standard categories
-                if (status === 'Normal' || status === 'Healthy' || status === 'H') {
-                    status = 'Healthy';
-                } else if (status === 'Underweight' || status === 'Severely Underweight' || status === 'UW') {
-                    status = 'Underweight';
-                } else if (status === 'Overweight' || status === 'OW') {
-                    status = 'Overweight';
-                } else if (status === 'Obese' || status === 'O') {
-                    status = 'Obese';
-                }
-                // If it doesn't match any, leave as is
-                
+                const status = normalizeNutritionStatus(child.nutrition_status);
                 acc[status] = (acc[status] || 0) + 1;
                 return acc;
             }, {});
 
-            console.log('Processed nutrition data:', nutritionData);
-
-            // ADDED: Monthly trends calculation
+            // Monthly trends calculation
             const monthlyTrends = [];
             for (let i = 5; i >= 0; i--) {
                 const date = new Date();
@@ -436,7 +470,7 @@ export default function BnsDashboard() {
                 monthlyTrends.push({ month: monthYear, count });
             }
 
-            // ADDED: Age distribution calculation
+            // Age distribution calculation
             const ageData = childrenData?.reduce((acc, child) => {
                 if (!child.dob) return acc;
                 
@@ -455,6 +489,16 @@ export default function BnsDashboard() {
                 return acc;
             }, {});
 
+            // Log for debugging
+            console.log('BNS Analytics calculated:');
+            console.log('Total children:', totalChildren);
+            console.log('Healthy count:', healthyCount);
+            console.log('Underweight count:', underweightCount);
+            console.log('Overweight count:', overweightCount);
+            console.log('Obese count:', obeseCount);
+            console.log('Nutrition data:', nutritionData);
+            console.log('Healthy from distribution:', nutritionData?.['Healthy'] || 0);
+
             setAnalytics({
                 totalChildren,
                 healthyCount,
@@ -467,7 +511,7 @@ export default function BnsDashboard() {
             });
 
         } catch (error) {
-            console.error('Error fetching analytics:', error);
+            console.error('Error fetching BNS analytics:', error);
             addNotification(`Error loading analytics: ${error.message}`, 'error');
         }
     }, [user, addNotification]);

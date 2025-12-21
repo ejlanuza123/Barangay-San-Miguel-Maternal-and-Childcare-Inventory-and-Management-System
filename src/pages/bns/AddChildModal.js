@@ -210,10 +210,10 @@ export default function AddChildModal({ onClose, onSave, mode = 'add', initialDa
     };
 
     const handleSave = async () => {
-        setLoading(true);
-        const { data: { user } } = await supabase.auth.getUser();
-        
-        const firstName = formData.first_name || '';
+        setLoading(true);
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        const firstName = formData.first_name || '';
         const lastName = formData.last_name || '';
         const nutritionStatus = getNutritionStatus(formData.bmi);
         const lastCheckupDate = new Date().toISOString().split('T')[0];
@@ -237,31 +237,33 @@ export default function AddChildModal({ onClose, onSave, mode = 'add', initialDa
             health_details: formData
         };
 
-        let result;
-        if (mode === 'edit') {
-            result = await supabase.from('requestions').insert([{
-                worker_id: user.id,
-                request_type: 'Update',
-                target_table: 'child_records',
-                target_record_id: initialData.id,
-                request_data: recordData,
-                status: 'Pending'
-            }]);
-        } else {
-            result = await supabase.from('child_records').insert([recordData]);
-        }
+        let result;
+        if (mode === 'edit') {
+            // --- MODIFIED LOGIC: DIRECT UPDATE INSTEAD OF REQUEST ---
+            result = await supabase
+              .from('child_records')
+              .update(recordData)
+              .eq('id', initialData.id);
+        } else {
+            // Add mode remains the same
+            result = await supabase.from('child_records').insert([recordData]);
+        }
 
-        if (result.error) {
-            addNotification(`Error: ${result.error.message}`, 'error');
-        } else {
-            const successMsg = mode === 'edit' ? 'Update request submitted for approval.' : 'New child added successfully.';
-            addNotification(successMsg, 'success');
-            logActivity(mode === 'edit' ? 'Child Record Update Request' : 'New Child Added', `ID: ${childId}, Name: ${formData.child_name}`);
-            onSave();
-            onClose();
-        }
-        setLoading(false);
-    };
+        if (result.error) {
+            addNotification(`Error: ${result.error.message}`, 'error');
+        } else {
+            if (mode === 'edit') {
+                addNotification('Child record updated successfully.', 'success');
+                logActivity('Child Record Updated', `Updated record for ${firstName} ${lastName}`);
+            } else {
+                addNotification('New child added successfully.', 'success');
+                logActivity('New Child Added', `Registered ${firstName} ${lastName}`);
+            }
+            onSave();
+            onClose();
+        }
+        setLoading(false);
+    };
 
     const title = mode === 'edit' ? 'Edit Child Immunization Record' : 'New Child Immunization Record';
 

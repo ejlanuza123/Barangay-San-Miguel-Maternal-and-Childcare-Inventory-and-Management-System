@@ -8,10 +8,27 @@ import { useAuth } from "../../context/AuthContext";
 import { QRCodeSVG } from "qrcode.react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import * as XLSX from 'xlsx';
 import PatientQRCode from "../../components/reusables/PatientQRCode";
 import PatientQRCodeModal from "../../components/reusables/PatientQRCodeModal";
 
 // --- ICONS ---
+const ExportIcon = () => (
+  <svg
+    className="w-5 h-5 text-gray-500"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+    ></path>
+  </svg>
+);
+
 const SearchIcon = () => (
   <svg
     className="w-5 h-5 text-gray-400"
@@ -823,12 +840,161 @@ export default function MaternityManagement() {
   const [patientToDelete, setPatientToDelete] = useState(null);
   const { user } = useAuth();
   const { addNotification } = useNotification();
-  const [patientForQR, setPatientForQR] = useState(null); // <-- 2. ADD STATE FOR THE MODAL
-
-  // --- NEW: Pagination State ---
+  const [patientForQR, setPatientForQR] = useState(null); 
+  const [isExportOpen, setIsExportOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10); // Set how many patients per page
   const [totalPatients, setTotalPatients] = useState(0);
+
+  // Export functions for Maternity Management
+  const exportToPDF = async (filename = 'maternity_records') => {
+    try {
+      // Fetch ALL patient records
+      const { data: allPatients, error } = await supabase
+        .from('patients')
+        .select('*')
+        .order('patient_id', { ascending: true });
+
+      if (error) throw error;
+
+      const doc = new jsPDF();
+      
+      // Header
+      doc.setFontSize(16);
+      doc.text('Maternal Health Records', 105, 15, { align: 'center' });
+      doc.setFontSize(10);
+      doc.text(`Total Records: ${allPatients.length}`, 105, 22, { align: 'center' });
+      doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 105, 28, { align: 'center' });
+      
+      // Table headers
+      const headers = [
+        ['Patient ID', 'Last Name', 'First Name', 'Age', 'Contact', 'Weeks Pregnant', 
+        'Last Visit', 'Risk Level', 'Address']
+      ];
+      
+      // Table data
+      const tableData = allPatients.map(patient => {
+        const medicalHistory = patient.medical_history || {};
+        const address = `${medicalHistory.purok || ''}, ${medicalHistory.street || ''}`.trim();
+        const addressDisplay = address || 'N/A';
+        
+        return [
+          patient.patient_id,
+          patient.last_name || '',
+          patient.first_name || '',
+          patient.age || '',
+          patient.contact_no || '',
+          patient.weeks || '',
+          patient.last_visit || '',
+          patient.risk_level || '',
+          addressDisplay
+        ];
+      });
+      
+      // Create table
+      autoTable(doc, {
+        startY: 35,
+        head: headers,
+        body: tableData,
+        theme: 'grid',
+        styles: { fontSize: 7, cellPadding: 1.5 },
+        headStyles: { fillColor: [41, 128, 185], textColor: [255, 255, 255] },
+        margin: { left: 10, right: 10 }
+      });
+      
+      // Footer
+      const pageCount = doc.getNumberOfPages();
+      for(let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.text(`Page ${i} of ${pageCount}`, 105, doc.internal.pageSize.height - 10, { align: 'center' });
+      }
+      
+      // Save PDF
+      doc.save(`${filename}_${new Date().toISOString().slice(0, 10)}.pdf`);
+      logActivity('Exported Records', `Exported ${allPatients.length} maternity records to PDF`);
+    } catch (error) {
+      console.error('Error exporting to PDF:', error);
+      addNotification('Error exporting to PDF: ' + error.message, 'error');
+    }
+  };
+
+  const exportToExcel = async (filename = 'maternity_records') => {
+    try {
+      // Fetch ALL patient records
+      const { data: allPatients, error } = await supabase
+        .from('patients')
+        .select('*')
+        .order('patient_id', { ascending: true });
+
+      if (error) throw error;
+      
+      // Prepare data for Excel
+      const worksheetData = [
+        ['Patient ID', 'Last Name', 'First Name', 'Middle Name', 'Age', 'Contact No.', 
+        'Weeks Pregnant', 'Last Visit', 'Risk Level', 'Purok', 'Street', 
+        'Date of Birth', 'Blood Type', 'NHTS No.', 'PhilHealth No.', 'Created At']
+      ];
+      
+      allPatients.forEach(patient => {
+        const medicalHistory = patient.medical_history || {};
+        worksheetData.push([
+          patient.patient_id,
+          patient.last_name,
+          patient.first_name,
+          patient.middle_name || '',
+          patient.age,
+          patient.contact_no,
+          patient.weeks,
+          patient.last_visit,
+          patient.risk_level,
+          medicalHistory.purok || '',
+          medicalHistory.street || '',
+          medicalHistory.dob || '',
+          medicalHistory.blood_type || '',
+          medicalHistory.nhts_no || '',
+          medicalHistory.philhealth_no || '',
+          new Date(patient.created_at).toLocaleDateString()
+        ]);
+      });
+      
+      // Create workbook and worksheet
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet(worksheetData);
+      
+      // Set column widths
+      const colWidths = [
+        {wch: 12}, // Patient ID
+        {wch: 15}, // Last Name
+        {wch: 15}, // First Name
+        {wch: 15}, // Middle Name
+        {wch: 6},  // Age
+        {wch: 12}, // Contact No.
+        {wch: 10}, // Weeks Pregnant
+        {wch: 12}, // Last Visit
+        {wch: 12}, // Risk Level
+        {wch: 10}, // Purok
+        {wch: 15}, // Street
+        {wch: 12}, // Date of Birth
+        {wch: 10}, // Blood Type
+        {wch: 12}, // NHTS No.
+        {wch: 12}, // PhilHealth No.
+        {wch: 12}  // Created At
+      ];
+      ws['!cols'] = colWidths;
+      
+      // Add worksheet to workbook
+      XLSX.utils.book_append_sheet(wb, ws, 'Maternity Records');
+      
+      // Generate Excel file
+      XLSX.writeFile(wb, `${filename}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      logActivity('Exported Records', `Exported ${allPatients.length} maternity records to Excel`);
+    } catch (error) {
+      console.error('Error exporting to Excel:', error);
+      addNotification('Error exporting to Excel: ' + error.message, 'error');
+    }
+};
 
   const fetchPageData = useCallback(async () => {
     setLoading(true);
@@ -968,7 +1134,7 @@ export default function MaternityManagement() {
         <div className="xl:col-span-3">
           <div className="bg-white p-4 rounded-lg shadow border">
             <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-3">
-              <h2 className="text-2xl font-bold text-gray-700">Patient List</h2>
+              <h2 className="text-2xl font-bold text-gray-700">Maternal Records</h2>
               <div className="flex items-center space-x-2">
                 <div className="relative">
                   <span className="absolute inset-y-0 left-0 flex items-center pl-2">
@@ -983,6 +1149,8 @@ export default function MaternityManagement() {
                     className="pl-8 pr-2 py-1.5 w-full sm:w-auto text-sm rounded-md border bg-gray-50 focus:bg-white"
                   />
                 </div>
+                
+                {/* Filter Button */}
                 <div className="relative">
                   <button
                     onClick={() => setIsFilterOpen(!isFilterOpen)}
@@ -1051,6 +1219,71 @@ export default function MaternityManagement() {
                       </div>
                     </div>
                   )}
+                </div>
+                
+                {/* Export Button */}
+                <div className="relative">
+                  <button
+                    onClick={() => setIsExportOpen(!isExportOpen)}
+                    disabled={exporting}
+                    className={`flex items-center space-x-2 px-3 py-1.5 text-sm border rounded-md bg-white hover:bg-gray-50 ${
+                      exporting ? 'opacity-50 cursor-not-allowed' : ''
+                    }`}
+                  >
+                    {exporting ? (
+                      <>
+                        <svg className="animate-spin h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span>Exporting...</span>
+                      </>
+                    ) : (
+                      <>
+                        <ExportIcon /> <span>Export</span>
+                      </>
+                    )}
+                  </button>
+                  <AnimatePresence>
+                    {isExportOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -5 }}
+                        className="absolute right-0 mt-2 w-40 bg-white rounded-lg shadow-xl z-20 border"
+                      >
+                        <div className="p-2 text-xs font-semibold text-gray-600 border-b">
+                          Export Format
+                        </div>
+                        <div className="p-1">
+                          <button
+                            onClick={() => {
+                              exportToPDF('maternity_records');
+                              setIsExportOpen(false);
+                            }}
+                            className="flex items-center w-full px-3 py-2 text-sm text-left rounded hover:bg-red-50 text-red-600 hover:text-red-700"
+                          >
+                            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                            </svg>
+                            Export as PDF
+                          </button>
+                          <button
+                            onClick={() => {
+                              exportToExcel('maternity_records');
+                              setIsExportOpen(false);
+                            }}
+                            className="flex items-center w-full px-3 py-2 text-sm text-left rounded hover:bg-green-50 text-green-600 hover:text-green-700"
+                          >
+                            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            Export as Excel
+                          </button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
               </div>
             </div>
@@ -1136,7 +1369,7 @@ export default function MaternityManagement() {
               }}
               className="w-full bg-blue-600 text-white font-bold py-2.5 px-4 rounded-lg shadow-md hover:bg-blue-700 text-sm"
             >
-              + Add New Patient
+              + New Mother Patient
             </button>
             <QuickStats stats={stats} />
             <UpcomingAppointmentsWidget appointments={upcomingAppointments} />

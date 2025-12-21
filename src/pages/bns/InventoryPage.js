@@ -248,18 +248,29 @@ export default function BnsInventoryPage() {
     }, [fetchPageData]);
 
     const handleDelete = async () => {
-        if (!itemToDelete) return;
+        if (!itemToDelete || !user) return;
 
-        const { error } = await supabase.from('bns_inventory').delete().eq('id', itemToDelete.id);
+        // Request delete instead of direct delete
+        const { error } = await supabase.from('requestions').insert([{
+            worker_id: user.id,
+            request_type: 'Delete',
+            target_table: 'bns_inventory',
+            target_record_id: itemToDelete.id,
+            request_data: { 
+                item_name: itemToDelete.item_name,
+                quantity: itemToDelete.quantity,
+                category: itemToDelete.category
+            },
+            status: 'Pending'
+        }]);
         
         if (error) {
-            addNotification(`Error deleting item: ${error.message}`, 'error');
+            addNotification(`Error submitting delete request: ${error.message}`, 'error');
         } else {
-            addNotification(`${itemToDelete.item_name} was deleted successfully.`, 'success');
-            await logActivity('BNS Item Deleted', `Deleted item: ${itemToDelete.item_name}`);
-            fetchPageData(); // Refresh the list
+            addNotification('Delete request submitted for approval.', 'success');
+            await logActivity('BNS Inventory Delete Request', `Submitted request for ${itemToDelete.item_name}`);
         }
-        setItemToDelete(null); // Close the modal
+        setItemToDelete(null);
     };
 
     const filteredInventory = useMemo(() => {
