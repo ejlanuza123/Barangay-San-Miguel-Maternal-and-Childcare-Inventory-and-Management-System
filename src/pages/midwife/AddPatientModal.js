@@ -4,7 +4,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { logActivity } from "../../services/activityLogger";
 import { useNotification } from "../../context/NotificationContext";
 import { QRCodeSVG } from "qrcode.react";
-import { useAuth } from "../../context/AuthContext";
 
 // --- Helper Icon for Profile Placeholder ---
 const ProfileIcon = () => (
@@ -125,6 +124,7 @@ const Step1 = ({ formData, handleChange, handleDobChange, newPatientId }) => (
   <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8">
     {/* Left Profile Section */}
     <div className="md:col-span-1 flex flex-col items-center mb-6 md:mb-0">
+      {/* ... (QR code and Patient ID display) ... */}
       <div className="w-32 h-32 bg-white rounded-md border p-1 flex items-center justify-center">
         {newPatientId && newPatientId.startsWith("P-") ? (
           <QRCodeSVG value={newPatientId} size={120} />
@@ -142,6 +142,7 @@ const Step1 = ({ formData, handleChange, handleDobChange, newPatientId }) => (
 
     {/* Right Side with Info + ID Numbers */}
     <div className="md:col-span-2 space-y-4">
+      {/* ... (Personal Information and ID Numbers sections) ... */}
       <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
         {/* Personal Information */}
         <div className="flex-1">
@@ -250,6 +251,7 @@ const Step1 = ({ formData, handleChange, handleDobChange, newPatientId }) => (
         </div>
       </div>
       <div>
+        {/* ... (Contact Information section) ... */}
         <h3 className="font-semibold text-gray-700 mb-2">
           Contact Information
         </h3>
@@ -295,6 +297,7 @@ const Step1 = ({ formData, handleChange, handleDobChange, newPatientId }) => (
       <div>
         <h3 className="font-semibold text-gray-700 mb-2">Address</h3>
         <div className="grid grid-cols-2 gap-2">
+          {/* --- MODIFICATION: Updated with the full list from the image --- */}
           <div>
             <label className="text-xs text-gray-500">Purok</label>
             <select
@@ -331,6 +334,7 @@ const Step1 = ({ formData, handleChange, handleDobChange, newPatientId }) => (
               <option value="Purok Magara Zone 2">Purok Magara Zone 2</option>
             </select>
           </div>
+          {/* --- END MODIFICATION --- */}
           <div>
             <label className="text-xs text-gray-500">Street</label>
             <input
@@ -344,6 +348,7 @@ const Step1 = ({ formData, handleChange, handleDobChange, newPatientId }) => (
         </div>
       </div>
       <div>
+        {/* ... (Obstetrical Score section) ... */}
         <h3 className="font-semibold text-gray-700 mb-2">Obstetrical Score</h3>
         <div className="grid grid-cols-6 gap-2">
           <div>
@@ -412,198 +417,165 @@ const Step1 = ({ formData, handleChange, handleDobChange, newPatientId }) => (
   </div>
 );
 
-const Step2 = ({ formData, handleChange, isReadOnly }) => (
+const Step2 = ({ formData, handleChange }) => (
   <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
-    
-    {/* --- BANNER FOR BHW --- */}
-    <div className="md:col-span-5">
-      <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4 rounded shadow-sm flex items-start">
-        <svg className="w-6 h-6 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
-        </svg>
-        <div>
-          <p className="font-bold">Restricted Access</p>
-          <p className="text-sm">
-            Only Midwives can enter or edit Pregnancy & OB History. 
-            This step is hidden for BHW users. Please proceed to the next step.
-          </p>
+    <div className="md:col-span-3">
+      <h3 className="font-semibold text-gray-700 mb-2">Pregnancy History</h3>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm border">
+          <thead className="bg-gray-50">
+            <tr>
+              {["Gravida", "Outcome", "Sex", "NSD/CS", "Delivered At"].map(
+                (h) => (
+                  <th key={h} className="p-2 border font-medium text-xs">
+                    {h}
+                  </th>
+                )
+              )}
+            </tr>
+          </thead>
+          <tbody>
+            {Array.from({ length: 10 }, (_, i) => i + 1).map((g) => (
+              <tr key={g}>
+                <td className="p-1 border text-center font-semibold text-gray-600">
+                  G{g}
+                </td>
+                <td className="p-1 border">
+                  <input
+                    type="text"
+                    name={`g${g}_outcome`}
+                    value={formData[`g${g}_outcome`] || ""}
+                    onChange={handleChange}
+                    className="w-full p-1 border-none text-xs focus:ring-0"
+                  />
+                </td>
+                <td className="p-1 border">
+                  <input
+                    type="text"
+                    name={`g${g}_sex`}
+                    value={formData[`g${g}_sex`] || ""}
+                    onChange={handleChange}
+                    className="w-full p-1 border-none text-xs focus:ring-0"
+                  />
+                </td>
+                <td className="p-1 border">
+                  <input
+                    type="text"
+                    name={`g${g}_delivery_type`}
+                    value={formData[`g${g}_delivery_type`] || ""}
+                    onChange={handleChange}
+                    className="w-full p-1 border-none text-xs focus:ring-0"
+                  />
+                </td>
+                <td className="p-1 border">
+                  <input
+                    type="text"
+                    name={`g${g}_delivered_at`}
+                    value={formData[`g${g}_delivered_at`] || ""}
+                    onChange={handleChange}
+                    className="w-full p-1 border-none text-xs focus:ring-0"
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div className="md:col-span-2 space-y-4">
+      <div>
+        <h3 className="font-semibold text-gray-700 mb-2">
+          Past Menstrual Period
+        </h3>
+        <div className="space-y-2">
+          <div>
+            <label className="text-xs text-gray-500">
+              Last Menstrual Period (LMP)
+            </label>
+            <input
+              type="date"
+              name="lmp"
+              value={formData.lmp || ""}
+              onChange={handleChange}
+              className="w-full p-2 border rounded-md text-sm"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500">Risk Code</label>
+            <input
+              type="text"
+              name="risk_code"
+              value={formData.risk_code || ""}
+              onChange={handleChange}
+              className="w-full p-2 border rounded-md text-sm"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500">
+              Expected Date of Confinement (EDC)
+            </label>
+            <input
+              type="date"
+              name="edc"
+              value={formData.edc || ""}
+              onChange={handleChange}
+              className="w-full p-2 border rounded-md text-sm"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500">Age of First Period</label>
+            <input
+              type="number"
+              name="age_first_period"
+              value={formData.age_first_period || ""}
+              onChange={handleChange}
+              className="w-full p-2 border rounded-md text-sm"
+            />
+          </div>
+        </div>
+      </div>
+      <div>
+        <h3 className="font-semibold text-gray-700 mb-2">OB History</h3>
+        <div className="space-y-2">
+          <div>
+            <label className="text-xs text-gray-500">Age of Menarche</label>
+            <input
+              type="number"
+              name="age_of_menarche"
+              value={formData.age_of_menarche || ""}
+              onChange={handleChange}
+              className="w-full p-2 border rounded-md text-sm"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500">Amount of Bleeding</label>
+            <select
+              name="bleeding_amount"
+              value={formData.bleeding_amount || ""}
+              onChange={handleChange}
+              className="w-full p-2 border rounded-md text-sm bg-gray-50"
+            >
+              <option>Select amount</option>
+              <option>Scanty</option>
+              <option>Moderate</option>
+              <option>Heavy</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-gray-500">
+              Duration of Menstruation (days)
+            </label>
+            <input
+              type="number"
+              name="menstruation_duration"
+              value={formData.menstruation_duration || ""}
+              onChange={handleChange}
+              className="w-full p-2 border rounded-md text-sm"
+            />
+          </div>
         </div>
       </div>
     </div>
-
-    {/* Hide all form content for BHW users */}
-    {!isReadOnly ? (
-      <>
-        <div className="md:col-span-3">
-          <h3 className="font-semibold text-gray-700 mb-2">Pregnancy History</h3>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm border">
-              <thead className="bg-gray-50">
-                <tr>
-                  {["Gravida", "Outcome", "Sex", "NSD/CS", "Delivered At"].map(
-                    (h) => (
-                      <th key={h} className="p-2 border font-medium text-xs">
-                        {h}
-                      </th>
-                    )
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {Array.from({ length: 10 }, (_, i) => i + 1).map((g) => (
-                  <tr key={g}>
-                    <td className="p-1 border text-center font-semibold text-gray-600">
-                      G{g}
-                    </td>
-                    <td className="p-1 border">
-                      <input
-                        type="text"
-                        name={`g${g}_outcome`}
-                        value={formData[`g${g}_outcome`] || ""}
-                        onChange={handleChange}
-                        className="w-full p-1 border-none text-xs focus:ring-0"
-                      />
-                    </td>
-                    <td className="p-1 border">
-                      <input
-                        type="text"
-                        name={`g${g}_sex`}
-                        value={formData[`g${g}_sex`] || ""}
-                        onChange={handleChange}
-                        className="w-full p-1 border-none text-xs focus:ring-0"
-                      />
-                    </td>
-                    <td className="p-1 border">
-                      <input
-                        type="text"
-                        name={`g${g}_delivery_type`}
-                        value={formData[`g${g}_delivery_type`] || ""}
-                        onChange={handleChange}
-                        className="w-full p-1 border-none text-xs focus:ring-0"
-                      />
-                    </td>
-                    <td className="p-1 border">
-                      <input
-                        type="text"
-                        name={`g${g}_delivered_at`}
-                        value={formData[`g${g}_delivered_at`] || ""}
-                        onChange={handleChange}
-                        className="w-full p-1 border-none text-xs focus:ring-0"
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-        <div className="md:col-span-2 space-y-4">
-          <div>
-            <h3 className="font-semibold text-gray-700 mb-2">
-              Past Menstrual Period
-            </h3>
-            <div className="space-y-2">
-              <div>
-                <label className="text-xs text-gray-500">
-                  Last Menstrual Period (LMP)
-                </label>
-                <input
-                  type="date"
-                  name="lmp"
-                  value={formData.lmp || ""}
-                  onChange={handleChange}
-                  className="w-full p-2 border rounded-md text-sm"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500">Risk Code</label>
-                <input
-                  type="text"
-                  name="risk_code"
-                  value={formData.risk_code || ""}
-                  onChange={handleChange}
-                  className="w-full p-2 border rounded-md text-sm"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500">
-                  Expected Date of Confinement (EDC)
-                </label>
-                <input
-                  type="date"
-                  name="edc"
-                  value={formData.edc || ""}
-                  onChange={handleChange}
-                  className="w-full p-2 border rounded-md text-sm"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500">Age of First Period</label>
-                <input
-                  type="number"
-                  name="age_first_period"
-                  value={formData.age_first_period || ""}
-                  onChange={handleChange}
-                  className="w-full p-2 border rounded-md text-sm"
-                />
-              </div>
-            </div>
-          </div>
-          <div>
-            <h3 className="font-semibold text-gray-700 mb-2">OB History</h3>
-            <div className="space-y-2">
-              <div>
-                <label className="text-xs text-gray-500">Age of Menarche</label>
-                <input
-                  type="number"
-                  name="age_of_menarche"
-                  value={formData.age_of_menarche || ""}
-                  onChange={handleChange}
-                  className="w-full p-2 border rounded-md text-sm"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500">Amount of Bleeding</label>
-                <select
-                  name="bleeding_amount"
-                  value={formData.bleeding_amount || ""}
-                  onChange={handleChange}
-                  className="w-full p-2 border rounded-md text-sm bg-gray-50"
-                >
-                  <option>Select amount</option>
-                  <option>Scanty</option>
-                  <option>Moderate</option>
-                  <option>Heavy</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-xs text-gray-500">
-                  Duration of Menstruation (days)
-                </label>
-                <input
-                  type="number"
-                  name="menstruation_duration"
-                  value={formData.menstruation_duration || ""}
-                  onChange={handleChange}
-                  className="w-full p-2 border rounded-md text-sm"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      </>
-    ) : (
-      /* Show empty state for BHW users */
-      <div className="md:col-span-5 text-center py-12">
-        <div className="bg-gray-100 rounded-lg p-8 inline-block">
-          <svg className="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
-          </svg>
-          <h3 className="text-lg font-semibold text-gray-600">Content Restricted</h3>
-          <p className="text-gray-500 mt-2">Pregnancy & OB History can only be viewed/edited by Midwives.</p>
-        </div>
-      </div>
-    )}
   </div>
 );
 
@@ -930,7 +902,6 @@ export default function AddPatientModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const { addNotification } = useNotification();
-  const { profile } = useAuth();
 
   const [formData, setFormData] = useState({});
   const [patientId, setPatientId] = useState("Loading...");
@@ -1148,7 +1119,7 @@ export default function AddPatientModal({
       
       // Log activity
       await logActivity(
-        mode === 'edit' ? 'Record Updated' : 'New Mother Record Added',
+        mode === 'edit' ? 'Patient Updated' : 'New Patient Added',
         `${mode === 'edit' ? 'Updated' : 'Added'} patient ${formData.first_name} ${formData.last_name} (${patientId})`
       );
       
@@ -1164,7 +1135,6 @@ export default function AddPatientModal({
   };
 
   const title = mode === "edit" ? "Edit Patient Record" : "New Patient Record";
-  const isBHW = profile?.role === 'BHW';
 
   return (
     <AnimatePresence>
@@ -1228,11 +1198,7 @@ export default function AddPatientModal({
               />
             )}
             {step === 2 && (
-              <Step2 
-                formData={formData} 
-                handleChange={handleChange}
-                isReadOnly={isBHW} 
-              />
+              <Step2 formData={formData} handleChange={handleChange} />
             )}
             {step === 3 && (
               <Step3 

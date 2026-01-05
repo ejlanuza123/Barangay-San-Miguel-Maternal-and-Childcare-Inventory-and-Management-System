@@ -134,6 +134,8 @@ const getDotColor = (role) => {
       return "bg-green-500";
     case "Admin":
       return "bg-orange-500";
+    case "Midwife": 
+      return "bg-purple-500";
     case "BHW":
     default:
       return "bg-blue-500";
@@ -219,7 +221,7 @@ const QuickAccess = () => (
       to="/bhw/maternity-management"
       className="w-full text-center bg-blue-600 text-white font-semibold py-2 px-3 rounded-md shadow-sm hover:bg-blue-700 text-sm"
     >
-      + New Mother Patient
+      + New Mother Record
     </Link>
     <Link
       to="/bhw/reports"

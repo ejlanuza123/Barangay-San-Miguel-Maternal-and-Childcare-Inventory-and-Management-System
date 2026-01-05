@@ -121,8 +121,9 @@ export default function RequestionsPage() {
     } else if (request.request_type === "Delete") {
       const { error } = await supabase
         .from(request.target_table)
-        .delete()
+        .update({ is_deleted: true, deleted_at: new Date() })
         .eq("id", request.target_record_id);
+      
       actionError = error;
     }
 

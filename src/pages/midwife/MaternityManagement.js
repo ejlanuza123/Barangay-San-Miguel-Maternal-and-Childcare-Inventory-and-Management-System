@@ -563,7 +563,7 @@ const ViewPatientModal = ({ patient, onClose }) => {
           {/* Header Section */}
           <div className="p-4 bg-gray-50 border-b">
             <h2 className="text-lg font-bold text-gray-800">
-              Maternal Record
+              Maternal Patient Record
             </h2>
             <p className="text-sm text-gray-600">
               Viewing record for{" "}
@@ -998,18 +998,12 @@ export default function MaternityManagement() {
 
   const fetchPageData = useCallback(async () => {
     setLoading(true);
-
     const from = (currentPage - 1) * itemsPerPage;
     const to = from + itemsPerPage - 1;
-
-    // Fetch paginated patients
-    const {
-      data: patientData,
-      error: patientError,
-      count: patientCount,
-    } = await supabase
+    const { data: patientData, error: patientError, count: patientCount } = await supabase
       .from("patients")
       .select("*", { count: "exact" })
+      .eq('is_deleted', false) // <--- ADD THIS LINE
       .order("patient_id", { ascending: true })
       .range(from, to);
 
@@ -1051,34 +1045,23 @@ export default function MaternityManagement() {
   // src/pages/bhw/MaternityManagement.js
 
   const handleDelete = async () => {
-    if (!patientToDelete || !user) return;
+    if (!patientToDelete) return;
+    
+    // CHANGE THIS BLOCK
+    const { error } = await supabase
+      .from("patients")
+      .update({ is_deleted: true, deleted_at: new Date().toISOString() }) // <--- SOFT DELETE
+      .eq("id", patientToDelete.id);
 
-    const { error } = await supabase.from("requestions").insert([
-      {
-        worker_id: user.id,
-        request_type: "Delete",
-        target_table: "patients",
-        target_record_id: patientToDelete.id,
-        request_data: {
-          patient_id: patientToDelete.patient_id,
-          name: `${patientToDelete.first_name} ${patientToDelete.last_name}`,
-        },
-        status: "Pending",
-      },
-    ]);
     if (error) {
-      addNotification(
-        `Error submitting delete request: ${error.message}`,
-        "error"
-      );
+      addNotification(`Error deleting record: ${error.message}`, "error");
     } else {
-      addNotification("Delete request submitted for approval.", "success");
-      logActivity(
-        "Mother Record Delete Request",
-        `Submitted request for ${patientToDelete.first_name} ${patientToDelete.last_name}`
-      );
+      // Update the success message to be accurate
+      addNotification("Mother Record moved to Recycle Bin.", "success");
+      logActivity("Mother Record Deleted (Soft)", `Moved ${patientToDelete.first_name} ${patientToDelete.last_name} to trash`);
+      fetchPageData(); 
     }
-    setPatientToDelete(null); // Close the modal
+    setPatientToDelete(null);
   };
 
   const filteredPatients = useMemo(() => {
@@ -1134,7 +1117,7 @@ export default function MaternityManagement() {
         <div className="xl:col-span-3">
           <div className="bg-white p-4 rounded-lg shadow border">
             <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-3">
-              <h2 className="text-2xl font-bold text-gray-700">Maternal Record List</h2>
+              <h2 className="text-2xl font-bold text-gray-700">Maternal Records</h2>
               <div className="flex items-center space-x-2">
                 <div className="relative">
                   <span className="absolute inset-y-0 left-0 flex items-center pl-2">
@@ -1369,7 +1352,7 @@ export default function MaternityManagement() {
               }}
               className="w-full bg-blue-600 text-white font-bold py-2.5 px-4 rounded-lg shadow-md hover:bg-blue-700 text-sm"
             >
-              + New Mother Record
+              + New Mother Patient
             </button>
             <QuickStats stats={stats} />
             <StatusLegend />

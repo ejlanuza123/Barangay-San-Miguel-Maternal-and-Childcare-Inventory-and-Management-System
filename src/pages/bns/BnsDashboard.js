@@ -176,6 +176,8 @@ const getDotColor = (role) => {
             return 'bg-green-500';
         case 'Admin':
             return 'bg-orange-500';
+        case "Midwife": 
+            return "bg-purple-500";
         case 'BHW':
         default:
             return 'bg-blue-500';
@@ -238,7 +240,7 @@ const QuickAccess = () => (
     <div className="bg-white p-4 rounded-lg shadow border flex flex-col space-y-3 h-full justify-center">
         <h3 className="font-bold text-gray-700 text-base text-center mb-2">Quick Access</h3>
         <Link to="/bns/child-records" className="w-full text-center bg-blue-600 text-white font-semibold py-2 px-3 rounded-md shadow-sm hover:bg-blue-700 text-sm">
-            + New Child Patient
+            + New Child Record
         </Link>
         <Link to="/bns/reports" className="w-full text-center bg-orange-400 text-white font-semibold py-2 px-3 rounded-md shadow-sm hover:bg-orange-500 text-sm">
             Generate Reports

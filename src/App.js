@@ -12,6 +12,7 @@ import ResetPassword from "./components/auth/ResetPassword";
 import AppLayout from "./components/layout/AppLayout";
 import PrivateRoute from "./components/auth/PrivateRoute";
 import RoleGuard from "./components/auth/RoleGuard"; 
+import RecycleBinPage from "./pages/common/RecycleBinPage";
 
 // Pages
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -35,6 +36,8 @@ import BnsReportsPage from "./pages/bns/ReportsPage";
 // Midwife Pages
 import MidwifeDashboard from "./pages/midwife/MidwifeDashboard";
 import ItemIssuancePage from "./pages/midwife/ItemIssuancePage";
+import MidwifeMaternityManagement from "./pages/midwife/MaternityManagement"; // NEW IMPORT
+import MidwifeChildHealthRecords from "./pages/midwife/ChildHealthRecords"; // NEW IMPORT
 
 import { AuthProvider } from "./context/AuthContext";
 import { NotificationProvider } from "./context/NotificationContext";
@@ -66,16 +69,19 @@ function App() {
                 <Route path="admin/employees" element={<EmployeesPage />} />
                 <Route path="admin/patient-records" element={<PatientRecordsPage />} />
                 <Route path="admin/inventory" element={<AdminInventoryPage />} />
+                <Route path="admin/recycle-bin" element={<RecycleBinPage />} /> 
               </Route>
 
               {/* 2. MIDWIFE ROUTES (NEW) */}
               <Route element={<RoleGuard allowedRoles={['Midwife']} />}>
                 <Route path="midwife/dashboard" element={<MidwifeDashboard />} />
                 <Route path="midwife/requestions" element={<RequestionsPage />} /> 
-                {/* Reusing Admin pages for shared functionality */}
-                <Route path="midwife/patient-records" element={<PatientRecordsPage />} />
+                {/* --- NEW DROPDOWN ROUTES --- */}
+                <Route path="midwife/maternity-records" element={<MidwifeMaternityManagement />} />
+                <Route path="midwife/child-records" element={<MidwifeChildHealthRecords />} />
                 <Route path="midwife/inventory" element={<AdminInventoryPage />} />
                 <Route path="midwife/item-issuance" element={<ItemIssuancePage />} />
+                <Route path="midwife/recycle-bin" element={<RecycleBinPage />} /> 
               </Route>
 
               {/* 2. BHW ROUTES */}

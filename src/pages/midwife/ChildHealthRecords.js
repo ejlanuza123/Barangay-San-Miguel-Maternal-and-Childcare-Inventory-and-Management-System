@@ -727,13 +727,10 @@ export default function ChildHealthRecords() {
     setLoading(true);
     const from = (currentPage - 1) * itemsPerPage;
     const to = from + itemsPerPage - 1;
-    const {
-      data: recordsData,
-      error: recordsError,
-      count: recordsCount,
-    } = await supabase
+    const { data: recordsData, error: recordsError, count: recordsCount } = await supabase
       .from("child_records")
       .select("*", { count: "exact" })
+      .eq('is_deleted', false) // <--- ADD THIS LINE
       .order("child_id", { ascending: true })
       .range(from, to);
     if (recordsError) {
@@ -768,33 +765,20 @@ export default function ChildHealthRecords() {
   };
 
   const handleDelete = async () => {
-    if (!patientToDelete || !user) return;
+    if (!patientToDelete) return;
+
+    // CHANGE THIS BLOCK
     const { error } = await supabase
-      .from("requestions")
-      .insert([
-        {
-          worker_id: user.id,
-          request_type: "Delete",
-          target_table: "child_records",
-          target_record_id: patientToDelete.id,
-          request_data: {
-            child_id: patientToDelete.child_id,
-            name: `${patientToDelete.first_name} ${patientToDelete.last_name}`,
-          },
-          status: "Pending",
-        },
-      ]);
+      .from("child_records")
+      .update({ is_deleted: true, deleted_at: new Date().toISOString() }) // <--- SOFT DELETE
+      .eq("id", patientToDelete.id);
+
     if (error) {
-      addNotification(
-        `Error submitting delete request: ${error.message}`,
-        "error"
-      );
+      addNotification(`Error deleting record: ${error.message}`, "error");
     } else {
-      addNotification("Delete request submitted for approval.", "success");
-      logActivity(
-        "Child Record Delete Request",
-        `Submitted request for ${patientToDelete.first_name} ${patientToDelete.last_name}`
-      );
+      addNotification("Child record moved to Recycle Bin.", "success");
+      logActivity("Child Record Deleted (Soft)", `Moved ${patientToDelete.first_name} ${patientToDelete.last_name} to trash`);
+      fetchPageData(); 
     }
     setPatientToDelete(null);
   };
@@ -854,7 +838,7 @@ export default function ChildHealthRecords() {
             <div className="bg-white p-4 rounded-lg shadow-sm border">
               <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-3">
                 <h2 className="text-xl font-bold text-gray-700">
-                  Children Record List
+                  Children Records
                 </h2>
                 <div className="flex items-center space-x-2">
                   <div className="relative">
@@ -1068,10 +1052,9 @@ export default function ChildHealthRecords() {
               }}
               className="w-full bg-blue-600 text-white font-bold py-2.5 px-4 rounded-lg shadow-md hover:bg-blue-700 text-sm"
             >
-              + New Child Record
+              + New Child Patient
             </button>
             <StatusLegend />
-            <UpcomingAppointmentsWidget appointments={upcomingAppointments} />
           </div>
         </div>
     </>
