@@ -108,6 +108,12 @@ const LogOutIcon = () => (
     ></path>{" "}
   </svg>
 );
+
+const IssuanceIcon = () => (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+    </svg>
+);
 const UsersIcon = () => (
   <svg
     className="w-5 h-5"
@@ -214,6 +220,14 @@ export default function Sidebar({ role, openSettings }) {
             icon: <InventoryIcon />,
           },
         ];
+      case "Midwife": // --- NEW ROLE CONFIGURATION ---
+        return [
+          { name: "Midwife Dashboard", path: "/midwife/dashboard", icon: <DashboardIcon /> },
+          { name: "Requestions", path: "/midwife/requestions", icon: <RequestionsIcon /> },
+          { name: "Patient Records", path: "/midwife/patient-records", icon: <MaternityIcon /> },
+          { name: "Inventory", path: "/midwife/inventory", icon: <InventoryIcon /> },
+          { name: "Item Issuance", path: "/midwife/item-issuance", icon: <IssuanceIcon /> },
+        ];
       case "BHW":
         return [
           {
@@ -222,12 +236,12 @@ export default function Sidebar({ role, openSettings }) {
             icon: <DashboardIcon />,
           },
           {
-            name: "Maternity Management",
+            name: "Maternal Records",
             path: "/bhw/maternity-management",
             icon: <MaternityIcon />,
           },
           {
-            name: "Appointment",
+            name: "Follow Up Checkups",
             path: "/bhw/appointment",
             icon: <AppointmentIcon />,
           },
@@ -251,7 +265,7 @@ export default function Sidebar({ role, openSettings }) {
             icon: <MaternityIcon />,
           },
           {
-            name: "Appointment",
+            name: "Follow Up Checkups",
             path: "/bns/appointment",
             icon: <AppointmentIcon />,
           },

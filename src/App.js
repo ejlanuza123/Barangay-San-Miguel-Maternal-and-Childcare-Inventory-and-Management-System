@@ -32,9 +32,9 @@ import BnsAppointmentPage from "./pages/bns/AppointmentPage";
 import BnsInventoryPage from "./pages/bns/InventoryPage";
 import BnsReportsPage from "./pages/bns/ReportsPage";
 
-import UserDashboard from "./pages/user/UserDashboard";
-import ScheduleAppointment from "./pages/user/ScheduleAppointment";
-import ViewUserRecords from "./pages/user/ViewUserRecords";
+// Midwife Pages
+import MidwifeDashboard from "./pages/midwife/MidwifeDashboard";
+import ItemIssuancePage from "./pages/midwife/ItemIssuancePage";
 
 import { AuthProvider } from "./context/AuthContext";
 import { NotificationProvider } from "./context/NotificationContext";
@@ -68,6 +68,16 @@ function App() {
                 <Route path="admin/inventory" element={<AdminInventoryPage />} />
               </Route>
 
+              {/* 2. MIDWIFE ROUTES (NEW) */}
+              <Route element={<RoleGuard allowedRoles={['Midwife']} />}>
+                <Route path="midwife/dashboard" element={<MidwifeDashboard />} />
+                <Route path="midwife/requestions" element={<RequestionsPage />} /> 
+                {/* Reusing Admin pages for shared functionality */}
+                <Route path="midwife/patient-records" element={<PatientRecordsPage />} />
+                <Route path="midwife/inventory" element={<AdminInventoryPage />} />
+                <Route path="midwife/item-issuance" element={<ItemIssuancePage />} />
+              </Route>
+
               {/* 2. BHW ROUTES */}
               <Route element={<RoleGuard allowedRoles={['BHW']} />}>
                 <Route path="bhw/dashboard" element={<BhwDashboard />} />
@@ -85,14 +95,6 @@ function App() {
                 <Route path="bns/inventory" element={<BnsInventoryPage />} />
                 <Route path="bns/reports" element={<BnsReportsPage />} />
               </Route>
-
-              {/* 4. USER ROUTES */}
-              <Route element={<RoleGuard allowedRoles={['USER/MOTHER/GUARDIAN']} />}>
-                <Route path="user/dashboard" element={<UserDashboard />} />
-                <Route path="user/schedule-appointment" element={<ScheduleAppointment />} />
-                <Route path="user/records" element={<ViewUserRecords />} />
-              </Route>
-
             </Route>
 
             <Route path="*" element={<Navigate to="/" replace />} />

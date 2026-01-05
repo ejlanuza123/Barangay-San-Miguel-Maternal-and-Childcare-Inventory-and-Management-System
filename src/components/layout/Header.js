@@ -272,7 +272,7 @@ export default function Header() {
 
     let channel;
 
-    if (profile.role === "Admin") {
+    if (profile.role === "Admin" || profile.role === "Midwife") {
       const fetchRequestionsAsNotifications = async () => {
         const { data, error, count } = await supabase
           .from("requestions")
@@ -380,6 +380,8 @@ export default function Header() {
         return "Barangay Nutrition Scholar";
       case "Admin":
         return "Administrator";
+      case "Midwife": 
+        return "Midwife";
       case "USER/MOTHER/GUARDIAN":
         return "My Health Portal";
       default:

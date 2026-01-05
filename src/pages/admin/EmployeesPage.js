@@ -381,6 +381,7 @@ const AddEmployeeModal = ({ onClose, onSave }) => {
             >
               <option value="BHW">Barangay Health Worker</option>
               <option value="BNS">Barangay Nutrition Scholar</option>
+              <option value="Midwife">Midwife</option>
             </select>
           </div>
 

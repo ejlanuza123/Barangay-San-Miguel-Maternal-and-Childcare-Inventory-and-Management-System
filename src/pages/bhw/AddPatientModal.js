@@ -16,6 +16,108 @@ const ProfileIcon = () => (
   </svg>
 );
 
+const InventoryInput = ({ label, fieldName, value, onChange, inventoryCategory, inventoryItems, onAddToQueue, amountFieldName, amountValue }) => {
+  const [selectedItemId, setSelectedItemId] = useState("");
+  
+  // Filter inventory based on the category (e.g., 'Vaccines')
+  const filteredItems = inventoryItems.filter(
+    item => item.category === inventoryCategory && item.quantity > 0
+  );
+
+  const handleDateSet = (dateVal) => {
+    // Update the form data with the date
+    onChange({ target: { name: fieldName, value: dateVal } });
+  };
+
+  const handleSetToday = () => {
+    const today = new Date().toISOString().split('T')[0];
+    handleDateSet(today);
+  };
+
+  const handleItemSelect = (e) => {
+    const itemId = e.target.value;
+    setSelectedItemId(itemId);
+    
+    // Find the item details
+    const item = filteredItems.find(i => i.id === itemId);
+    
+    // Attempt to parse amount for deduction, default to 1 if not a valid number
+    const qtyToDeduct = parseInt(amountValue) || 1;
+
+    if (item) {
+        // Add to the parent's deduction queue
+        onAddToQueue({
+            itemId: item.id,
+            itemName: item.item_name,
+            deductQty: qtyToDeduct, 
+            category: inventoryCategory,
+            dateGiven: value, // Use the current date value
+            fieldName: fieldName
+        });
+    }
+  };
+
+  return (
+    <div className="border p-2 rounded-md bg-gray-50 mb-2">
+        <label className="block text-xs font-bold text-gray-700 mb-1">{label}</label>
+        
+        {/* Date Section */}
+        <div className="flex gap-2 mb-2">
+            <input 
+                type="date" 
+                name={fieldName}
+                value={value || ''} 
+                onChange={(e) => handleDateSet(e.target.value)}
+                className="w-full p-1 border rounded text-xs" 
+            />
+            <button 
+                type="button" 
+                onClick={handleSetToday}
+                className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs hover:bg-blue-200"
+            >
+                Today
+            </button>
+        </div>
+
+        {/* Amount Given Section - Optional */}
+        {amountFieldName && (
+            <div className="mb-2">
+                <label className="block text-[10px] text-gray-500 mb-0.5">Amount Given</label>
+                <input 
+                    type="text" 
+                    name={amountFieldName}
+                    value={amountValue || ''} 
+                    onChange={onChange}
+                    placeholder="e.g. 1 cap"
+                    className="w-full p-1 border rounded text-xs" 
+                />
+            </div>
+        )}
+
+        {/* Inventory Section (Only show if date is filled) */}
+        {value && (
+            <div>
+                <select 
+                    className="w-full p-1 border rounded text-xs bg-white"
+                    value={selectedItemId}
+                    onChange={handleItemSelect}
+                >
+                    <option value="">-- Select Item to Deduct --</option>
+                    {filteredItems.map(item => (
+                        <option key={item.id} value={item.id}>
+                            {item.item_name} (Qty: {item.quantity})
+                        </option>
+                    ))}
+                </select>
+                <p className="text-[10px] text-gray-500 mt-1">
+                    Selecting an item will auto-deduct from inventory upon save.
+                </p>
+            </div>
+        )}
+    </div>
+  );
+};
+
 // --- Helper Components for Each Step of the Form ---
 
 const Step1 = ({ formData, handleChange, handleDobChange, newPatientId }) => (
@@ -477,42 +579,25 @@ const Step2 = ({ formData, handleChange }) => (
   </div>
 );
 
-const Step3 = ({ formData, handleChange }) => (
+const Step3 = ({ formData, handleChange, inventoryItems, onAddToQueue }) => (
   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
     <div className="lg:col-span-1 space-y-4">
       <div>
         <h3 className="font-semibold text-gray-700 mb-2">Vaccination Record</h3>
-        <div className="p-4 border rounded-md space-y-2">
-          <table className="w-full text-sm">
-            <thead>
-              <tr>
-                <th className="text-left font-semibold text-gray-600 pb-1">
-                  Vaccine
-                </th>
-                <th className="text-left font-semibold text-gray-600 pb-1">
-                  Date Given
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {["TT1", "TT2", "TT3", "TT4", "TT5", "FIM"].map((vaccine) => (
-                <tr key={vaccine}>
-                  <td className="py-1 pr-4 font-medium text-gray-600">
-                    {vaccine}
-                  </td>
-                  <td className="py-1">
-                    <input
-                      type="date"
-                      name={`vaccine_${vaccine.toLowerCase()}`}
-                      value={formData[`vaccine_${vaccine.toLowerCase()}`] || ""}
-                      onChange={handleChange}
-                      className="w-full p-2 border rounded-md text-sm"
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <p className="text-[10px] text-gray-500 mb-2 italic">Select a date and an item to auto-deduct from inventory.</p>
+        <div className="space-y-1">
+            {["TT1", "TT2", "TT3", "TT4", "TT5", "FIM"].map((vaccine) => (
+                <InventoryInput 
+                    key={vaccine}
+                    label={vaccine}
+                    fieldName={`vaccine_${vaccine.toLowerCase()}`}
+                    value={formData[`vaccine_${vaccine.toLowerCase()}`]}
+                    onChange={handleChange}
+                    inventoryCategory="Vaccines" 
+                    inventoryItems={inventoryItems}
+                    onAddToQueue={onAddToQueue}
+                />
+            ))}
         </div>
       </div>
       <div>
@@ -623,7 +708,7 @@ const Step3 = ({ formData, handleChange }) => (
   </div>
 );
 
-const Step4 = ({ formData, handleChange }) => {
+const Step4 = ({ formData, handleChange, inventoryItems, onAddToQueue }) => {
   const treatmentHeaders = [
     "Date",
     "Arrival",
@@ -777,61 +862,30 @@ const Step4 = ({ formData, handleChange }) => {
       </div>
 
       <div>
-        <h3 className="font-semibold text-gray-700 mb-2">
-          Micronutrient Supplementation
-        </h3>
-        <div className="overflow-x-auto border rounded-md">
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="p-2 border-r font-medium text-xs text-gray-600">
-                  Supplementation Type
-                </th>
-                <th className="p-2 border-r font-medium text-xs text-gray-600">
-                  Date Given
-                </th>
-                <th className="p-2 font-medium text-xs text-gray-600">
-                  Amount Given
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td className="p-2 border-r border-t font-medium text-gray-700">
-                  Iron Supplementation / Ferrous Sulfate
-                </td>
-                <td className="p-1 border-r border-t">
-                  <input
-                    type="date"
-                    className="w-full p-1 border-none text-xs"
-                  />
-                </td>
-                <td className="p-1 border-t">
-                  <input
-                    type="text"
-                    className="w-full p-1 border-none text-xs"
-                  />
-                </td>
-              </tr>
-              <tr>
-                <td className="p-2 border-r border-t font-medium text-gray-700">
-                  Vitamin A (200,000 IU)
-                </td>
-                <td className="p-1 border-r border-t">
-                  <input
-                    type="date"
-                    className="w-full p-1 border-none text-xs"
-                  />
-                </td>
-                <td className="p-1 border-t">
-                  <input
-                    type="text"
-                    className="w-full p-1 border-none text-xs"
-                  />
-                </td>
-              </tr>
-            </tbody>
-          </table>
+        <h3 className="font-semibold text-gray-700 mb-2">Micronutrient Supplementation</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <InventoryInput 
+                label="Iron Supplementation / Ferrous Sulfate"
+                fieldName="iron_supp_date"
+                value={formData.iron_supp_date}
+                onChange={handleChange}
+                inventoryCategory="Medicines"
+                inventoryItems={inventoryItems}
+                onAddToQueue={onAddToQueue}
+                amountFieldName="iron_supp_amount"
+                amountValue={formData.iron_supp_amount}
+            />
+             <InventoryInput 
+                label="Vitamin A (200,000 IU)"
+                fieldName="vitamin_a_date"
+                value={formData.vitamin_a_date}
+                onChange={handleChange}
+                inventoryCategory="Medicines"
+                inventoryItems={inventoryItems}
+                onAddToQueue={onAddToQueue}
+                amountFieldName="vitamin_a_amount"
+                amountValue={formData.vitamin_a_amount}
+            />
         </div>
       </div>
     </div>
@@ -851,13 +905,60 @@ export default function AddPatientModal({
 
   const [formData, setFormData] = useState({});
   const [patientId, setPatientId] = useState("Loading...");
+  const [inventoryItems, setInventoryItems] = useState([]);
+  const [deductionQueue, setDeductionQueue] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
+
+  // Fetch inventory items
+  useEffect(() => {
+    const fetchInventory = async () => {
+      const { data, error } = await supabase
+        .from('inventory')
+        .select('id, item_name, quantity, category')
+        .gt('quantity', 0);
+      
+      if (!error) {
+        setInventoryItems(data || []);
+      }
+    };
+    fetchInventory();
+
+    // Get current user
+    const getUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setCurrentUser(user);
+    };
+    getUser();
+  }, []);
+
+  // Handle adding items to deduction queue
+  const handleAddToQueue = (itemData) => {
+    setDeductionQueue(prev => {
+      // Check if item already in queue for this field
+      const existingIndex = prev.findIndex(item => 
+        item.itemId === itemData.itemId && item.fieldName === itemData.fieldName
+      );
+      
+      if (existingIndex >= 0) {
+        // Update existing entry
+        const newQueue = [...prev];
+        newQueue[existingIndex] = itemData;
+        return newQueue;
+      } else {
+        // Add new entry
+        return [...prev, itemData];
+      }
+    });
+    
+    addNotification(`Added ${itemData.itemName} to deduction queue.`, 'info');
+  };
 
   useEffect(() => {
     if (mode === "edit" && initialData) {
       // Combines the medical_history JSON with the top-level patient fields
       const combinedData = {
-        ...(initialData.medical_history || {}), // Load all history fields first
-        first_name: initialData.first_name || "", // Then override with main table fields
+        ...(initialData.medical_history || {}),
+        first_name: initialData.first_name || "",
         middle_name: initialData.middle_name || "",
         last_name: initialData.last_name || "",
         age: initialData.age || "",
@@ -872,13 +973,11 @@ export default function AddPatientModal({
           initialData.sms_notifications_enabled ?? true,
       };
 
-      // This now populates formData with 'dob', 'nhts_no', etc.
       setFormData(combinedData);
       setPatientId(initialData.patient_id);
     } else {
-      // Add mode
       setFormData({
-        sms_notifications_enabled: true, // Default SMS to true
+        sms_notifications_enabled: true,
       });
       const generateNewId = async () => {
         const { count, error } = await supabase
@@ -895,37 +994,34 @@ export default function AddPatientModal({
     }
   }, [mode, initialData]);
 
-  // --- ADDED: Helper function to calculate age ---
+  // Calculate age from DOB
   const calculateAge = (dobString) => {
     if (!dobString) return "";
     const today = new Date();
     const birthDate = new Date(dobString);
-    if (isNaN(birthDate.getTime())) return ""; // Check for invalid date
+    if (isNaN(birthDate.getTime())) return "";
 
     let age = today.getFullYear() - birthDate.getFullYear();
     const monthDifference = today.getMonth() - birthDate.getMonth();
 
-    // Check if the birthday has already occurred this year
     if (
       monthDifference < 0 ||
       (monthDifference === 0 && today.getDate() < birthDate.getDate())
     ) {
-      age--; // Subtract 1 if the birthday hasn't happened yet
+      age--;
     }
 
-    // Handle invalid dates (e.g., future dates)
     return age < 0 ? "" : age.toString();
   };
 
-  // --- ADDED: Specific handler for Date of Birth input ---
   const handleDobChange = (e) => {
-    const { name, value } = e.target; // name will be "dob"
+    const { name, value } = e.target;
     const calculatedAge = calculateAge(value);
 
     setFormData((prev) => ({
       ...prev,
-      [name]: value, // Set "dob"
-      age: calculatedAge, // Automatically set "age"
+      [name]: value,
+      age: calculatedAge,
     }));
   };
 
@@ -943,18 +1039,62 @@ export default function AddPatientModal({
   const handleSave = async () => {
     setLoading(true);
     setError("");
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    
+    // Process inventory deductions first
+    if (deductionQueue.length > 0) {
+      try {
+        for (const item of deductionQueue) {
+          // Fetch current quantity to be safe
+          const { data: currentItem, error: fetchError } = await supabase
+            .from('inventory')
+            .select('quantity, item_name')
+            .eq('id', item.itemId)
+            .single();
+          
+          if (fetchError) throw fetchError;
+          
+          if (currentItem && currentItem.quantity >= item.deductQty) {
+            // Update inventory
+            const { error: invError } = await supabase
+              .from('inventory')
+              .update({ quantity: currentItem.quantity - item.deductQty })
+              .eq('id', item.itemId);
+            
+            if (invError) throw invError;
+            
+            // Log activity
+            await logActivity(
+              'Stock Deducted', 
+              `Used ${item.deductQty} unit(s) of ${item.itemName} for patient ${patientId}`
+            );
+            
+            // Record transaction if we have a patient record
+            if (initialData?.id || mode === "add") {
+              const patientRecordId = mode === "edit" ? initialData.id : null;
+              
+              // In a real app, you would save this to inventory_transactions table
+              // For now, we'll just log it
+              console.log(`Transaction: ${item.deductQty} x ${item.itemName} for patient ${patientRecordId}`);
+            }
+            
+            addNotification(`Deducted ${item.deductQty} of ${item.itemName} from inventory`, 'success');
+          } else {
+            addNotification(`Insufficient stock for ${item.itemName}. Available: ${currentItem?.quantity || 0}`, 'error');
+          }
+        }
+      } catch (err) {
+        console.error("Inventory deduction error", err);
+        addNotification("Error updating inventory: " + err.message, "error");
+      }
+    }
 
-    // This object ONLY contains fields that are actual columns in the 'patients' table
+    // Save patient data
     const patientData = {
       patient_id: patientId,
       first_name: formData.first_name,
       middle_name: formData.middle_name,
       last_name: formData.last_name,
-      age: formData.age, // Age is now set from state
-      // dob: formData.dob, <-- REMOVED to avoid error, it's inside medical_history
+      age: formData.age,
       contact_no: formData.contact_no,
       risk_level: formData.risk_level,
       weeks: formData.weeks,
@@ -962,46 +1102,33 @@ export default function AddPatientModal({
       purok: formData.purok,
       street: formData.street,
       sms_notifications_enabled: formData.sms_notifications_enabled ?? true,
-      // 'formData' contains ALL fields, including 'dob' and medical history,
-      // which will be stored correctly in the JSONB column.
       medical_history: formData,
     };
 
     try {
       let result;
       if (mode === "edit") {
-        // --- MODIFIED LOGIC: DIRECT UPDATE INSTEAD OF REQUEST ---
-        result = await supabase
-          .from("patients")
-          .update(patientData)
-          .eq("id", initialData.id);
+        result = await supabase.from("patients").update(patientData).eq("id", initialData.id);
       } else {
-        // Add mode remains the same
         result = await supabase.from("patients").insert([patientData]);
       }
       
-      if (result.error) {
-        throw result.error;
-      } else {
-        if (mode === "edit") {
-          addNotification("Patient record updated successfully.", "success");
-          logActivity(
-            "Patient Record Updated",
-            `Updated record for ${formData.first_name} ${formData.last_name}`
-          );
-        } else {
-          addNotification("New patient added successfully.", "success");
-          logActivity(
-            "New Patient Added",
-            `Registered ${formData.first_name} ${formData.last_name}`
-          );
-        }
-        onSave();
-        onClose();
-      }
+      if (result.error) throw result.error;
+
+      addNotification(mode === 'edit' ? "Patient record updated successfully." : "New patient added successfully.", "success");
+      
+      // Log activity
+      await logActivity(
+        mode === 'edit' ? 'Patient Updated' : 'New Patient Added',
+        `${mode === 'edit' ? 'Updated' : 'Added'} patient ${formData.first_name} ${formData.last_name} (${patientId})`
+      );
+      
+      onSave();
+      onClose();
+      
     } catch (err) {
       setError("An error occurred: " + err.message);
-      addNotification(`An error occurred: ${err.message}`, "error");
+      addNotification("Error saving patient: " + err.message, "error");
     } finally {
       setLoading(false);
     }
@@ -1047,6 +1174,13 @@ export default function AddPatientModal({
             </div>
           )}
 
+          {deductionQueue.length > 0 && (
+            <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-2 rounded mb-4 text-sm">
+              <strong>Note: </strong>
+              {deductionQueue.length} item(s) will be deducted from inventory upon save.
+            </div>
+          )}
+
           <h2 className="text-xl font-bold text-gray-800 text-center mb-1">
             PARENTAL INDIVIDUAL TREATMENT RECORD
           </h2>
@@ -1067,10 +1201,20 @@ export default function AddPatientModal({
               <Step2 formData={formData} handleChange={handleChange} />
             )}
             {step === 3 && (
-              <Step3 formData={formData} handleChange={handleChange} />
+              <Step3 
+                formData={formData} 
+                handleChange={handleChange}
+                inventoryItems={inventoryItems}
+                onAddToQueue={handleAddToQueue}
+              />
             )}
             {step === 4 && (
-              <Step4 formData={formData} handleChange={handleChange} />
+              <Step4 
+                formData={formData} 
+                handleChange={handleChange}
+                inventoryItems={inventoryItems}
+                onAddToQueue={handleAddToQueue}
+              />
             )}
           </div>
 

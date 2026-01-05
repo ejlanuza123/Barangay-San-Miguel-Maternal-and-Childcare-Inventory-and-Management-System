@@ -52,6 +52,7 @@ export default function Login() {
       // If the user is already logged in, send them to their dashboard immediately
       switch (profile.role) {
         case "Admin": navigate("/admin/dashboard", { replace: true }); break;
+        case "Midwife": navigate("/midwife/dashboard", { replace: true }); break;
         case "BHW": navigate("/bhw/dashboard", { replace: true }); break;
         case "BNS": navigate("/bns/dashboard", { replace: true }); break;
         case "USER/MOTHER/GUARDIAN": navigate("/user/dashboard", { replace: true }); break;
