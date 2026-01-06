@@ -75,22 +75,26 @@ const ViewQuarterModal = ({ quarter, onClose, allData, onDownloadMonth }) => {
     const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
     const year = quarter.year;
     
-    // Filter Data for counts (Quarterly Summary) - STRICT YEAR CHECK
-    const children = allData.children.filter(c => {
+    // 1. New Children Registered
+    const newChildren = allData.children.filter(c => {
         const d = new Date(c.created_at);
         return months.includes(d.getMonth()) && d.getFullYear() === year;
     });
-    const appointments = allData.appointments.filter(a => {
-        const d = new Date(a.date);
+
+    // 2. Active Checkups (Based on last_checkup)
+    const activeCheckups = allData.children.filter(c => {
+        if (!c.last_checkup) return false;
+        const d = new Date(c.last_checkup);
         return months.includes(d.getMonth()) && d.getFullYear() === year;
     });
+
     const inventory = allData.inventory.filter(i => {
         const d = new Date(i.updated_at || i.created_at);
         return months.includes(d.getMonth()) && d.getFullYear() === year;
     });
 
-    // Simple malnutrition check
-    const malnutritionCount = children.filter(c => {
+    // Simple malnutrition check (on new/active combined or just new? Let's use new for stats)
+    const malnutritionCount = newChildren.filter(c => {
         const status = c.nutrition_status || 'H';
         return status === 'UW' || status === 'O' || status === 'OW';
     }).length;
@@ -112,12 +116,12 @@ const ViewQuarterModal = ({ quarter, onClose, allData, onDownloadMonth }) => {
                     {/* Stats Grid */}
                     <div className="grid grid-cols-2 gap-4">
                         <div className="bg-blue-50 p-4 rounded-lg text-center">
-                            <p className="text-2xl font-bold text-blue-600">{children.length}</p>
+                            <p className="text-2xl font-bold text-blue-600">{newChildren.length}</p>
                             <p className="text-xs text-gray-600 uppercase font-semibold">New Children</p>
                         </div>
                         <div className="bg-green-50 p-4 rounded-lg text-center">
-                            <p className="text-2xl font-bold text-green-600">{appointments.filter(a => a.status === 'Completed').length}</p>
-                            <p className="text-xs text-gray-600 uppercase font-semibold">Completed Checkups</p>
+                            <p className="text-2xl font-bold text-green-600">{activeCheckups.length}</p>
+                            <p className="text-xs text-gray-600 uppercase font-semibold">Active Checkups</p>
                         </div>
                         <div className="bg-yellow-50 p-4 rounded-lg text-center">
                             <p className="text-2xl font-bold text-yellow-600">{inventory.length}</p>
@@ -135,12 +139,9 @@ const ViewQuarterModal = ({ quarter, onClose, allData, onDownloadMonth }) => {
                         <div className="space-y-3">
                             {months.map(m => {
                                 const mName = monthNames[m];
-                                const mChildren = allData.children.filter(c => {
-                                    const d = new Date(c.created_at);
-                                    return d.getMonth() === m && d.getFullYear() === year;
-                                }).length;
-                                const mAppts = allData.appointments.filter(a => {
-                                    const d = new Date(a.date);
+                                const mVisits = allData.children.filter(c => {
+                                    if(!c.last_checkup) return false;
+                                    const d = new Date(c.last_checkup);
                                     return d.getMonth() === m && d.getFullYear() === year;
                                 }).length;
 
@@ -148,7 +149,7 @@ const ViewQuarterModal = ({ quarter, onClose, allData, onDownloadMonth }) => {
                                     <div key={m} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border hover:bg-gray-100 transition-colors">
                                         <div>
                                             <p className="font-bold text-gray-800 text-sm">{mName}</p>
-                                            <p className="text-xs text-gray-500">{mChildren} Children • {mAppts} Appointments</p>
+                                            <p className="text-xs text-gray-500">{mVisits} Checkups Recorded</p>
                                         </div>
                                         <button
                                             onClick={() => onDownloadMonth(m, quarter.year)}
@@ -217,20 +218,26 @@ export default function BnsReportsPage() {
     // --- REUSABLE PDF GENERATOR FOR BNS ---
     const generateReport = async (fileName, periodLabel, targetMonths, year) => {
         // 1. Filter Data for target months AND YEAR
-        const children = allData.children.filter(c => {
+        
+        // New Registrations
+        const newChildren = allData.children.filter(c => {
             const d = new Date(c.created_at);
             return targetMonths.includes(d.getMonth()) && d.getFullYear() === year;
         });
-        const appointments = allData.appointments.filter(a => {
-            const d = new Date(a.date);
+
+        // Active Checkups (Last Checkup)
+        const activeCheckups = allData.children.filter(c => {
+            if (!c.last_checkup) return false;
+            const d = new Date(c.last_checkup);
             return targetMonths.includes(d.getMonth()) && d.getFullYear() === year;
         });
+
         const inventory = allData.inventory.filter(i => {
             const d = new Date(i.updated_at || i.created_at);
             return targetMonths.includes(d.getMonth()) && d.getFullYear() === year;
         });
 
-        if (children.length === 0 && appointments.length === 0) {
+        if (newChildren.length === 0 && activeCheckups.length === 0 && inventory.length === 0) {
             setShowNoDataPop(true);
             setTimeout(() => setShowNoDataPop(false), 2000);
             return;
@@ -239,19 +246,19 @@ export default function BnsReportsPage() {
         setIsGenerating(true);
         
         // 2. BNS Analytics Calculations
-        const totalChildren = children.length;
+        const totalNew = newChildren.length;
+        const totalCheckups = activeCheckups.length;
+        
+        // Combine new and active for nutrition stats
+        const uniqueActive = [...new Set([...newChildren, ...activeCheckups])];
         const nutritionDist = { H: 0, UW: 0, OW: 0, O: 0 };
         
-        children.forEach(c => {
+        uniqueActive.forEach(c => {
             const status = c.nutrition_status || 'H';
             if (nutritionDist[status] !== undefined) nutritionDist[status]++;
         });
 
-        const totalAppts = appointments.length;
-        const completedAppts = appointments.filter(a => a.status === 'Completed').length;
-        
         const lowStockItems = inventory.filter(i => i.quantity <= 20).length;
-        const criticalStockItems = inventory.filter(i => i.quantity <= 10).length;
 
         // 3. Initialize PDF
         const doc = new jsPDF();
@@ -274,34 +281,34 @@ export default function BnsReportsPage() {
         const statsY = 62;
         doc.setFontSize(10);
         
-        // Box 1: Children
+        // Box 1: New Children
         doc.setDrawColor(200); doc.setFillColor(245, 247, 250); doc.rect(15, statsY, 55, 25, 'F'); doc.rect(15, statsY, 55, 25, 'S');
-        doc.setFont(undefined, 'bold').text(`${totalChildren}`, 25, statsY + 10);
+        doc.setFont(undefined, 'bold').text(`${totalNew}`, 25, statsY + 10);
         doc.setFont(undefined, 'normal').text("New Children Registered", 25, statsY + 18);
 
-        // Box 2: Appointments
+        // Box 2: Checkups
         doc.setFillColor(240, 253, 244); doc.rect(75, statsY, 55, 25, 'F'); doc.rect(75, statsY, 55, 25, 'S');
-        doc.setFont(undefined, 'bold').text(`${completedAppts} / ${totalAppts}`, 85, statsY + 10);
-        doc.setFont(undefined, 'normal').text("Appointments Completed", 85, statsY + 18);
+        doc.setFont(undefined, 'bold').text(`${totalCheckups}`, 85, statsY + 10);
+        doc.setFont(undefined, 'normal').text("Checkups Completed", 85, statsY + 18);
 
         // Box 3: Inventory
         doc.setFillColor(255, 247, 237); doc.rect(135, statsY, 55, 25, 'F'); doc.rect(135, statsY, 55, 25, 'S');
-        doc.setFont(undefined, 'bold').text(`${lowStockItems} Low / ${criticalStockItems} Critical`, 145, statsY + 10);
-        doc.setFont(undefined, 'normal').text("Inventory Alerts", 145, statsY + 18);
+        doc.setFont(undefined, 'bold').text(`${inventory.length}`, 145, statsY + 10);
+        doc.setFont(undefined, 'normal').text("Items Updated", 145, statsY + 18);
 
         // Nutrition Text
-        doc.text("Nutritional Status Overview:", 15, statsY + 35);
+        doc.text("Nutritional Status Overview (Active Patients):", 15, statsY + 35);
         doc.setFontSize(9).setTextColor(100);
-        doc.text(`- Healthy (H): ${nutritionDist.H} (${totalChildren > 0 ? ((nutritionDist.H/totalChildren)*100).toFixed(1) : 0}%)`, 20, statsY + 42);
+        doc.text(`- Healthy (H): ${nutritionDist.H}`, 20, statsY + 42);
         doc.text(`- Underweight (UW): ${nutritionDist.UW}`, 20, statsY + 48);
         doc.text(`- Overweight/Obese (OW/O): ${nutritionDist.OW + nutritionDist.O}`, 20, statsY + 54);
         doc.setTextColor(0);
 
-        // --- SECTION 2: CHILD REGISTRY ---
+        // --- SECTION 2: NEW REGISTRATIONS ---
         let currentY = statsY + 65;
-        doc.setFontSize(12).setTextColor(39, 174, 96).text("2. Detailed Child Registry", 15, currentY);
+        doc.setFontSize(12).setTextColor(39, 174, 96).text("2. New Child Registrations", 15, currentY);
         
-        const childRows = children.map(c => [
+        const childRows = newChildren.map(c => [
             c.child_id,
             `${c.last_name}, ${c.first_name}`,
             c.sex,
@@ -315,30 +322,31 @@ export default function BnsReportsPage() {
             head: [['ID', 'Name', 'Sex', 'Weight', 'Status', 'Reg. Date']],
             body: childRows,
             theme: 'striped',
-            headStyles: { fillColor: [39, 174, 96] }, // Green for BNS
+            headStyles: { fillColor: [39, 174, 96] },
             styles: { fontSize: 8 },
         });
 
-        // --- SECTION 3: APPOINTMENTS ---
+        // --- SECTION 3: CHECKUP ACTIVITY ---
         currentY = doc.lastAutoTable.finalY + 15;
         if (currentY > 250) { doc.addPage(); currentY = 20; }
         
-        doc.setFontSize(12).setTextColor(39, 174, 96).text("3. Appointment Log", 15, currentY);
+        doc.setFontSize(12).setTextColor(39, 174, 96).text("3. Child Check-up Activity", 15, currentY);
         
-        const apptRows = appointments.map(a => [
-            new Date(a.date).toLocaleDateString(),
-            a.patient_name,
-            a.reason,
-            a.status,
-            a.profiles ? `${a.profiles.first_name} ${a.profiles.last_name}` : 'N/A'
+        const checkupRows = activeCheckups.map(c => [
+            c.last_checkup ? new Date(c.last_checkup).toLocaleDateString() : 'N/A',
+            `${c.last_name}, ${c.first_name}`,
+            c.child_id,
+            c.weight_kg ? `${c.weight_kg}kg` : '-',
+            c.height_cm ? `${c.height_cm}cm` : '-',
+            c.nutrition_status
         ]);
 
         autoTable(doc, {
             startY: currentY + 5,
-            head: [['Date', 'Child/Patient', 'Purpose', 'Status', 'Assigned Staff']],
-            body: apptRows,
+            head: [['Date', 'Child Name', 'ID', 'Wt', 'Ht', 'Status']],
+            body: checkupRows,
             theme: 'striped',
-            headStyles: { fillColor: [41, 128, 185] }, // Blue for Appointments
+            headStyles: { fillColor: [41, 128, 185] }, 
             styles: { fontSize: 8 },
         });
 
@@ -346,27 +354,26 @@ export default function BnsReportsPage() {
         currentY = doc.lastAutoTable.finalY + 15;
         if (currentY > 250) { doc.addPage(); currentY = 20; }
 
-        doc.setFontSize(12).setTextColor(39, 174, 96).text("4. Current Inventory Snapshot", 15, currentY);
+        doc.setFontSize(12).setTextColor(39, 174, 96).text("4. Inventory Activity", 15, currentY);
 
         const inventoryRows = inventory.map(i => [
             i.item_name,
             i.category,
             `${i.quantity} ${i.unit || 'units'}`,
             i.status,
-            i.expiry_date || 'N/A'
+            new Date(i.updated_at || i.created_at).toLocaleDateString()
         ]);
 
         autoTable(doc, {
             startY: currentY + 5,
-            head: [['Item Name', 'Category', 'Stock Level', 'Status', 'Expiry']],
+            head: [['Item Name', 'Category', 'Stock Level', 'Status', 'Date Updated']],
             body: inventoryRows,
             theme: 'grid',
-            headStyles: { fillColor: [230, 126, 34] }, // Orange for Inventory
+            headStyles: { fillColor: [230, 126, 34] }, 
             styles: { fontSize: 8 },
         });
 
         doc.save(`${fileName}.pdf`);
-        
         setIsGenerating(false);
         logActivity('Report Generated', `Created BNS PDF report for ${periodLabel}`);
         addNotification('PDF Report generated successfully.', 'success');
@@ -400,22 +407,23 @@ export default function BnsReportsPage() {
             const months = getQuarterMonths(q);
             
             // FILTER BY CURRENT YEAR
-            const cCount = allData.children.filter(c => {
+            const newCount = allData.children.filter(c => {
                 const d = new Date(c.created_at);
                 return months.includes(d.getMonth()) && d.getFullYear() === currentYear;
             }).length;
             
-            const aCount = allData.appointments.filter(a => {
-                const d = new Date(a.date);
+            const checkupCount = allData.children.filter(c => {
+                if (!c.last_checkup) return false;
+                const d = new Date(c.last_checkup);
                 return months.includes(d.getMonth()) && d.getFullYear() === currentYear;
             }).length;
             
             return { 
                 id: q, 
                 name: `${q}${q === 1 ? 'st' : q === 2 ? 'nd' : q === 3 ? 'rd' : 'th'} Quarter`, 
-                year: currentYear, // Use selected year
+                year: currentYear, 
                 type: "Analytics PDF", 
-                size: `${cCount + aCount} Records`
+                size: `${newCount} New / ${checkupCount} Checkups`
             };
         });
     }, [allData, currentYear]);

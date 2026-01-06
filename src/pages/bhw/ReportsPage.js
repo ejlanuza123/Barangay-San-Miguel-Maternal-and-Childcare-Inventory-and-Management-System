@@ -75,15 +75,19 @@ const ViewQuarterModal = ({ quarter, onClose, allData, onDownloadMonth }) => {
     const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
     const year = quarter.year;
     
-    // Filter Data for counts (Quarterly Summary) - NOW STRICTLY CHECKING YEAR
-    const patients = allData.patients.filter(p => {
+    // 1. New Patients Registered
+    const newPatients = allData.patients.filter(p => {
         const d = new Date(p.created_at);
         return months.includes(d.getMonth()) && d.getFullYear() === year;
     });
-    const appointments = allData.appointments.filter(a => {
-        const d = new Date(a.date);
+
+    // 2. Patients Visited (Based on last_visit)
+    const visitedPatients = allData.patients.filter(p => {
+        if (!p.last_visit) return false;
+        const d = new Date(p.last_visit);
         return months.includes(d.getMonth()) && d.getFullYear() === year;
     });
+
     const inventory = allData.inventory.filter(i => {
         const d = new Date(i.updated_at || i.created_at);
         return months.includes(d.getMonth()) && d.getFullYear() === year;
@@ -106,20 +110,20 @@ const ViewQuarterModal = ({ quarter, onClose, allData, onDownloadMonth }) => {
                     {/* Stats Grid */}
                     <div className="grid grid-cols-2 gap-4">
                         <div className="bg-blue-50 p-4 rounded-lg text-center">
-                            <p className="text-2xl font-bold text-blue-600">{patients.length}</p>
+                            <p className="text-2xl font-bold text-blue-600">{newPatients.length}</p>
                             <p className="text-xs text-gray-600 uppercase font-semibold">New Patients</p>
                         </div>
                         <div className="bg-green-50 p-4 rounded-lg text-center">
-                            <p className="text-2xl font-bold text-green-600">{appointments.filter(a => a.status === 'Completed').length}</p>
-                            <p className="text-xs text-gray-600 uppercase font-semibold">Completed Checkups</p>
+                            <p className="text-2xl font-bold text-green-600">{visitedPatients.length}</p>
+                            <p className="text-xs text-gray-600 uppercase font-semibold">Active Visits</p>
                         </div>
                         <div className="bg-yellow-50 p-4 rounded-lg text-center">
                             <p className="text-2xl font-bold text-yellow-600">{inventory.length}</p>
                             <p className="text-xs text-gray-600 uppercase font-semibold">Items Updated</p>
                         </div>
                         <div className="bg-red-50 p-4 rounded-lg text-center">
-                            <p className="text-2xl font-bold text-red-600">{patients.filter(p => p.risk_level === 'HIGH RISK').length}</p>
-                            <p className="text-xs text-gray-600 uppercase font-semibold">High Risk Cases</p>
+                            <p className="text-2xl font-bold text-red-600">{newPatients.filter(p => p.risk_level === 'HIGH RISK').length}</p>
+                            <p className="text-xs text-gray-600 uppercase font-semibold">High Risk (New)</p>
                         </div>
                     </div>
                     
@@ -129,12 +133,10 @@ const ViewQuarterModal = ({ quarter, onClose, allData, onDownloadMonth }) => {
                         <div className="space-y-3">
                             {months.map(m => {
                                 const mName = monthNames[m];
-                                const mPatients = allData.patients.filter(p => {
-                                    const d = new Date(p.created_at);
-                                    return d.getMonth() === m && d.getFullYear() === year;
-                                }).length;
-                                const mAppts = allData.appointments.filter(a => {
-                                    const d = new Date(a.date);
+                                // Count visits in this month
+                                const mVisits = allData.patients.filter(p => {
+                                    if(!p.last_visit) return false;
+                                    const d = new Date(p.last_visit);
                                     return d.getMonth() === m && d.getFullYear() === year;
                                 }).length;
 
@@ -142,7 +144,7 @@ const ViewQuarterModal = ({ quarter, onClose, allData, onDownloadMonth }) => {
                                     <div key={m} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border hover:bg-gray-100 transition-colors">
                                         <div>
                                             <p className="font-bold text-gray-800 text-sm">{mName}</p>
-                                            <p className="text-xs text-gray-500">{mPatients} Patients • {mAppts} Appointments</p>
+                                            <p className="text-xs text-gray-500">{mVisits} Patient Visits Recorded</p>
                                         </div>
                                         <button
                                             onClick={() => onDownloadMonth(m, quarter.year)}
@@ -210,21 +212,26 @@ export default function ReportsPage() {
     // --- REUSABLE PDF GENERATOR ---
     const generateReport = async (fileName, periodLabel, targetMonths, year) => {
         // 1. Filter Data for target months AND YEAR
-        const patients = allData.patients.filter(p => {
+        
+        // Patients who REGISTERED in this period
+        const newPatients = allData.patients.filter(p => {
             const d = new Date(p.created_at);
             return targetMonths.includes(d.getMonth()) && d.getFullYear() === year;
         });
-        const appointments = allData.appointments.filter(a => {
-            const d = new Date(a.date);
+
+        // Patients who VISITED in this period (Active Activity)
+        const visitedPatients = allData.patients.filter(p => {
+            if (!p.last_visit) return false;
+            const d = new Date(p.last_visit);
             return targetMonths.includes(d.getMonth()) && d.getFullYear() === year;
         });
+
         const inventory = allData.inventory.filter(i => {
-            // Inventory snapshots typically show current state, but if we track history:
             const d = new Date(i.updated_at || i.created_at);
             return targetMonths.includes(d.getMonth()) && d.getFullYear() === year;
         });
 
-        if (patients.length === 0 && appointments.length === 0) {
+        if (newPatients.length === 0 && visitedPatients.length === 0 && inventory.length === 0) {
             setShowNoDataPop(true);
             setTimeout(() => setShowNoDataPop(false), 2000);
             return;
@@ -233,29 +240,28 @@ export default function ReportsPage() {
         setIsGenerating(true);
         
         // 2. Analytics Calculations
-        const totalPatients = patients.length;
+        const totalNew = newPatients.length;
+        const totalVisited = visitedPatients.length;
+        
         const riskDist = { Normal: 0, Mid: 0, High: 0 };
-        patients.forEach(p => {
+        // Calculate risk dist based on ALL active patients (new + visited unique)
+        const uniqueActive = [...new Set([...newPatients, ...visitedPatients])];
+        uniqueActive.forEach(p => {
             const r = p.risk_level?.toUpperCase() || 'NORMAL';
             if (r.includes('HIGH')) riskDist.High++;
             else if (r.includes('MID')) riskDist.Mid++;
             else riskDist.Normal++;
         });
 
-        const totalAppts = appointments.length;
-        const completedAppts = appointments.filter(a => a.status === 'Completed').length;
-        
         const lowStockItems = inventory.filter(i => i.quantity <= 20).length;
-        const criticalStockItems = inventory.filter(i => i.quantity <= 10).length;
 
         // 3. Initialize PDF
         const doc = new jsPDF();
         const pageWidth = doc.internal.pageSize.width;
         
         // --- HEADER ---
-        // doc.addImage(logo, 'JPEG', 15, 10, 20, 20); // Uncomment if logo import works
         doc.setFontSize(14).setFont(undefined, 'bold').text("Barangay San Miguel Health Center", pageWidth / 2, 20, { align: "center" });
-        doc.setFontSize(10).setFont(undefined, 'normal').text("Maternal Health Report", pageWidth / 2, 26, { align: "center" });
+        doc.setFontSize(10).setFont(undefined, 'normal').text("Maternal Health Activity Report", pageWidth / 2, 26, { align: "center" });
         doc.line(15, 32, pageWidth - 15, 32);
 
         // --- REPORT INFO ---
@@ -270,34 +276,34 @@ export default function ReportsPage() {
         const statsY = 62;
         doc.setFontSize(10);
         
-        // Box 1: Patients
+        // Box 1: New Registrations
         doc.setDrawColor(200); doc.setFillColor(245, 247, 250); doc.rect(15, statsY, 55, 25, 'F'); doc.rect(15, statsY, 55, 25, 'S');
-        doc.setFont(undefined, 'bold').text(`${totalPatients}`, 25, statsY + 10);
+        doc.setFont(undefined, 'bold').text(`${totalNew}`, 25, statsY + 10);
         doc.setFont(undefined, 'normal').text("New Patients Registered", 25, statsY + 18);
 
-        // Box 2: Appointments
+        // Box 2: Active Visits
         doc.setFillColor(240, 253, 244); doc.rect(75, statsY, 55, 25, 'F'); doc.rect(75, statsY, 55, 25, 'S');
-        doc.setFont(undefined, 'bold').text(`${completedAppts} / ${totalAppts}`, 85, statsY + 10);
-        doc.setFont(undefined, 'normal').text("Appointments Completed", 85, statsY + 18);
+        doc.setFont(undefined, 'bold').text(`${totalVisited}`, 85, statsY + 10);
+        doc.setFont(undefined, 'normal').text("Patient Visits Recorded", 85, statsY + 18);
 
-        // Box 3: Inventory Health
+        // Box 3: Inventory
         doc.setFillColor(255, 247, 237); doc.rect(135, statsY, 55, 25, 'F'); doc.rect(135, statsY, 55, 25, 'S');
-        doc.setFont(undefined, 'bold').text(`${lowStockItems} Low / ${criticalStockItems} Critical`, 145, statsY + 10);
-        doc.setFont(undefined, 'normal').text("Inventory Alerts", 145, statsY + 18);
+        doc.setFont(undefined, 'bold').text(`${inventory.length}`, 145, statsY + 10);
+        doc.setFont(undefined, 'normal').text("Items Updated/Added", 145, statsY + 18);
 
         // Analytics Text
-        doc.text("Risk Assessment Overview:", 15, statsY + 35);
+        doc.text("Activity Risk Overview (Unique Patients):", 15, statsY + 35);
         doc.setFontSize(9).setTextColor(100);
-        doc.text(`- High Risk Patients: ${riskDist.High} (${totalPatients > 0 ? ((riskDist.High/totalPatients)*100).toFixed(1) : 0}%)`, 20, statsY + 42);
-        doc.text(`- Mid Risk Patients: ${riskDist.Mid}`, 20, statsY + 48);
-        doc.text(`- Normal Risk Patients: ${riskDist.Normal}`, 20, statsY + 54);
+        doc.text(`- High Risk Patients Seen: ${riskDist.High}`, 20, statsY + 42);
+        doc.text(`- Mid Risk Patients Seen: ${riskDist.Mid}`, 20, statsY + 48);
+        doc.text(`- Normal Risk Patients Seen: ${riskDist.Normal}`, 20, statsY + 54);
         doc.setTextColor(0);
 
-        // --- SECTION 2: PATIENT REGISTRY ---
+        // --- SECTION 2: NEW PATIENT REGISTRY ---
         let currentY = statsY + 65;
-        doc.setFontSize(12).setTextColor(41, 128, 185).text("2. Detailed Patient Registry", 15, currentY);
+        doc.setFontSize(12).setTextColor(41, 128, 185).text("2. New Patient Registry", 15, currentY);
         
-        const patientRows = patients.map(p => [
+        const patientRows = newPatients.map(p => [
             p.patient_id,
             `${p.last_name}, ${p.first_name}`,
             p.age,
@@ -315,24 +321,24 @@ export default function ReportsPage() {
             styles: { fontSize: 8 },
         });
 
-        // --- SECTION 3: APPOINTMENTS ---
+        // --- SECTION 3: VISIT LOG ---
         currentY = doc.lastAutoTable.finalY + 15;
         if (currentY > 250) { doc.addPage(); currentY = 20; }
         
-        doc.setFontSize(12).setTextColor(41, 128, 185).text("3. Appointment Log", 15, currentY);
+        doc.setFontSize(12).setTextColor(41, 128, 185).text("3. Patient Visit Activity", 15, currentY);
         
-        const apptRows = appointments.map(a => [
-            new Date(a.date).toLocaleDateString(),
-            a.patient_name,
-            a.reason,
-            a.status,
-            a.profiles ? `${a.profiles.first_name} ${a.profiles.last_name}` : 'N/A'
+        const visitRows = visitedPatients.map(p => [
+            p.last_visit ? new Date(p.last_visit).toLocaleDateString() : 'N/A',
+            `${p.last_name}, ${p.first_name}`,
+            p.patient_id,
+            p.purok,
+            p.risk_level
         ]);
 
         autoTable(doc, {
             startY: currentY + 5,
-            head: [['Date', 'Patient', 'Purpose', 'Status', 'Assigned BHW']],
-            body: apptRows,
+            head: [['Visit Date', 'Patient Name', 'ID', 'Purok', 'Risk Status']],
+            body: visitRows,
             theme: 'striped',
             headStyles: { fillColor: [39, 174, 96] }, 
             styles: { fontSize: 8 },
@@ -342,19 +348,19 @@ export default function ReportsPage() {
         currentY = doc.lastAutoTable.finalY + 15;
         if (currentY > 250) { doc.addPage(); currentY = 20; }
 
-        doc.setFontSize(12).setTextColor(41, 128, 185).text("4. Current Inventory Snapshot", 15, currentY);
+        doc.setFontSize(12).setTextColor(41, 128, 185).text("4. Inventory Activity", 15, currentY);
 
         const inventoryRows = inventory.map(i => [
             i.item_name,
             i.category,
             `${i.quantity} ${i.unit || 'units'}`,
             i.status,
-            i.expiry_date || 'N/A'
+            new Date(i.updated_at || i.created_at).toLocaleDateString()
         ]);
 
         autoTable(doc, {
             startY: currentY + 5,
-            head: [['Item Name', 'Category', 'Stock Level', 'Status', 'Expiry']],
+            head: [['Item Name', 'Category', 'Stock Level', 'Status', 'Date Updated']],
             body: inventoryRows,
             theme: 'grid',
             headStyles: { fillColor: [230, 126, 34] },
@@ -395,26 +401,27 @@ export default function ReportsPage() {
         return [1, 2, 3, 4].map(q => {
             const months = getQuarterMonths(q);
             
-            // FILTER BY CURRENT YEAR
-            const pCount = allData.patients.filter(p => {
+            // FILTER BY CURRENT YEAR & ACTIVITY
+            const newCount = allData.patients.filter(p => {
                 const d = new Date(p.created_at);
                 return months.includes(d.getMonth()) && d.getFullYear() === currentYear;
             }).length;
             
-            const aCount = allData.appointments.filter(a => {
-                const d = new Date(a.date);
+            const visitCount = allData.patients.filter(p => {
+                if (!p.last_visit) return false;
+                const d = new Date(p.last_visit);
                 return months.includes(d.getMonth()) && d.getFullYear() === currentYear;
             }).length;
             
             return { 
                 id: q, 
                 name: `${q}${q === 1 ? 'st' : q === 2 ? 'nd' : q === 3 ? 'rd' : 'th'} Quarter`, 
-                year: currentYear, // Use the selected year
+                year: currentYear, 
                 type: "Analytics PDF", 
-                size: `${pCount + aCount} Records`
+                size: `${newCount} New / ${visitCount} Visits`
             };
         });
-    }, [allData, currentYear]); // Re-calculate when year changes
+    }, [allData, currentYear]);
 
     const filteredReports = useMemo(() => {
         if (!searchTerm) return quarterlyReports;
