@@ -5,12 +5,14 @@ import { logActivity } from '../../services/activityLogger';
 import { useNotification } from '../../context/NotificationContext';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-// import logo from '../../assets/logo.jpg'; // Uncomment if you have the logo
+import logo from '../../assets/logo.jpg'; // Uncomment if you have the logo
 
 // --- ICONS ---
 const DownloadIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>;
 const ViewIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>;
 const SearchIcon = () => <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>;
+const ChevronLeftIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>;
+const ChevronRightIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>;
 
 // --- HELPER FUNCTIONS ---
 const getQuarterMonths = (q) => {
@@ -71,13 +73,23 @@ const Calendar = () => {
 const ViewQuarterModal = ({ quarter, onClose, allData, onDownloadMonth }) => {
     const months = getQuarterMonths(quarter.id);
     const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    const year = quarter.year;
     
-    // Filter Data for counts (Quarterly Summary)
-    const children = allData.children.filter(c => months.includes(new Date(c.created_at).getMonth()));
-    const appointments = allData.appointments.filter(a => months.includes(new Date(a.date).getMonth()));
-    const inventory = allData.inventory.filter(i => months.includes(new Date(i.updated_at || i.created_at).getMonth()));
+    // Filter Data for counts (Quarterly Summary) - STRICT YEAR CHECK
+    const children = allData.children.filter(c => {
+        const d = new Date(c.created_at);
+        return months.includes(d.getMonth()) && d.getFullYear() === year;
+    });
+    const appointments = allData.appointments.filter(a => {
+        const d = new Date(a.date);
+        return months.includes(d.getMonth()) && d.getFullYear() === year;
+    });
+    const inventory = allData.inventory.filter(i => {
+        const d = new Date(i.updated_at || i.created_at);
+        return months.includes(d.getMonth()) && d.getFullYear() === year;
+    });
 
-    // Simple malnutrition check for dashboard view
+    // Simple malnutrition check
     const malnutritionCount = children.filter(c => {
         const status = c.nutrition_status || 'H';
         return status === 'UW' || status === 'O' || status === 'OW';
@@ -123,8 +135,14 @@ const ViewQuarterModal = ({ quarter, onClose, allData, onDownloadMonth }) => {
                         <div className="space-y-3">
                             {months.map(m => {
                                 const mName = monthNames[m];
-                                const mChildren = allData.children.filter(c => new Date(c.created_at).getMonth() === m).length;
-                                const mAppts = allData.appointments.filter(a => new Date(a.date).getMonth() === m).length;
+                                const mChildren = allData.children.filter(c => {
+                                    const d = new Date(c.created_at);
+                                    return d.getMonth() === m && d.getFullYear() === year;
+                                }).length;
+                                const mAppts = allData.appointments.filter(a => {
+                                    const d = new Date(a.date);
+                                    return d.getMonth() === m && d.getFullYear() === year;
+                                }).length;
 
                                 return (
                                     <div key={m} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border hover:bg-gray-100 transition-colors">
@@ -172,11 +190,15 @@ export default function BnsReportsPage() {
     const [isGenerating, setIsGenerating] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [showNoDataPop, setShowNoDataPop] = useState(false);
+    
+    // --- NEW: Current Year State ---
+    const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
+    
     const { addNotification } = useNotification();
 
     const fetchAllData = useCallback(async () => {
         setLoading(true);
-        // MODIFIED: Fetching data from BNS related tables
+        // We fetch ALL data initially, then filter by year on client-side
         const [childrenRes, inventoryRes, appointmentsRes] = await Promise.all([
             supabase.from('child_records').select('*'),
             supabase.from('bns_inventory').select('*'),
@@ -193,11 +215,20 @@ export default function BnsReportsPage() {
     useEffect(() => { fetchAllData(); }, [fetchAllData]);
 
     // --- REUSABLE PDF GENERATOR FOR BNS ---
-    const generateReport = async (fileName, periodLabel, targetMonths) => {
-        // 1. Filter Data for target months
-        const children = allData.children.filter(c => targetMonths.includes(new Date(c.created_at).getMonth()));
-        const appointments = allData.appointments.filter(a => targetMonths.includes(new Date(a.date).getMonth()));
-        const inventory = allData.inventory; // Inventory is snapshot
+    const generateReport = async (fileName, periodLabel, targetMonths, year) => {
+        // 1. Filter Data for target months AND YEAR
+        const children = allData.children.filter(c => {
+            const d = new Date(c.created_at);
+            return targetMonths.includes(d.getMonth()) && d.getFullYear() === year;
+        });
+        const appointments = allData.appointments.filter(a => {
+            const d = new Date(a.date);
+            return targetMonths.includes(d.getMonth()) && d.getFullYear() === year;
+        });
+        const inventory = allData.inventory.filter(i => {
+            const d = new Date(i.updated_at || i.created_at);
+            return targetMonths.includes(d.getMonth()) && d.getFullYear() === year;
+        });
 
         if (children.length === 0 && appointments.length === 0) {
             setShowNoDataPop(true);
@@ -212,7 +243,7 @@ export default function BnsReportsPage() {
         const nutritionDist = { H: 0, UW: 0, OW: 0, O: 0 };
         
         children.forEach(c => {
-            const status = c.nutrition_status || 'H'; // Default to Healthy
+            const status = c.nutrition_status || 'H';
             if (nutritionDist[status] !== undefined) nutritionDist[status]++;
         });
 
@@ -347,7 +378,8 @@ export default function BnsReportsPage() {
         generateReport(
             `BNS_Quarterly_Report_${quarter.name}_${quarter.year}`,
             `${quarter.name} ${quarter.year}`,
-            months
+            months,
+            quarter.year // Pass year
         );
     };
 
@@ -357,26 +389,36 @@ export default function BnsReportsPage() {
         generateReport(
             `BNS_Monthly_Report_${monthName}_${year}`,
             `${monthName} ${year}`,
-            [monthIndex]
+            [monthIndex],
+            year
         );
     };
 
+    // --- REFACTORED: Dependent on 'currentYear' state ---
     const quarterlyReports = useMemo(() => {
-        const year = new Date().getFullYear();
         return [1, 2, 3, 4].map(q => {
             const months = getQuarterMonths(q);
-            const pCount = allData.children.filter(p => months.includes(new Date(p.created_at).getMonth())).length;
-            const aCount = allData.appointments.filter(a => months.includes(new Date(a.date).getMonth())).length;
+            
+            // FILTER BY CURRENT YEAR
+            const cCount = allData.children.filter(c => {
+                const d = new Date(c.created_at);
+                return months.includes(d.getMonth()) && d.getFullYear() === currentYear;
+            }).length;
+            
+            const aCount = allData.appointments.filter(a => {
+                const d = new Date(a.date);
+                return months.includes(d.getMonth()) && d.getFullYear() === currentYear;
+            }).length;
             
             return { 
                 id: q, 
                 name: `${q}${q === 1 ? 'st' : q === 2 ? 'nd' : q === 3 ? 'rd' : 'th'} Quarter`, 
-                year, 
+                year: currentYear, // Use selected year
                 type: "Analytics PDF", 
-                size: `${pCount + aCount} Records`
+                size: `${cCount + aCount} Records`
             };
         });
-    }, [allData]);
+    }, [allData, currentYear]);
 
     const filteredReports = useMemo(() => {
         if (!searchTerm) return quarterlyReports;
@@ -405,7 +447,29 @@ export default function BnsReportsPage() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 bg-white p-6 rounded-lg shadow-sm border">
                     <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
-                        <h2 className="text-2xl font-bold text-gray-800">Reports Generation</h2>
+                        <div className="flex items-center space-x-4">
+                            <h2 className="text-2xl font-bold text-gray-800">Reports</h2>
+                            
+                            {/* --- YEAR SELECTOR --- */}
+                            <div className="flex items-center bg-gray-100 rounded-lg p-1 space-x-2">
+                                <button 
+                                    onClick={() => setCurrentYear(y => y - 1)} 
+                                    className="p-1 hover:bg-white rounded-md text-gray-600 hover:text-blue-600 transition-colors"
+                                    title="Previous Year"
+                                >
+                                    <ChevronLeftIcon />
+                                </button>
+                                <span className="px-2 font-bold text-gray-700 select-none min-w-[3rem] text-center">{currentYear}</span>
+                                <button 
+                                    onClick={() => setCurrentYear(y => y + 1)} 
+                                    className="p-1 hover:bg-white rounded-md text-gray-600 hover:text-blue-600 transition-colors"
+                                    title="Next Year"
+                                >
+                                    <ChevronRightIcon />
+                                </button>
+                            </div>
+                        </div>
+
                         <div className="relative w-full md:w-auto">
                             <span className="absolute inset-y-0 left-0 flex items-center pl-3"><SearchIcon /></span>
                             <input type="text" placeholder="Search Quarter..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 form-input rounded-md border-gray-300 shadow-sm text-sm" />
@@ -423,7 +487,7 @@ export default function BnsReportsPage() {
                                     <tr key={report.id} className="text-gray-700 hover:bg-gray-50 transition-colors">
                                         <td className="p-3">RPT-Q{report.id}</td>
                                         <td className="p-3 font-semibold text-gray-800">{report.name}</td>
-                                        <td className="p-3">{report.year}</td>
+                                        <td className="p-3 font-bold text-blue-600">{report.year}</td>
                                         <td className="p-3"><span className="bg-red-100 text-red-700 px-2 py-0.5 rounded text-xs font-bold">PDF</span></td>
                                         <td className="p-3">{report.size}</td>
                                         <td className="p-3 flex items-center space-x-2">

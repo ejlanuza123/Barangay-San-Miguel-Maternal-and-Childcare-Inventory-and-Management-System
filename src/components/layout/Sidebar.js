@@ -7,6 +7,7 @@ import logo from "../../assets/logo.jpg";
 import { motion, AnimatePresence } from "framer-motion";
 
 // --- (Your icons: DashboardIcon, MaternityIcon, etc.) ---
+const VisitIcon = () => ( <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" > <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" ></path> </svg> );
 const DashboardIcon = () => (
   <svg
     className="w-5 h-5"
@@ -237,7 +238,7 @@ export default function Sidebar({ role, openSettings }) {
         return [
           { name: "Dashboard", path: "/bhw/dashboard", icon: <DashboardIcon /> },
           { name: "Maternity Records", path: "/bhw/maternity-management", icon: <MaternityIcon /> },
-          { name: "Appointment", path: "/bhw/appointment", icon: <AppointmentIcon /> },
+          { name: "Follow-up Visit", path: "/bhw/appointment", icon: <VisitIcon /> },
           { name: "Inventory", path: "/bhw/inventory", icon: <InventoryIcon /> },
           { name: "Reports", path: "/bhw/reports", icon: <ReportsIcon /> },
         ];
@@ -245,7 +246,7 @@ export default function Sidebar({ role, openSettings }) {
         return [
           { name: "Dashboard", path: "/bns/dashboard", icon: <DashboardIcon /> },
           { name: "Child Health Records", path: "/bns/child-records", icon: <MaternityIcon /> },
-          { name: "Appointment", path: "/bns/appointment", icon: <AppointmentIcon /> },
+          { name: "Follow-up Visit", path: "/bns/appointment", icon: <VisitIcon /> },
           { name: "Inventory", path: "/bns/inventory", icon: <InventoryIcon /> },
           { name: "Reports", path: "/bns/reports", icon: <ReportsIcon /> },
         ];
