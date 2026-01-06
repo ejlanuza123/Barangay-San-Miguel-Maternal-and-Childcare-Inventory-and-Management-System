@@ -15,16 +15,16 @@ const AnalyticsOverview = ({ analytics }) => (
         <p className="text-xl font-bold text-blue-700">{analytics.totalPatients}</p>
       </div>
       <div className="bg-green-50 p-3 rounded-lg border border-green-100">
-        <p className="text-xs text-green-600 font-semibold">This Month</p>
-        <p className="text-xl font-bold text-green-700">{analytics.monthlyAppointments}</p>
+        <p className="text-xs text-green-600 font-semibold">Recent Visits</p>
+        <p className="text-xl font-bold text-green-700">{analytics.recentVisits}</p>
       </div>
       <div className="bg-red-50 p-3 rounded-lg border border-red-100">
         <p className="text-xs text-red-600 font-semibold">High Risk</p>
         <p className="text-xl font-bold text-red-700">{analytics.highRiskPatients}</p>
       </div>
       <div className="bg-purple-50 p-3 rounded-lg border border-purple-100">
-        <p className="text-xs text-purple-600 font-semibold">Completion Rate</p>
-        <p className="text-xl font-bold text-purple-700">{analytics.completionRate}%</p>
+        <p className="text-xs text-purple-600 font-semibold">Active Records</p>
+        <p className="text-xl font-bold text-purple-700">{analytics.totalPatients}</p>
       </div>
     </div>
   </div>
@@ -70,7 +70,7 @@ const RiskLevelChart = ({ riskLevels }) => {
 
 const MonthlyTrends = ({ monthlyData }) => (
   <div className="bg-white p-4 rounded-lg shadow border h-full">
-    <h3 className="font-bold text-gray-700 text-base mb-4">Monthly Appointments</h3>
+    <h3 className="font-bold text-gray-700 text-base mb-4">Monthly Patient Registrations</h3>
     <div className="space-y-2">
       {monthlyData.map((month, index) => {
          const maxVal = Math.max(...monthlyData.map(m => m.count)) || 1;
@@ -181,31 +181,18 @@ const Calendar = () => {
   };
 
   return (
-    <div className="bg-white p-4 rounded-lg shadow border h-full">
+    // Changed h-full to h-auto to wrap content tightly. 
+    // Added min-h to ensure consistency if needed.
+    <div className="bg-white p-4 rounded-lg shadow border h-auto min-h-[300px]">
       <div className="flex justify-between items-center mb-3">
-        <button
-          onClick={() => changeMonth(-1)}
-          className="p-1 rounded-full hover:bg-gray-100"
-        >
-          &lt;
-        </button>
+        <button onClick={() => changeMonth(-1)} className="p-1 rounded-full hover:bg-gray-100">&lt;</button>
         <h3 className="font-bold text-gray-700 text-base">
-          {currentDate.toLocaleString("default", {
-            month: "long",
-            year: "numeric",
-          })}
+          {currentDate.toLocaleString("default", { month: "long", year: "numeric" })}
         </h3>
-        <button
-          onClick={() => changeMonth(1)}
-          className="p-1 rounded-full hover:bg-gray-100"
-        >
-          &gt;
-        </button>
+        <button onClick={() => changeMonth(1)} className="p-1 rounded-full hover:bg-gray-100">&gt;</button>
       </div>
       <div className="grid grid-cols-7 gap-1 text-center text-xs text-gray-500 font-semibold">
-        {daysOfWeek.map((day) => (
-          <div key={day}>{day}</div>
-        ))}
+        {daysOfWeek.map((day) => <div key={day}>{day}</div>)}
       </div>
       <div className="grid grid-cols-7 gap-1 mt-2">{generateDates()}</div>
     </div>
@@ -277,87 +264,35 @@ const RecentActivity = ({ activities, onViewAll }) => (
   </div>
 );
 
-const UpcomingAppointments = ({ appointments }) => {
-  const getStatusClass = (status) => {
-    const styles = {
-      Scheduled: "bg-blue-100 text-blue-800",
-      Completed: "bg-green-100 text-green-700",
-      Cancelled: "bg-red-100 text-red-500",
-      Missed: "bg-orange-100 text-orange-500",
+const UpcomingVisits = ({ visits }) => {
+    // Helper to get next Wednesday date
+    const getNextWednesday = () => {
+        const d = new Date();
+        const diff = (3 + 7 - d.getDay()) % 7; 
+        d.setDate(d.getDate() + diff);
+        return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
     };
-    return styles[status] || styles.Cancelled;
-  };
-  const formatSchedulerName = (profile) => {
-    if (!profile?.first_name || !profile?.last_name) {
-      return "N/A";
-    }
-    const firstInitial = profile.first_name.charAt(0).toUpperCase();
-    return `${firstInitial}. ${profile.last_name}`;
-  };
-  return (
-    <div className="bg-white p-4 rounded-lg shadow border flex flex-col">
-      <div className="flex justify-between items-center mb-3">
-        <h3 className="font-bold text-gray-700 text-base">
-          Upcoming Appointments
-        </h3>
-        <Link
-          to="/bhw/appointment"
-          className="bg-green-500 text-white font-semibold py-2 px-3 rounded-md shadow-sm hover:bg-green-600 text-sm"
-        >
-          Scheduled Check-up
-        </Link>
-      </div>
+    const nextDate = getNextWednesday();
 
-      <div className="overflow-y-auto h-48">
-        <table className="w-full text-xs">
-          <thead className="sticky top-0 bg-white">
-            <tr className="text-left text-gray-500">
-              <th className="px-2 py-2 font-semibold">Patient Name</th>
-              <th className="px-2 py-2 font-semibold">Date</th>
-              <th className="px-2 py-2 font-semibold">Time</th>
-              <th className="px-2 py-2 font-semibold">Reason</th>
-              <th className="px-2 py-2 font-semibold">BHW</th>
-              <th className="px-2 py-2 font-semibold">Status</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {appointments.length > 0 ? (
-              appointments.map((app) => (
-                <tr key={app.id} className="text-gray-600">
-                  <td className="px-2 py-2 font-semibold text-gray-700">
-                    {app.patient_name}
-                  </td>
-                  <td className="px-2 py-2">
-                    {new Date(app.date).toLocaleDateString()}
-                  </td>
-                  <td className="px-2 py-2">{app.time}</td>
-                  <td className="px-2 py-2">{app.reason}</td>
-                  <td className="px-2 py-2">
-                    {formatSchedulerName(app.profiles)}
-                  </td>
-                  <td className="px-2 py-2">
-                    <span
-                      className={`px-2 py-0.5 font-bold rounded-full ${getStatusClass(
-                        app.status
-                      )}`}
-                    >
-                      {app.status}
-                    </span>
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan="6" className="p-4 text-center text-gray-500">
-                  No upcoming appointments.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
+    return (
+        <div className="bg-white p-4 rounded-lg shadow border h-full">
+            <h3 className="font-bold text-gray-700 text-base mb-3">Upcoming Follow-up Visits</h3>
+            <p className="text-xs text-gray-500 mb-2">Next Visit Day: <span className="font-bold text-blue-600">{nextDate}</span> (Wednesday)</p>
+            <div className="space-y-2 overflow-y-auto max-h-80">
+                {visits.length > 0 ? visits.map(patient => (
+                    <div key={patient.id} className="flex justify-between items-center p-3 bg-blue-50 rounded border hover:bg-blue-100 transition-colors">
+                        <div>
+                            <p className="font-semibold text-sm text-gray-800">{patient.last_name}, {patient.first_name}</p>
+                            <p className="text-xs text-gray-500">Purok: {patient.purok}</p>
+                        </div>
+                        <div className="text-right">
+                            <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-green-100 text-green-700">Walk-in Expected</span>
+                        </div>
+                    </div>
+                )) : <p className="text-sm text-gray-500 text-center py-4">No active patients found.</p>}
+            </div>
+        </div>
+    );
 };
 
 const ViewAllActivityModal = ({ activities, onClose }) => (
@@ -460,212 +395,126 @@ const AppointmentRequests = ({ requests, onApprove, onDeny }) => (
 );
 
 export default function BhwDashboard() {
-  const [stats, setStats] = useState({ total: 0, active: 0, today: 0 });
-  const [upcomingAppointments, setUpcomingAppointments] = useState([]);
-  const [recentActivities, setRecentActivities] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [upcomingVisits, setUpcomingVisits] = useState([]);
+  const [recentActivities, setRecentActivities] = useState([]);
   const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
-  const [pendingRequests, setPendingRequests] = useState([]);
-  const [patientsData, setPatientsData] = useState([]); // Store patient data for consistency
+  const [riskData, setRiskData] = useState([]);
+  
   const [analytics, setAnalytics] = useState({
     totalPatients: 0,
-    monthlyAppointments: 0,
+    recentVisits: 0,
     highRiskPatients: 0,
-    completionRate: 0,
-    riskLevels: {},
-    monthlyTrends: [],
-    appointmentStatus: {}
+    riskLevels: { Normal: 0, Medium: 0, High: 0 },
+    monthlyTrends: []
   });
 
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const { addNotification } = useNotification();
 
-  const fetchAnalyticsData = useCallback(async () => {
+  const fetchDashboardData = useCallback(async () => {
     if (!user) return;
+    setLoading(true);
 
     try {
-      // Fetch patient statistics - store for reuse
-      const { data: patientsData, error: patientsError } = await supabase
-        .from('patients')
-        .select('risk_level, created_at');
+      // 1. Fetch Patients & Activity
+      const [patientsRes, activityRes] = await Promise.all([
+        supabase.from('patients')
+            .select('id, first_name, last_name, purok, risk_level, created_at, last_visit, is_deleted')
+            .eq('is_deleted', false)
+            .order('last_name', { ascending: true }),
+        
+        supabase.from("activity_log")
+            .select("*, profiles(role, last_name)")
+            .eq('user_id', user.id)
+            .order("created_at", { ascending: false })
+            .limit(10)
+      ]);
 
-      if (patientsError) throw patientsError;
-      setPatientsData(patientsData || []);
+      if (patientsRes.error) throw patientsRes.error;
+      if (activityRes.error) throw activityRes.error;
 
-      // Fetch appointment statistics
-      const currentMonth = new Date().toISOString().slice(0, 7);
-      const { data: appointmentsData, error: appointmentsError } = await supabase
-        .from('appointments')
-        .select('status, date, created_at')
-        .gte('created_at', new Date(new Date().getFullYear(), 0, 1).toISOString());
-
-      if (appointmentsError) throw appointmentsError;
-
-      // Calculate analytics from the SAME patient data
-      const totalPatients = patientsData?.length || 0;
+      const patients = patientsRes.data || [];
       
-      const monthlyAppointments = appointmentsData?.filter(apt => 
-        apt.date?.startsWith(currentMonth)
-      ).length || 0;
+      // Upcoming Visits: Just take the first 10 active patients as "Expected" for the dashboard preview
+      setUpcomingVisits(patients.slice(0, 10));
+      setRecentActivities(activityRes.data || []);
 
-      // Normalize risk level matching for consistency
-      const normalizeRiskLevel = (risk) => {
-        if (!risk) return 'Unknown';
-        const riskLower = risk.toLowerCase();
-        if (riskLower.includes('high')) return 'High';
-        if (riskLower.includes('medium') || riskLower.includes('mid')) return 'Medium';
-        if (riskLower.includes('low') || riskLower.includes('normal')) return 'Low';
-        return risk;
-      };
-
-      // Calculate high risk patients - using normalized risk level
-      const highRiskPatients = patientsData?.filter(
-        patient => normalizeRiskLevel(patient.risk_level) === 'High'
-      ).length || 0;
-
-      const completedAppointments = appointmentsData?.filter(
-        apt => apt.status === 'Completed'
-      ).length || 0;
+      // 2. Calculate Analytics
+      const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
       
-      const totalAppointments = appointmentsData?.length || 0;
-      const completionRate = totalAppointments > 0 ? 
-        Math.round((completedAppointments / totalAppointments) * 100) : 0;
+      const totalPatients = patients.length;
+      
+      // Count "Recent Visits" (patients with last_visit in current month)
+      const recentVisits = patients.filter(p => p.last_visit && p.last_visit.startsWith(currentMonth)).length;
 
-      // Risk level distribution - using normalized risk levels
-      const riskLevels = patientsData?.reduce((acc, patient) => {
-        const risk = normalizeRiskLevel(patient.risk_level);
-        acc[risk] = (acc[risk] || 0) + 1;
+      // Robust High Risk Calculation
+      const highRiskPatients = patients.filter(p => {
+          const risk = (p.risk_level || '').toUpperCase();
+          return risk.includes('HIGH');
+      }).length;
+
+      // Risk Levels Distribution
+      const riskLevels = patients.reduce((acc, p) => {
+        const risk = (p.risk_level || '').toUpperCase();
+        let key = 'Normal';
+        if (risk.includes('HIGH')) key = 'High';
+        else if (risk.includes('MID') || risk.includes('MEDIUM')) key = 'Medium';
+        acc[key] = (acc[key] || 0) + 1;
         return acc;
-      }, {});
+      }, { Normal: 0, Medium: 0, High: 0 });
 
-      // Monthly trends (last 6 months)
+      setRiskData([
+        { name: 'Normal', value: riskLevels['Normal'] },
+        { name: 'Mid Risk', value: riskLevels['Medium'] },
+        { name: 'High Risk', value: riskLevels['High'] }
+      ]);
+
+      // Monthly Trends (Registrations Last 6 months)
       const monthlyTrends = [];
       for (let i = 5; i >= 0; i--) {
         const date = new Date();
         date.setMonth(date.getMonth() - i);
-        const monthYear = date.toLocaleString('default', { month: 'short', year: 'numeric' });
+        const monthLabel = date.toLocaleString('default', { month: 'short' });
         const monthStr = date.toISOString().slice(0, 7);
-        
-        const count = appointmentsData?.filter(apt => 
-          apt.date?.startsWith(monthStr)
-        ).length || 0;
-        
-        monthlyTrends.push({ month: monthYear, count });
+        const count = patients.filter(p => p.created_at?.startsWith(monthStr)).length;
+        monthlyTrends.push({ month: monthLabel, count });
       }
-
-      // Appointment status distribution
-      const appointmentStatus = appointmentsData?.reduce((acc, apt) => {
-        const status = apt.status || 'Unknown';
-        acc[status] = (acc[status] || 0) + 1;
-        return acc;
-      }, {});
-
-      // Log for debugging
-      console.log('Analytics calculated:');
-      console.log('Total patients:', totalPatients);
-      console.log('High risk patients:', highRiskPatients);
-      console.log('Risk levels distribution:', riskLevels);
-      console.log('High risk from distribution:', riskLevels?.['High'] || 0);
 
       setAnalytics({
         totalPatients,
-        monthlyAppointments,
+        recentVisits,
         highRiskPatients,
-        completionRate,
-        riskLevels: riskLevels || {},
-        monthlyTrends,
-        appointmentStatus: appointmentStatus || {}
+        riskLevels,
+        monthlyTrends
       });
 
     } catch (error) {
-      console.error('Error fetching analytics:', error);
-      addNotification(`Error loading analytics: ${error.message}`, 'error');
-    }
-  }, [user, addNotification]);
-
-  const fetchDashboardData = useCallback(async () => {
-    if (!user) return;
-
-    setLoading(true);
-
-    try {
-      await fetchAnalyticsData();
-
-      const [appointmentsRes, activityRes, requestsRes] = await Promise.all([
-        supabase
-          .from("appointments")
-          .select("*, profiles(first_name, last_name)")
-          .eq("created_by", user.id)
-          .order("created_at", { ascending: false })
-          .limit(10),
-
-        supabase
-          .from("activity_log")
-          .select("*, profiles(role, last_name)")
-          .order("created_at", { ascending: false }),
-
-        supabase
-          .from("appointments")
-          .select("*")
-          .eq("status", "Pending")
-      ]);
-
-      if (appointmentsRes.error) throw appointmentsRes.error;
-      if (activityRes.error) throw activityRes.error;
-      if (requestsRes.error) throw requestsRes.error;
-
-      setUpcomingAppointments(appointmentsRes.data || []);
-      setRecentActivities(activityRes.data || []);
-      setPendingRequests(requestsRes.data || []);
-
-    } catch (error) {
-      addNotification(`Error fetching dashboard data: ${error.message}`, 'error');
+      console.error("Error fetching dashboard data:", error);
+      addNotification(`Error loading dashboard: ${error.message}`, 'error');
     } finally {
       setLoading(false);
     }
-  }, [user, addNotification, fetchAnalyticsData]);
+  }, [user, addNotification]);
 
-  const handleApprove = async (appointmentId) => {
-    await supabase.rpc("approve_appointment_and_notify_user", {
-      appointment_id_param: appointmentId,
-      approver_name_param: profile.full_name,
-    });
-    fetchDashboardData();
-  };
+  useEffect(() => { fetchDashboardData(); }, [fetchDashboardData]);
 
-  const handleDeny = async (appointmentId) => {
-    await supabase
-      .from("appointments")
-      .update({ status: "Cancelled" })
-      .eq("id", appointmentId);
-    fetchDashboardData();
-  };
+  if (loading) return <div className="p-6 text-center text-gray-500">Loading Dashboard...</div>;
 
-  useEffect(() => {
-    fetchDashboardData();
-  }, [fetchDashboardData]);
-
-  if (loading) {
     return (
-      <div className="flex h-full items-center justify-center">
-        Loading Dashboard...
-      </div>
-    );
-  }
-
-  return (
     <>
       <AnimatePresence>
         {isActivityModalOpen && (
-          <ViewAllActivityModal
-            activities={recentActivities}
-            onClose={() => setIsActivityModalOpen(false)}
+          <ViewAllActivityModal 
+            activities={recentActivities} 
+            onClose={() => setIsActivityModalOpen(false)} 
           />
         )}
       </AnimatePresence>
-      
-      <div className="space-y-4">
-        {/* --- ANALYTICS SECTION --- */}
+
+      <div className="space-y-6">
+        
+        {/* --- TOP ROW: Analytics & Quick Stats --- */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
           <div className="lg:col-span-2">
             <AnalyticsOverview analytics={analytics} />
@@ -674,34 +523,34 @@ export default function BhwDashboard() {
             <RiskLevelChart riskLevels={analytics.riskLevels} />
           </div>
           <div className="lg:col-span-1">
-            <AppointmentStatusChart statusData={analytics.appointmentStatus} />
+             <QuickAccess />
           </div>
         </div>
 
-        {/* --- MAIN DASHBOARD CONTENT --- */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-          <div className="lg:col-span-1">
-            <MonthlyTrends monthlyData={analytics.monthlyTrends} />
-          </div>
-          <div className="lg:col-span-2">
-            <RecentActivity
-              activities={recentActivities}
-              onViewAll={() => setIsActivityModalOpen(true)}
-            />
-          </div>
-          <div className="lg:col-span-1">
-            <QuickAccess />
-          </div>
-        </div>
+        {/* --- BOTTOM ROW: Widgets Grid (4 Columns) --- */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+           {/* 1. Trends */}
+           <div className="lg:col-span-1">
+              <MonthlyTrends monthlyData={analytics.monthlyTrends} />
+           </div>
+           
+           {/* 2. Visits List */}
+           <div className="lg:col-span-1">
+             <UpcomingVisits visits={upcomingVisits} />
+           </div>
 
-        {/* --- BOTTOM SECTION --- */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="lg:col-span-2">
-            <UpcomingAppointments appointments={upcomingAppointments} />
-          </div>
-          <div className="lg:col-span-1">
-            <Calendar />
-          </div>
+           {/* 3. Activity Feed */}
+           <div className="lg:col-span-1">
+              <RecentActivity 
+                activities={recentActivities} 
+                onViewAll={() => setIsActivityModalOpen(true)} 
+              />
+           </div>
+
+           {/* 4. Calendar (Fixed Size) */}
+           <div className="lg:col-span-1">
+              <Calendar />
+           </div>
         </div>
       </div>
     </>
