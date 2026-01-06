@@ -5,6 +5,55 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import { useNotification } from '../../context/NotificationContext';
 
+// Helper function to calculate age from DOB
+const calculateAgeInYears = (dob) => {
+  if (!dob) return 0;
+  const birthDate = new Date(dob);
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDiff = today.getMonth() - birthDate.getMonth();
+  
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  
+  return age;
+};
+
+// Helper function to calculate age group
+const getAgeGroup = (age) => {
+  if (age < 1) return '0-1 years';
+  if (age < 3) return '1-3 years';
+  if (age < 5) return '3-5 years';
+  return '5+ years';
+};
+
+// Helper function to normalize nutrition status
+const normalizeNutritionStatus = (status) => {
+  if (!status) return 'Unknown';
+  
+  const statusStr = String(status).toUpperCase().trim();
+  
+  switch(statusStr) {
+    case 'H':
+    case 'HEALTHY':
+    case 'NORMAL':
+      return 'Healthy';
+    case 'UW':
+    case 'UNDERWEIGHT':
+    case 'SEVERELY UNDERWEIGHT':
+      return 'Underweight';
+    case 'OW':
+    case 'OVERWEIGHT':
+      return 'Overweight';
+    case 'O':
+    case 'OBESE':
+      return 'Obese';
+    default:
+      return 'Unknown';
+  }
+};
+
 // --- ANALYTICS COMPONENTS ---
 const AnalyticsOverview = ({ analytics }) => (
   <div className="bg-white p-4 rounded-lg shadow border h-full">
@@ -34,45 +83,18 @@ const AnalyticsOverview = ({ analytics }) => (
   </div>
 );
 
-const NutritionStatusChart = ({ nutritionData }) => {
-  // Normalize data to ensure consistency
-  const normalizeNutritionStatus = (status) => {
-    if (!status) return 'Unknown';
-    
-    const statusLower = status.toLowerCase();
-    if (statusLower.includes('normal') || statusLower.includes('healthy') || statusLower === 'h') {
-      return 'Healthy';
-    }
-    if (statusLower.includes('underweight') || statusLower.includes('severely') || statusLower === 'uw') {
-      return 'Underweight';
-    }
-    if (statusLower.includes('overweight') || statusLower === 'ow') {
-      return 'Overweight';
-    }
-    if (statusLower.includes('obese') || statusLower === 'o') {
-      return 'Obese';
-    }
-    return status;
-  };
-
-  // Group and normalize nutrition data
-  const normalizedData = Object.entries(nutritionData || {}).reduce((acc, [status, count]) => {
-    const normalizedStatus = normalizeNutritionStatus(status);
-    acc[normalizedStatus] = (acc[normalizedStatus] || 0) + count;
-    return acc;
-  }, {});
-
-  const total = Object.values(normalizedData).reduce((sum, count) => sum + count, 0);
+const NutritionChart = ({ nutritionData }) => {
+  const total = Object.values(nutritionData || {}).reduce((sum, count) => sum + count, 0);
   
   // Define display order
-  const displayOrder = ['Healthy', 'Underweight', 'Overweight', 'Obese', 'Unknown'];
+  const displayOrder = ['Healthy', 'Underweight', 'Overweight', 'Obese'];
   
   return (
     <div className="bg-white p-4 rounded-lg shadow border h-full">
       <h3 className="font-bold text-gray-700 text-base mb-4">Nutrition Status</h3>
       <div className="space-y-3">
         {displayOrder.map((status) => {
-          const count = normalizedData[status] || 0;
+          const count = nutritionData[status] || 0;
           const percentage = total > 0 ? ((count / total) * 100).toFixed(1) : 0;
           
           const getColor = (status) => {
@@ -84,8 +106,6 @@ const NutritionStatusChart = ({ nutritionData }) => {
               default: return 'bg-gray-500';
             }
           };
-          
-          if (count === 0 && status !== 'Unknown') return null;
           
           return (
             <div key={status} className="space-y-1">
@@ -112,62 +132,28 @@ const NutritionStatusChart = ({ nutritionData }) => {
 
 const MonthlyTrends = ({ monthlyData }) => (
   <div className="bg-white p-4 rounded-lg shadow border h-full">
-    <h3 className="font-bold text-gray-700 text-base mb-4">Monthly Checkups</h3>
+    <h3 className="font-bold text-gray-700 text-base mb-4">Monthly Registrations</h3>
     <div className="space-y-2">
-      {monthlyData && monthlyData.length > 0 ? monthlyData.map((month, index) => {
-        const maxVal = Math.max(...monthlyData.map(m => m.count || 1));
-        return (
-          <div key={index} className="flex items-center justify-between">
-            <span className="text-sm text-gray-600 font-medium">{month.month}</span>
-            <div className="flex items-center space-x-2">
-              <div className="w-24 bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-green-500 h-2 rounded-full"
-                  style={{ width: `${(month.count / maxVal) * 100}%` }}
-                ></div>
+      {monthlyData.map((month, index) => {
+         const maxVal = Math.max(...monthlyData.map(m => m.count)) || 1;
+         return (
+            <div key={index} className="flex items-center justify-between">
+              <span className="text-sm text-gray-600 font-medium w-10">{month.month}</span>
+              <div className="flex items-center space-x-2 flex-1 ml-2">
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div 
+                    className="bg-blue-500 h-2 rounded-full transition-all duration-500"
+                    style={{ width: `${(month.count / maxVal) * 100}%` }}
+                  ></div>
+                </div>
+                <span className="text-sm font-semibold text-gray-700 w-6 text-right">{month.count}</span>
               </div>
-              <span className="text-sm font-semibold text-gray-700 w-8">{month.count}</span>
             </div>
-          </div>
-        );
-      }) : (
-        <p className="text-sm text-gray-500 text-center py-4">No monthly data available</p>
-      )}
+         );
+      })}
     </div>
   </div>
 );
-
-const AgeDistributionChart = ({ ageData }) => {
-  const data = ageData || {};
-  const total = Object.values(data).reduce((sum, count) => sum + count, 0);
-  
-  // Define display order for age groups
-  const displayOrder = ['0-1 years', '1-3 years', '3-5 years', '5+ years'];
-  
-  return (
-    <div className="bg-white p-4 rounded-lg shadow border h-full">
-      <h3 className="font-bold text-gray-700 text-base mb-4">Age Distribution</h3>
-      <div className="space-y-3">
-        {Object.keys(data).length > 0 ? displayOrder.map((ageGroup) => {
-          const count = data[ageGroup] || 0;
-          const percentage = total > 0 ? ((count / total) * 100).toFixed(1) : 0;
-          
-          return (
-            <div key={ageGroup} className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                <span className="text-sm font-medium text-gray-700">{ageGroup}</span>
-              </div>
-              <span className="text-sm text-gray-500">{count} ({percentage}%)</span>
-            </div>
-          );
-        }) : (
-          <p className="text-sm text-gray-500 text-center py-4">No age data available</p>
-        )}
-      </div>
-    </div>
-  );
-};
 
 // --- EXISTING WIDGETS & SUB-COMPONENTS ---
 const getDotColor = (role) => {
@@ -185,55 +171,60 @@ const getDotColor = (role) => {
 };
 
 const Calendar = () => {
-    const [currentDate, setCurrentDate] = useState(new Date());
-    const daysOfWeek = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
-    
-    const changeMonth = (amount) => {
-        setCurrentDate(prevDate => {
-            const newDate = new Date(prevDate);
-            newDate.setMonth(newDate.getMonth() + amount);
-            return newDate;
-        });
-    };
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const daysOfWeek = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 
-    const generateDates = () => {
-        const year = currentDate.getFullYear();
-        const month = currentDate.getMonth();
-        const firstDayOfMonth = new Date(year, month, 1).getDay();
-        const daysInMonth = new Date(year, month + 1, 0).getDate();
-        const dates = [];
-        for (let i = 0; i < firstDayOfMonth; i++) {
-            dates.push(<div key={`pad-start-${i}`} className="p-2"></div>);
-        }
-        for (let i = 1; i <= daysInMonth; i++) {
-            const date = new Date(year, month, i);
-            const isToday = date.toDateString() === new Date().toDateString();
-            dates.push(
-                <div key={i} className={`p-2 rounded-full text-center text-sm cursor-pointer ${isToday ? 'bg-blue-500 text-white font-bold' : 'hover:bg-gray-100'}`}>
-                    {i}
-                </div>
-            );
-        }
-        return dates;
-    };
+  const changeMonth = (amount) => {
+    setCurrentDate((prevDate) => {
+      const newDate = new Date(prevDate);
+      newDate.setMonth(newDate.getMonth() + amount);
+      return newDate;
+    });
+  };
 
-    return (
-        <div className="bg-white p-4 rounded-lg shadow border h-full">
-            <div className="flex justify-between items-center mb-3">
-                <button onClick={() => changeMonth(-1)} className="p-1 rounded-full hover:bg-gray-100">&lt;</button>
-                <h3 className="font-bold text-gray-700 text-base">
-                    {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
-                </h3>
-                <button onClick={() => changeMonth(1)} className="p-1 rounded-full hover:bg-gray-100">&gt;</button>
-            </div>
-            <div className="grid grid-cols-7 gap-1 text-center text-xs text-gray-500 font-semibold">
-                {daysOfWeek.map(day => <div key={day}>{day}</div>)}
-            </div>
-            <div className="grid grid-cols-7 gap-1 mt-2">
-                {generateDates()}
-            </div>
+  const generateDates = () => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const firstDayOfMonth = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const dates = [];
+    for (let i = 0; i < firstDayOfMonth; i++) {
+      dates.push(<div key={`pad-start-${i}`} className="p-2"></div>);
+    }
+    for (let i = 1; i <= daysInMonth; i++) {
+      const date = new Date(year, month, i);
+      const isToday = date.toDateString() === new Date().toDateString();
+      dates.push(
+        <div
+          key={i}
+          className={`p-2 rounded-full text-center text-sm cursor-pointer ${
+            isToday ? "bg-green-500 text-white font-bold" : "hover:bg-gray-100"
+          }`}
+        >
+          {i}
         </div>
-    );
+      );
+    }
+    return dates;
+  };
+
+  return (
+    // Changed h-full to h-auto to wrap content tightly. 
+    // Added min-h to ensure consistency if needed.
+    <div className="bg-white p-4 rounded-lg shadow border h-auto min-h-[300px]">
+      <div className="flex justify-between items-center mb-3">
+        <button onClick={() => changeMonth(-1)} className="p-1 rounded-full hover:bg-gray-100">&lt;</button>
+        <h3 className="font-bold text-gray-700 text-base">
+          {currentDate.toLocaleString("default", { month: "long", year: "numeric" })}
+        </h3>
+        <button onClick={() => changeMonth(1)} className="p-1 rounded-full hover:bg-gray-100">&gt;</button>
+      </div>
+      <div className="grid grid-cols-7 gap-1 text-center text-xs text-gray-500 font-semibold">
+        {daysOfWeek.map((day) => <div key={day}>{day}</div>)}
+      </div>
+      <div className="grid grid-cols-7 gap-1 mt-2">{generateDates()}</div>
+    </div>
+  );
 };
 
 const QuickAccess = () => (
@@ -271,62 +262,33 @@ const RecentActivity = ({ activities, onViewAll }) => (
     </div>
 );
 
-const UpcomingAppointments = ({ appointments }) => {
-    const getStatusClass = (status) => {
-        const styles = {
-            Scheduled: 'bg-blue-100 text-blue-700',
-            Completed: 'bg-green-100 text-green-700',
-            Cancelled: 'bg-red-100 text-red-700',
-            Missed: 'bg-orange-100 text-orange-700',
-        };
-        return styles[status] || 'bg-gray-100 text-gray-800';
+const UpcomingVisits = ({ visits }) => {
+    // Helper to get next Thursday
+    const getNextThursday = () => {
+        const d = new Date();
+        const diff = (4 + 7 - d.getDay()) % 7; 
+        d.setDate(d.getDate() + diff);
+        return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
     };
-
-    const formatSchedulerName = (profile) => {
-        if (!profile?.first_name || !profile?.last_name) return 'N/A';
-        const firstInitial = profile.first_name.charAt(0).toUpperCase();
-        return `${firstInitial}. ${profile.last_name}`;
-    };
+    const nextDate = getNextThursday();
 
     return (
-        <div className="bg-white p-4 rounded-lg shadow border flex flex-col">
-            <div className="flex justify-between items-center mb-3">
-                <h3 className="font-bold text-gray-700 text-base">Upcoming Appointments</h3>
-                <Link to="/bns/appointment" className="bg-green-500 text-white font-semibold py-2 px-3 rounded-md shadow-sm hover:bg-green-600 text-sm">
-                    Scheduled Check-up
-                </Link>
-            </div>
-            <div className="overflow-y-auto h-48">
-                <table className="w-full text-xs">
-                    <thead className="sticky top-0 bg-white">
-                        <tr className="text-left text-gray-500">
-                            <th className="px-2 py-2 font-semibold">Patient Name</th>
-                            <th className="px-2 py-2 font-semibold">Date</th>
-                            <th className="px-2 py-2 font-semibold">Time</th>
-                            <th className="px-2 py-2 font-semibold">Reason</th>
-                            <th className="px-2 py-2 font-semibold">BNS</th>
-                            <th className="px-2 py-2 font-semibold">Status</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y">
-                        {appointments.length > 0 ? appointments.map((app) => (
-                            <tr key={app.id} className="text-gray-600">
-                                <td className="px-2 py-2 font-semibold text-gray-700">{app.patient_name}</td>
-                                <td className="px-2 py-2">{new Date(app.date).toLocaleDateString()}</td>
-                                <td className="px-2 py-2">{app.time}</td>
-                                <td className="px-2 py-2">{app.reason}</td>
-                                <td className="px-2 py-2">{formatSchedulerName(app.profiles)}</td>
-                                <td className="px-2 py-2">
-                                    <span className={`px-2 py-0.5 font-bold rounded-full ${getStatusClass(app.status)}`}>
-                                        {app.status}
-                                    </span>
-                                </td>
-                            </tr>
-                        )) : (
-                            <tr><td colSpan="6" className="p-4 text-center text-gray-500">No upcoming appointments.</td></tr>
-                        )}
-                    </tbody>
-                </table>
+        <div className="bg-white p-4 rounded-lg shadow border h-full">
+            <h3 className="font-bold text-gray-700 text-base mb-3">Upcoming Follow-up Visits</h3>
+            <p className="text-xs text-gray-500 mb-2">Next Visit Day: <span className="font-bold text-green-600">{nextDate}</span> (Thursday)</p>
+            <div className="space-y-2 overflow-y-auto max-h-80">
+                {visits.length > 0 ? visits.map(child => (
+                    <div key={child.id} className="flex justify-between items-center p-3 bg-green-50 rounded border hover:bg-green-100 transition-colors">
+                        <div>
+                            <p className="font-semibold text-sm text-gray-800">{child.last_name}, {child.first_name}</p>
+                            <p className="text-xs text-gray-500">ID: {child.child_id}</p>
+                            <p className="text-xs text-gray-500">Nutrition: {normalizeNutritionStatus(child.nutrition_status)}</p>
+                        </div>
+                        <div className="text-right">
+                            <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700">Walk-in Expected</span>
+                        </div>
+                    </div>
+                )) : <p className="text-sm text-gray-500 text-center py-4">No active records found.</p>}
             </div>
         </div>
     );
@@ -368,261 +330,164 @@ const ViewAllActivityModal = ({ activities, onClose }) => (
 
 // --- Main BNS Dashboard Component ---
 export default function BnsDashboard() {
-    const [upcomingAppointments, setUpcomingAppointments] = useState([]);
-    const [recentActivities, setRecentActivities] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
-    const [childrenData, setChildrenData] = useState([]); // Store children data for consistency
-    const [analytics, setAnalytics] = useState({
-        totalChildren: 0,
-        healthyCount: 0,
-        underweightCount: 0,
-        overweightCount: 0,
-        obeseCount: 0,
-        nutritionData: {},
-        monthlyTrends: [],
-        ageData: {}
-    });
+  const [loading, setLoading] = useState(true);
+  const [upcomingVisits, setUpcomingVisits] = useState([]);
+  const [recentActivities, setRecentActivities] = useState([]);
+  const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
+  
+  const [analytics, setAnalytics] = useState({
+    totalChildren: 0,
+    healthyCount: 0,
+    underweightCount: 0,
+    overweightCount: 0,
+    obeseCount: 0,
+    monthlyTrends: []
+  });
 
-    const { user } = useAuth();
-    const { addNotification } = useNotification();
+  const [nutritionData, setNutritionData] = useState({});
 
-    const fetchAnalyticsData = useCallback(async () => {
-        if (!user) return;
+  const { user } = useAuth();
+  const { addNotification } = useNotification();
 
-        try {
-            // Fetch child records statistics
-            const { data: childrenData, error: childrenError } = await supabase
-                .from('child_records')
-                .select('nutrition_status, weight_kg, height_cm, dob, last_checkup, bmi');
+  const fetchDashboardData = useCallback(async () => {
+    if (!user) return;
+    setLoading(true);
 
-            if (childrenError) throw childrenError;
-            
-            setChildrenData(childrenData || []);
+    try {
+      // 1. Fetch Children & Activity
+      const [childrenRes, activityRes] = await Promise.all([
+        supabase.from('child_records')
+            .select('id, child_id, first_name, last_name, dob, nutrition_status, created_at, last_checkup, is_deleted')
+            .eq('is_deleted', false)
+            .order('last_name', { ascending: true }),
+        
+        supabase.from("activity_log")
+            .select("*, profiles(role, last_name)")
+            .eq('user_id', user.id)
+            .order("created_at", { ascending: false })
+            .limit(10)
+      ]);
 
-            // Fetch appointment statistics for BNS
-            const currentMonth = new Date().toISOString().slice(0, 7);
-            const { data: appointmentsData, error: appointmentsError } = await supabase
-                .from('appointments')
-                .select('date, created_at')
-                .eq('created_by', user.id)
-                .gte('created_at', new Date(new Date().getFullYear(), 0, 1).toISOString());
+      if (childrenRes.error) throw childrenRes.error;
+      if (activityRes.error) throw activityRes.error;
 
-            if (appointmentsError) throw appointmentsError;
+      const children = childrenRes.data || [];
+      
+      // Upcoming Visits: Get children who need follow-up (last checkup was more than 1 month ago or never)
+      const oneMonthAgo = new Date();
+      oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+      
+      const visits = children.filter(child => {
+        if (!child.last_checkup) return true; // Never had checkup
+        const lastCheckupDate = new Date(child.last_checkup);
+        return lastCheckupDate < oneMonthAgo;
+      }).slice(0, 10);
+      
+      setUpcomingVisits(visits);
+      setRecentActivities(activityRes.data || []);
 
-            // Helper function to normalize nutrition status
-            const normalizeNutritionStatus = (status) => {
-                if (!status) return 'Unknown';
-                
-                const statusLower = status.toLowerCase();
-                if (statusLower.includes('normal') || statusLower.includes('healthy') || statusLower === 'h') {
-                    return 'Healthy';
-                }
-                if (statusLower.includes('underweight') || statusLower.includes('severely') || statusLower === 'uw') {
-                    return 'Underweight';
-                }
-                if (statusLower.includes('overweight') || statusLower === 'ow') {
-                    return 'Overweight';
-                }
-                if (statusLower.includes('obese') || statusLower === 'o') {
-                    return 'Obese';
-                }
-                return status;
-            };
+      // 2. Calculate Nutrition Statistics
+      const nutritionCounts = {
+        'Healthy': 0,
+        'Underweight': 0,
+        'Overweight': 0,
+        'Obese': 0
+      };
 
-            // Calculate analytics for BNS using the SAME normalization
-            const totalChildren = childrenData?.length || 0;
-
-            // Count nutrition status using normalized values
-            const healthyCount = childrenData?.filter(
-                child => normalizeNutritionStatus(child.nutrition_status) === 'Healthy'
-            ).length || 0;
-
-            const underweightCount = childrenData?.filter(
-                child => normalizeNutritionStatus(child.nutrition_status) === 'Underweight'
-            ).length || 0;
-
-            const overweightCount = childrenData?.filter(
-                child => normalizeNutritionStatus(child.nutrition_status) === 'Overweight'
-            ).length || 0;
-
-            const obeseCount = childrenData?.filter(
-                child => normalizeNutritionStatus(child.nutrition_status) === 'Obese'
-            ).length || 0;
-
-            // Nutrition status distribution - using normalized values
-            const nutritionData = childrenData?.reduce((acc, child) => {
-                const status = normalizeNutritionStatus(child.nutrition_status);
-                acc[status] = (acc[status] || 0) + 1;
-                return acc;
-            }, {});
-
-            // Monthly trends calculation
-            const monthlyTrends = [];
-            for (let i = 5; i >= 0; i--) {
-                const date = new Date();
-                date.setMonth(date.getMonth() - i);
-                const monthYear = date.toLocaleString('default', { month: 'short', year: 'numeric' });
-                const monthStr = date.toISOString().slice(0, 7);
-                
-                const count = appointmentsData?.filter(apt => 
-                    apt.date?.startsWith(monthStr)
-                ).length || 0;
-                
-                monthlyTrends.push({ month: monthYear, count });
-            }
-
-            // Age distribution calculation
-            const ageData = childrenData?.reduce((acc, child) => {
-                if (!child.dob) return acc;
-                
-                const birthDate = new Date(child.dob);
-                const today = new Date();
-                const ageInMonths = (today.getFullYear() - birthDate.getFullYear()) * 12 + 
-                                (today.getMonth() - birthDate.getMonth());
-                
-                let ageGroup;
-                if (ageInMonths <= 12) ageGroup = '0-1 years';
-                else if (ageInMonths <= 36) ageGroup = '1-3 years';
-                else if (ageInMonths <= 60) ageGroup = '3-5 years';
-                else ageGroup = '5+ years';
-                
-                acc[ageGroup] = (acc[ageGroup] || 0) + 1;
-                return acc;
-            }, {});
-
-            // Log for debugging
-            console.log('BNS Analytics calculated:');
-            console.log('Total children:', totalChildren);
-            console.log('Healthy count:', healthyCount);
-            console.log('Underweight count:', underweightCount);
-            console.log('Overweight count:', overweightCount);
-            console.log('Obese count:', obeseCount);
-            console.log('Nutrition data:', nutritionData);
-            console.log('Healthy from distribution:', nutritionData?.['Healthy'] || 0);
-
-            setAnalytics({
-                totalChildren,
-                healthyCount,
-                underweightCount,
-                overweightCount,
-                obeseCount,
-                nutritionData: nutritionData || {},
-                monthlyTrends: monthlyTrends || [],
-                ageData: ageData || {}
-            });
-
-        } catch (error) {
-            console.error('Error fetching BNS analytics:', error);
-            addNotification(`Error loading analytics: ${error.message}`, 'error');
+      children.forEach(child => {
+        // Nutrition status counting
+        const normalizedStatus = normalizeNutritionStatus(child.nutrition_status);
+        if (nutritionCounts[normalizedStatus] !== undefined) {
+          nutritionCounts[normalizedStatus]++;
         }
-    }, [user, addNotification]);
+      });
 
-    const fetchDashboardData = useCallback(async () => {
-        if (!user) return;
+      setNutritionData(nutritionCounts);
 
-        setLoading(true);
+      // Monthly Trends (Registrations Last 6 months)
+      const monthlyTrends = [];
+      for (let i = 5; i >= 0; i--) {
+        const date = new Date();
+        date.setMonth(date.getMonth() - i);
+        const monthLabel = date.toLocaleString('default', { month: 'short' });
+        const monthStr = date.toISOString().slice(0, 7);
+        const count = children.filter(c => {
+          if (!c.created_at) return false;
+          return c.created_at.startsWith(monthStr);
+        }).length;
+        monthlyTrends.push({ month: monthLabel, count });
+      }
 
-        try {
-            await fetchAnalyticsData();
+      setAnalytics({
+        totalChildren: children.length,
+        healthyCount: nutritionCounts['Healthy'],
+        underweightCount: nutritionCounts['Underweight'],
+        overweightCount: nutritionCounts['Overweight'],
+        obeseCount: nutritionCounts['Obese'],
+        monthlyTrends
+      });
 
-            const [appointmentsRes, activityRes] = await Promise.all([
-                supabase
-                    .from('appointments')
-                    .select('*, profiles(first_name, last_name)')
-                    .eq('created_by', user.id)
-                    .order('created_at', { ascending: false })
-                    .limit(10),
-
-                supabase
-                    .from('activity_log')
-                    .select('*, profiles(role, last_name)')
-                    .order('created_at', { ascending: false })
-            ]);
-
-            if (appointmentsRes.error) throw appointmentsRes.error;
-            if (activityRes.error) throw activityRes.error;
-
-            setUpcomingAppointments(appointmentsRes.data || []);
-            setRecentActivities(activityRes.data || []);
-
-        } catch (error) {
-            addNotification(`Error fetching dashboard data: ${error.message}`, 'error');
-        } finally {
-            setLoading(false);
-        }
-    }, [user, addNotification, fetchAnalyticsData]);
-
-    useEffect(() => {
-        fetchDashboardData();
-
-        const channel = supabase.channel('activity-log-channel')
-            .on(
-                'postgres_changes',
-                { event: 'INSERT', schema: 'public', table: 'activity_log' },
-                (payload) => {
-                    fetchDashboardData();
-                }
-            )
-            .subscribe();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, [fetchDashboardData]);
-
-    if (loading) {
-        return <div className="flex h-full items-center justify-center">Loading Dashboard...</div>;
+    } catch (error) {
+      console.error("Error fetching dashboard data:", error);
+      addNotification(`Error loading dashboard: ${error.message}`, 'error');
+    } finally {
+      setLoading(false);
     }
+  }, [user, addNotification]);
 
-    return (
-        <>
-            <AnimatePresence>
-                {isActivityModalOpen && (
-                    <ViewAllActivityModal 
-                        activities={recentActivities}
-                        onClose={() => setIsActivityModalOpen(false)}
-                    />
-                )}
-            </AnimatePresence>
-            
-            <div className="space-y-4">
-                {/* --- ANALYTICS SECTION --- */}
-                <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-                    <div className="lg:col-span-2">
-                        <AnalyticsOverview analytics={analytics} />
-                    </div>
-                    <div className="lg:col-span-1">
-                        <NutritionStatusChart nutritionData={analytics.nutritionData} />
-                    </div>
-                    <div className="lg:col-span-1">
-                        <AgeDistributionChart ageData={analytics.ageData} />
-                    </div>
-                </div>
+  useEffect(() => { 
+    fetchDashboardData(); 
+  }, [fetchDashboardData]);
 
-                {/* --- MAIN DASHBOARD CONTENT --- */}
-                <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-                    <div className="lg:col-span-1">
-                        <MonthlyTrends monthlyData={analytics.monthlyTrends} />
-                    </div>
-                    <div className="lg:col-span-2">
-                        <RecentActivity activities={recentActivities} onViewAll={() => setIsActivityModalOpen(true)} />
-                    </div>
-                    <div className="lg:col-span-1">
-                        <QuickAccess />
-                    </div>
-                </div>
+  if (loading) return <div className="p-6 text-center text-gray-500">Loading Dashboard...</div>;
 
-                {/* --- BOTTOM SECTION --- */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                    <div className="lg:col-span-2">
-                        <UpcomingAppointments appointments={upcomingAppointments} />
-                    </div>
-                    <div className="lg:col-span-1">
-                        <Calendar />
-                    </div>
-                </div>
-            </div>
-        </>
-    );
+  return (
+    <>
+      <AnimatePresence>
+        {isActivityModalOpen && (
+          <ViewAllActivityModal 
+            activities={recentActivities} 
+            onClose={() => setIsActivityModalOpen(false)} 
+          />
+        )}
+      </AnimatePresence>
+
+      <div className="space-y-6">
+        {/* --- TOP ROW: Analytics & Quick Stats --- */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+          <div className="lg:col-span-2">
+            <AnalyticsOverview analytics={analytics} />
+          </div>
+          <div className="lg:col-span-1">
+            <NutritionChart nutritionData={nutritionData} />
+          </div>
+          <div className="lg:col-span-1">
+             <QuickAccess />
+          </div>
+        </div>
+
+        {/* --- BOTTOM ROW: Widgets Grid --- */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+           <div className="lg:col-span-1">
+              <MonthlyTrends monthlyData={analytics.monthlyTrends} />
+           </div>
+           
+           <div className="lg:col-span-1">
+             <UpcomingVisits visits={upcomingVisits} />
+           </div>
+
+           <div className="lg:col-span-1">
+              <RecentActivity 
+                activities={recentActivities} 
+                onViewAll={() => setIsActivityModalOpen(true)} 
+              />
+           </div>
+
+           <div className="lg:col-span-1">
+              <Calendar />
+           </div>
+        </div>
+      </div>
+    </>
+  );
 }
