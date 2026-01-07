@@ -18,12 +18,9 @@ const SuccessIcon = () => (
   </svg>
 );
 
-export default function AddInventoryModal({
-  onClose,
-  onSave,
-  mode = "add",
-  initialData = null,
-}) {
+
+
+export default function AddInventoryModal({ onClose, onSave, mode = "add", initialData = null }) {
   const [formData, setFormData] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -36,6 +33,9 @@ export default function AddInventoryModal({
         item_name: initialData.item_name || "",
         category: initialData.category || "",
         quantity: initialData.quantity || "",
+        unit: initialData.unit || "", // UOM
+        sku: initialData.sku || "", // NEW
+        batch_no: initialData.batch_no || "", // NEW
         manufacture_date: initialData.manufacture_date || "",
         expiry_date: initialData.expiry_date || "",
       });
@@ -52,32 +52,32 @@ export default function AddInventoryModal({
     setLoading(true);
     setError("");
 
+    const dataPayload = {
+        ...formData,
+        // Ensure SKU is uppercase if provided, or null
+        sku: formData.sku ? formData.sku.toUpperCase() : null,
+        updated_at: new Date().toISOString()
+    };
+
     let result;
     if (mode === "edit") {
-      result = await supabase
-        .from("inventory")
-        .update({ ...formData, updated_at: new Date().toISOString() })
-        .eq("id", initialData.id);
+      result = await supabase.from("inventory").update(dataPayload).eq("id", initialData.id);
     } else {
-      result = await supabase.from("inventory").insert([formData]);
+      result = await supabase.from("inventory").insert([dataPayload]);
     }
 
     if (result.error) {
       setError(result.error.message);
-      addNotification(`Error: ${result.error.message}`, "error"); // <-- 3. SHOW NOTIFICATION
+      addNotification(`Error: ${result.error.message}`, "error");
     } else {
       if (mode === "add") {
-        logActivity("New Item Added", `Added item: ${formData.item_name}`);
-        // Use the new notification instead of the old success screen
+        logActivity("New Item Added", `Added item: ${formData.item_name} (Batch: ${formData.batch_no})`);
         addNotification("New item added to inventory.", "success");
         onSave();
         onClose();
       } else {
-        logActivity(
-          "Inventory Item Updated",
-          `Updated item: ${formData.item_name}`
-        );
-        addNotification("Inventory item updated successfully.", "success"); // <-- 3. SHOW NOTIFICATION
+        logActivity("Inventory Item Updated", `Updated item: ${formData.item_name}`);
+        addNotification("Inventory item updated successfully.", "success");
         onSave();
         onClose();
       }
@@ -85,153 +85,79 @@ export default function AddInventoryModal({
     setLoading(false);
   };
 
-  const handleDone = () => {
-    onSave();
-    onClose();
-  };
-
-  const modalVariants = {
-    hidden: { opacity: 0, scale: 0.95 },
-    visible: { opacity: 1, scale: 1 },
-    exit: { opacity: 0, scale: 0.95 },
-  };
-
+  const modalVariants = { hidden: { opacity: 0, scale: 0.95 }, visible: { opacity: 1, scale: 1 }, exit: { opacity: 0, scale: 0.95 } };
   const title = mode === "edit" ? "Edit Item" : "Add New Item";
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
       <AnimatePresence>
         {!showSuccess ? (
-          <motion.div
-            key="form"
-            variants={modalVariants}
-            initial="hidden"
-            animate="visible"
-            exit="exit"
-            className="bg-white rounded-lg shadow-2xl w-full max-w-md"
-          >
+          <motion.div key="form" variants={modalVariants} initial="hidden" animate="visible" exit="exit" className="bg-white rounded-lg shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto" >
             <div className="p-6">
-              <h2 className="text-2xl font-bold text-gray-800 mb-6">{title}</h2>
-              <form onSubmit={handleSave} className="space-y-4">
+              <h2 className="text-xl font-bold text-gray-800 mb-4">{title}</h2>
+              <form onSubmit={handleSave} className="space-y-3">
+                
+                {/* 1. SKU Field */}
                 <div>
-                  <label className="text-sm font-semibold text-gray-600">
-                    Item Name
-                  </label>
-                  <input
-                    type="text"
-                    name="item_name"
-                    value={formData.item_name || ""}
-                    placeholder="Enter item name"
-                    onChange={handleChange}
-                    className="w-full mt-1 p-2 border rounded-md text-sm"
-                    required
-                  />
+                  <label className="text-xs font-semibold text-gray-600">SKU (Stock Keeping Unit)</label>
+                  <input type="text" name="sku" value={formData.sku || ""} onChange={handleChange} placeholder="e.g. MED-001" className="w-full mt-1 p-2 border rounded-md text-sm uppercase" />
                 </div>
+
                 <div>
-                  <label className="text-sm font-semibold text-gray-600">
-                    Category
-                  </label>
-                  <select
-                    name="category"
-                    value={formData.category || ""}
-                    onChange={handleChange}
-                    className="w-full mt-1 p-2 border rounded-md text-sm bg-gray-50"
-                  >
-                    <option value="">Select category</option>
-                    <option value="Medicines">Medicines</option>
-                    <option value="Nutrition and Feeding">
-                      Nutrition and Feeding
-                    </option>
-                    <option value="Medical Supplies">Medical Supplies</option>
-                    <option value="Vaccines">Vaccines</option>
-                    <option value="Equipment">Equipment</option>
-                    <option value="Child Hygiene and Care">
-                      Child Hygiene and Care
-                    </option>
-                  </select>
+                  <label className="text-xs font-semibold text-gray-600">Item Name / Description</label>
+                  <input type="text" name="item_name" value={formData.item_name || ""} onChange={handleChange} className="w-full mt-1 p-2 border rounded-md text-sm" required />
                 </div>
-                <div>
-                  <label className="text-sm font-semibold text-gray-600">
-                    Stock Units
-                  </label>
-                  <input
-                    type="number"
-                    name="quantity"
-                    value={formData.quantity || ""}
-                    placeholder="Enter stock quantity"
-                    onChange={handleChange}
-                    className="w-full mt-1 p-2 border rounded-md text-sm"
-                    required
-                  />
+
+                <div className="grid grid-cols-2 gap-3">
+                    <div>
+                        <label className="text-xs font-semibold text-gray-600">Category</label>
+                        <select name="category" value={formData.category || ""} onChange={handleChange} className="w-full mt-1 p-2 border rounded-md text-sm bg-gray-50" required >
+                            <option value="">Select...</option>
+                            <option value="Medicines">Medicines</option>
+                            <option value="Medical Supplies">Supplies</option>
+                            <option value="Vaccines">Vaccines</option>
+                            <option value="Equipment">Equipment</option>
+                        </select>
+                    </div>
+                    {/* 2. Batch/Lot No. Field */}
+                    <div>
+                        <label className="text-xs font-semibold text-gray-600">Batch / Lot No.</label>
+                        <input type="text" name="batch_no" value={formData.batch_no || ""} onChange={handleChange} className="w-full mt-1 p-2 border rounded-md text-sm" />
+                    </div>
                 </div>
-                <div>
-                  <label className="text-sm font-semibold text-gray-600">
-                    Manufacture Date
-                  </label>
-                  <input
-                    type="date"
-                    name="manufacture_date"
-                    value={formData.manufacture_date || ""}
-                    onChange={handleChange}
-                    className="w-full mt-1 p-2 border rounded-md text-sm"
-                  />
+
+                <div className="grid grid-cols-2 gap-3">
+                    <div>
+                        <label className="text-xs font-semibold text-gray-600">Quantity</label>
+                        <input type="number" name="quantity" value={formData.quantity || ""} onChange={handleChange} className="w-full mt-1 p-2 border rounded-md text-sm" required />
+                    </div>
+                    <div>
+                        <label className="text-xs font-semibold text-gray-600">UOM (Unit)</label>
+                        <input type="text" name="unit" value={formData.unit || ""} onChange={handleChange} placeholder="e.g. Box, Pc" className="w-full mt-1 p-2 border rounded-md text-sm" required />
+                    </div>
                 </div>
-                <div>
-                  <label className="text-xs font-semibold text-gray-600">
-                    Expiry Date
-                  </label>
-                  <input
-                    type="date"
-                    name="expiry_date"
-                    value={formData.expiry_date || ""}
-                    onChange={handleChange}
-                    className="w-full mt-1 p-2 border rounded-md text-sm"
-                  />
+
+                <div className="grid grid-cols-2 gap-3">
+                    <div>
+                        <label className="text-xs font-semibold text-gray-600">Manufacture Date</label>
+                        <input type="date" name="manufacture_date" value={formData.manufacture_date || ""} onChange={handleChange} className="w-full mt-1 p-2 border rounded-md text-sm" />
+                    </div>
+                    <div>
+                        <label className="text-xs font-semibold text-gray-600">Expiry Date</label>
+                        <input type="date" name="expiry_date" value={formData.expiry_date || ""} onChange={handleChange} className="w-full mt-1 p-2 border rounded-md text-sm" />
+                    </div>
                 </div>
-                {error && (
-                  <p className="text-red-500 text-xs text-center">{error}</p>
-                )}
-                <div className="flex justify-end items-center space-x-3 pt-4">
-                  <button
-                    type="button"
-                    onClick={onClose}
-                    className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 font-semibold text-sm"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 font-semibold text-sm"
-                  >
-                    {loading ? "Saving..." : "Save"}
-                  </button>
+                
+                {error && <p className="text-red-500 text-xs text-center">{error}</p>}
+                
+                <div className="flex justify-end items-center space-x-3 pt-4 border-t mt-4">
+                  <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 font-semibold text-sm">Cancel</button>
+                  <button type="submit" disabled={loading} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 font-semibold text-sm">{loading ? "Saving..." : "Save Item"}</button>
                 </div>
               </form>
             </div>
           </motion.div>
-        ) : (
-          <motion.div
-            key="success"
-            variants={modalVariants}
-            initial="hidden"
-            animate="visible"
-            exit="exit"
-            className="bg-white rounded-lg shadow-2xl w-full max-w-sm p-8 flex flex-col items-center"
-          >
-            <SuccessIcon />
-            <h2 className="text-2xl font-bold text-gray-800 mt-4">Success!</h2>
-            <p className="text-gray-500 mt-2">
-              Your item has been added to inventory.
-            </p>
-            <button
-              onClick={handleDone}
-              className="mt-6 w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-semibold text-sm"
-            >
-              Done
-            </button>
-          </motion.div>
-        )}
+        ) : null}
       </AnimatePresence>
     </div>
   );

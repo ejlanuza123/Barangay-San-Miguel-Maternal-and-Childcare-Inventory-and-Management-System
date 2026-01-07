@@ -160,6 +160,7 @@ const EditInventoryModal = ({ item, onClose, onSave }) => {
                             <option>Medicines</option>
                             <option>Equipment</option>
                             <option>Supplies</option>
+                            <option>Vaccines</option>
                         </select>
                     </div>
                     <div>
@@ -425,7 +426,7 @@ export default function InventoryPage() {
                                     <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 border">
                                         <div className="p-2 text-sm font-semibold border-b">Filter by Category</div>
                                         <div className="p-2">
-                                            {['All', 'Medicines', 'Equipment', 'Supplies'].map(cat => (
+                                            {['All', 'Medicines', 'Equipment', 'Supplies','Vaccines'].map(cat => (
                                                  <label key={cat} className="flex items-center space-x-2 text-sm">
                                                     <input type="radio" name="category" value={cat} checked={filters.category === cat} onChange={(e) => setFilters({...filters, category: e.target.value})} />
                                                     <span>{cat}</span>
