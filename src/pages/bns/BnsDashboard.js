@@ -131,7 +131,7 @@ const NutritionChart = ({ nutritionData }) => {
 };
 
 const MonthlyTrends = ({ monthlyData }) => (
-  <div className="bg-white p-4 rounded-lg shadow border h-full">
+  <div className="bg-white p-4 rounded-lg shadow border min-h-[280px]"> {/* Changed from h-full to min-h-[280px] */}
     <h3 className="font-bold text-gray-700 text-base mb-4">Monthly Registrations</h3>
     <div className="space-y-2">
       {monthlyData.map((month, index) => {
@@ -273,10 +273,10 @@ const UpcomingVisits = ({ visits }) => {
     const nextDate = getNextThursday();
 
     return (
-        <div className="bg-white p-4 rounded-lg shadow border h-full">
+        <div className="bg-white p-4 rounded-lg shadow border min-h-[380px]"> {/* Changed from h-full to min-h-[280px] */}
             <h3 className="font-bold text-gray-700 text-base mb-3">Upcoming Follow-up Visits</h3>
             <p className="text-xs text-gray-500 mb-2">Next Visit Day: <span className="font-bold text-green-600">{nextDate}</span> (Thursday)</p>
-            <div className="space-y-2 overflow-y-auto max-h-80">
+            <div className="space-y-2 overflow-y-auto" style={{ maxHeight: '300px' }}> {/* Reduced max-height */}
                 {visits.length > 0 ? visits.map(child => (
                     <div key={child.id} className="flex justify-between items-center p-3 bg-green-50 rounded border hover:bg-green-100 transition-colors">
                         <div>
@@ -293,6 +293,7 @@ const UpcomingVisits = ({ visits }) => {
         </div>
     );
 };
+
 
 const ViewAllActivityModal = ({ activities, onClose }) => (
     <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4">

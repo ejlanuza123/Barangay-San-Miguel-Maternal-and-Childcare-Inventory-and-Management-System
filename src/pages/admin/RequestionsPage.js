@@ -61,7 +61,6 @@ const ActionButtons = ({ request, onApprove, onDeny }) => (
         ></path>
       </svg>
     </button>
-    {/* You can add a View modal button here if needed */}
   </div>
 );
 
@@ -73,15 +72,10 @@ export default function RequestionsPage() {
   const [loading, setLoading] = useState(true);
   const { addNotification } = useNotification();
 
-  // src/pages/admin/RequestionsPage.js
-
   const fetchRequestions = useCallback(async () => {
     setLoading(true);
     const roleFilter = activeTab === "BHW" ? "BHW" : "BNS";
 
-    // --- THIS IS THE CORRECTED LINE ---
-    // By adding "!inner", we are forcing the query to only return requests
-    // that have a matching profile with the correct role.
     let query = supabase
       .from("requestions")
       .select(
@@ -109,7 +103,6 @@ export default function RequestionsPage() {
     fetchRequestions();
   }, [fetchRequestions]);
 
-  // This function is called when the green checkmark is clicked
   const handleApprove = async (request) => {
     let actionError = null;
     if (request.request_type === "Update") {
@@ -119,9 +112,11 @@ export default function RequestionsPage() {
         .eq("id", request.target_record_id);
       actionError = error;
     } else if (request.request_type === "Delete") {
+      // --- SOFT DELETE IMPLEMENTATION ---
+      // Instead of hard deleting, we mark is_deleted as true
       const { error } = await supabase
         .from(request.target_table)
-        .update({ is_deleted: true, deleted_at: new Date() })
+        .update({ is_deleted: true, deleted_at: new Date().toISOString() })
         .eq("id", request.target_record_id);
       
       actionError = error;
@@ -147,7 +142,6 @@ export default function RequestionsPage() {
       );
     } else {
       addNotification(`Request has been approved.`, "success");
-      // --- MODIFIED: Pass the original worker's ID to the logger ---
       logActivity(
         "Request Approved",
         `Your ${request.request_type} request was approved by an Admin.`,
@@ -157,9 +151,7 @@ export default function RequestionsPage() {
     fetchRequestions();
   };
 
-  // This function is called when the red 'X' is clicked
   const handleDeny = async (request) => {
-    // This simply updates the request's status to 'Denied'
     const { error } = await supabase
       .from("requestions")
       .update({ status: "Denied" })
@@ -173,7 +165,7 @@ export default function RequestionsPage() {
         `Denied ${request.request_type} for record ID ${request.target_record_id}`
       );
     }
-    fetchRequestions(); // Refresh the list to show the change
+    fetchRequestions();
   };
 
   return (
@@ -226,7 +218,7 @@ export default function RequestionsPage() {
                 {[
                   "ID NO. REQUEST",
                   "NAME/ID/ROLE",
-                  "TYPE/REQUEST DATE",
+                  "TYPE/DETAILS", // Changed Header
                   "TIME",
                   "STATUS",
                   "ACTION",
@@ -258,14 +250,25 @@ export default function RequestionsPage() {
                     </td>
                     <td className="px-3 py-3">
                       <div className="font-semibold">
-                        {req.request_type} Patient Record
+                        {req.request_type}{" "}
+                        {req.target_table?.includes("inventory")
+                          ? "Inventory Item"
+                          : "Record"}
                       </div>
-                      <div className="text-gray-500">
-                        Patient ID:{" "}
-                        {req.request_data.patient_id ||
-                          req.request_data.child_id}
+                      <div className="text-gray-600 text-xs mt-1">
+                        {/* --- DYNAMIC DISPLAY LOGIC --- */}
+                        {req.target_table?.includes("inventory") ? (
+                          <>
+                            Item: <span className="font-bold">{req.request_data.item_name}</span>
+                            {req.request_data.quantity && <span> (Qty: {req.request_data.quantity})</span>}
+                          </>
+                        ) : (
+                          <>
+                            Target: <span className="font-bold">{req.request_data.name || req.request_data.patient_id || req.request_data.child_id}</span>
+                          </>
+                        )}
                       </div>
-                      <div className="text-gray-500">
+                      <div className="text-gray-400 text-xs mt-1">
                         {new Date(req.created_at).toLocaleDateString()}
                       </div>
                     </td>

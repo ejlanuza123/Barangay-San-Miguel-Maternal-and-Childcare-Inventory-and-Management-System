@@ -8,13 +8,16 @@ export default function AddBnsInventoryModal({ onClose, onSave, mode = "add", in
   const [formData, setFormData] = useState({});
   const { addNotification } = useNotification();
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     if (mode === "edit" && initialData) {
       setFormData({
         ...initialData,
         sku: initialData.sku || "",
-        batch_no: initialData.batch_no || ""
+        batch_no: initialData.batch_no || "",
+        supplier: initialData.supplier || "",
+        supply_source: initialData.supply_source || ""
       });
     }
   }, [mode, initialData]);
@@ -24,6 +27,38 @@ export default function AddBnsInventoryModal({ onClose, onSave, mode = "add", in
   const handleSave = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setError("");
+
+    // --- DUPLICATE CHECK LOGIC (BNS) ---
+    if (mode === "add") {
+        const { data: duplicateItem } = await supabase
+            .from("bns_inventory")
+            .select("id")
+            .ilike("item_name", formData.item_name)
+            .eq("batch_no", formData.batch_no || "")
+            .maybeSingle();
+
+        if (duplicateItem) {
+            setError(`Item "${formData.item_name}" with Batch No. "${formData.batch_no || 'N/A'}" already exists.`);
+            setLoading(false);
+            return;
+        }
+
+        if (formData.sku) {
+            const { data: duplicateSku } = await supabase
+                .from("bns_inventory")
+                .select("id")
+                .eq("sku", formData.sku.toUpperCase())
+                .maybeSingle();
+
+            if (duplicateSku) {
+                setError(`The SKU "${formData.sku.toUpperCase()}" is already assigned.`);
+                setLoading(false);
+                return;
+            }
+        }
+    }
+    // -----------------------------------
     
     const dataPayload = {
         ...formData,
@@ -38,6 +73,7 @@ export default function AddBnsInventoryModal({ onClose, onSave, mode = "add", in
     }
 
     if (result.error) {
+      setError(result.error.message);
       addNotification(`Error: ${result.error.message}`, "error");
     } else {
       const action = mode === "edit" ? "BNS Inventory Updated" : "New BNS Item Added";
@@ -65,6 +101,24 @@ export default function AddBnsInventoryModal({ onClose, onSave, mode = "add", in
             <input type="text" name="item_name" value={formData.item_name || ""} onChange={handleChange} className="w-full mt-1 p-2 border rounded" required />
           </div>
 
+          {/* --- NEW SUPPLIER SECTION --- */}
+          <div className="grid grid-cols-2 gap-3">
+              <div>
+                  <label className="text-xs font-semibold text-gray-600">Supplier Name</label>
+                  <input type="text" name="supplier" value={formData.supplier || ""} onChange={handleChange} placeholder="e.g. DOH" className="w-full mt-1 p-2 border rounded" />
+              </div>
+              <div>
+                  <label className="text-xs font-semibold text-gray-600">Supply Source</label>
+                    <select name="supply_source" value={formData.supply_source || ""} onChange={handleChange} className="w-full mt-1 p-2 border rounded bg-gray-50">
+                      <option value="">Select...</option>
+                      <option value="LGU">LGU (Local)</option>
+                      <option value="DOH">DOH (National)</option>
+                      <option value="Donation">Donation</option>
+                      <option value="Purchase">Direct Purchase</option>
+                  </select>
+              </div>
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
              <div>
                 <label className="font-semibold text-xs text-gray-600">Category</label>
@@ -73,7 +127,6 @@ export default function AddBnsInventoryModal({ onClose, onSave, mode = "add", in
                     <option value="Medicines">Medicines</option>
                     <option value="Nutrition and Feeding">Nutrition</option>
                     <option value="Child Hygiene and Care">Child Care</option>
-                    <option value="Vaccines">Vaccines</option>
                 </select>
              </div>
              <div>

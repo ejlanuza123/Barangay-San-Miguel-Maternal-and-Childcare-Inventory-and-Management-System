@@ -69,7 +69,7 @@ const RiskLevelChart = ({ riskLevels }) => {
 };
 
 const MonthlyTrends = ({ monthlyData }) => (
-  <div className="bg-white p-4 rounded-lg shadow border h-full">
+  <div className="bg-white p-4 rounded-lg shadow border min-h-[280px]">
     <h3 className="font-bold text-gray-700 text-base mb-4">Monthly Patient Registrations</h3>
     <div className="space-y-2">
       {monthlyData.map((month, index) => {

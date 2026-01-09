@@ -33,9 +33,13 @@ export default function AddInventoryModal({ onClose, onSave, mode = "add", initi
         item_name: initialData.item_name || "",
         category: initialData.category || "",
         quantity: initialData.quantity || "",
-        unit: initialData.unit || "", // UOM
-        sku: initialData.sku || "", // NEW
-        batch_no: initialData.batch_no || "", // NEW
+        unit: initialData.unit || "", 
+        sku: initialData.sku || "",
+        batch_no: initialData.batch_no || "",
+        // --- NEW FIELDS ---
+        supplier: initialData.supplier || "",
+        supply_source: initialData.supply_source || "",
+        // ------------------
         manufacture_date: initialData.manufacture_date || "",
         expiry_date: initialData.expiry_date || "",
       });
@@ -52,9 +56,43 @@ export default function AddInventoryModal({ onClose, onSave, mode = "add", initi
     setLoading(true);
     setError("");
 
+    // --- DUPLICATE CHECK LOGIC ---
+    if (mode === "add") {
+        // 1. Check for same Name + Batch No.
+        const { data: duplicateItem, error: checkError } = await supabase
+            .from("inventory")
+            .select("id")
+            .ilike("item_name", formData.item_name) // Case-insensitive check
+            .eq("batch_no", formData.batch_no || "") // Empty batch is considered a value
+            .maybeSingle();
+
+        if (checkError) {
+            console.error("Duplicate check error:", checkError);
+        } else if (duplicateItem) {
+            setError(`Item "${formData.item_name}" with Batch No. "${formData.batch_no || 'N/A'}" already exists. Please update the existing stock instead.`);
+            setLoading(false);
+            return;
+        }
+
+        // 2. Check for SKU uniqueness (only if SKU is provided)
+        if (formData.sku) {
+            const { data: duplicateSku } = await supabase
+                .from("inventory")
+                .select("id")
+                .eq("sku", formData.sku.toUpperCase())
+                .maybeSingle();
+
+            if (duplicateSku) {
+                setError(`The SKU "${formData.sku.toUpperCase()}" is already assigned to another item.`);
+                setLoading(false);
+                return;
+            }
+        }
+    }
+    // -----------------------------
+
     const dataPayload = {
         ...formData,
-        // Ensure SKU is uppercase if provided, or null
         sku: formData.sku ? formData.sku.toUpperCase() : null,
         updated_at: new Date().toISOString()
     };
@@ -97,7 +135,6 @@ export default function AddInventoryModal({ onClose, onSave, mode = "add", initi
               <h2 className="text-xl font-bold text-gray-800 mb-4">{title}</h2>
               <form onSubmit={handleSave} className="space-y-3">
                 
-                {/* 1. SKU Field */}
                 <div>
                   <label className="text-xs font-semibold text-gray-600">SKU (Stock Keeping Unit)</label>
                   <input type="text" name="sku" value={formData.sku || ""} onChange={handleChange} placeholder="e.g. MED-001" className="w-full mt-1 p-2 border rounded-md text-sm uppercase" />
@@ -108,18 +145,37 @@ export default function AddInventoryModal({ onClose, onSave, mode = "add", initi
                   <input type="text" name="item_name" value={formData.item_name || ""} onChange={handleChange} className="w-full mt-1 p-2 border rounded-md text-sm" required />
                 </div>
 
+                {/* --- NEW SUPPLIER SECTION --- */}
+                <div className="grid grid-cols-2 gap-3">
+                    <div>
+                        <label className="text-xs font-semibold text-gray-600">Supplier Name</label>
+                        <input type="text" name="supplier" value={formData.supplier || ""} onChange={handleChange} placeholder="e.g. PharmaCorp" className="w-full mt-1 p-2 border rounded-md text-sm" />
+                    </div>
+                    <div>
+                        <label className="text-xs font-semibold text-gray-600">Supply Source</label>
+                         <select name="supply_source" value={formData.supply_source || ""} onChange={handleChange} className="w-full mt-1 p-2 border rounded-md text-sm bg-gray-50">
+                            <option value="">Select...</option>
+                            <option value="LGU">LGU (Local)</option>
+                            <option value="DOH">DOH (National)</option>
+                            <option value="Donation">Donation</option>
+                            <option value="Purchase">Direct Purchase</option>
+                        </select>
+                    </div>
+                </div>
+                {/* --------------------------- */}
+
                 <div className="grid grid-cols-2 gap-3">
                     <div>
                         <label className="text-xs font-semibold text-gray-600">Category</label>
                         <select name="category" value={formData.category || ""} onChange={handleChange} className="w-full mt-1 p-2 border rounded-md text-sm bg-gray-50" required >
                             <option value="">Select...</option>
                             <option value="Medicines">Medicines</option>
+                            <option value="Nutrition and Feeding">Nutrition</option>
                             <option value="Medical Supplies">Supplies</option>
                             <option value="Vaccines">Vaccines</option>
                             <option value="Equipment">Equipment</option>
                         </select>
                     </div>
-                    {/* 2. Batch/Lot No. Field */}
                     <div>
                         <label className="text-xs font-semibold text-gray-600">Batch / Lot No.</label>
                         <input type="text" name="batch_no" value={formData.batch_no || ""} onChange={handleChange} className="w-full mt-1 p-2 border rounded-md text-sm" />

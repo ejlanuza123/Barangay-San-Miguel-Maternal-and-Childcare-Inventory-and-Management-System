@@ -377,60 +377,43 @@ const GenerateReportsModal = ({ onClose }) => {
 
 const ViewAllStockModal = ({ items, onClose }) => {
     const [searchTerm, setSearchTerm] = useState('');
-
     const filteredItems = useMemo(() => {
         if (!searchTerm) return items;
-        return items.filter(item => 
-            item.item_name.toLowerCase().includes(searchTerm.toLowerCase())
-        );
+        return items.filter(item => item.item_name.toLowerCase().includes(searchTerm.toLowerCase()));
     }, [items, searchTerm]);
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4">
-            <motion.div
-                className="bg-white rounded-lg shadow-2xl w-full max-w-2xl flex flex-col"
-                initial={{ opacity: 0, y: -30 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 30 }}
-            >
-                <div className="p-4 border-b">
-                    <h2 className="text-xl font-bold text-gray-800">Complete Stock Inventory</h2>
-                </div>
+            <motion.div className="bg-white rounded-lg shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh]" initial={{ opacity: 0, y: -30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 30 }}>
+                <div className="p-4 border-b"><h2 className="text-xl font-bold text-gray-800">Complete Stock Inventory</h2></div>
                 <div className="p-4">
-                     <div className="relative">
-                        <span className="absolute inset-y-0 left-0 flex items-center pl-3"><SearchIcon /></span>
-                        <input
-                            type="text"
-                            placeholder="Search item..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 text-sm rounded-lg border bg-gray-50 focus:bg-white"
-                        />
-                    </div>
+                    <div className="relative"><span className="absolute inset-y-0 left-0 flex items-center pl-3"><SearchIcon /></span><input type="text" placeholder="Search item..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 text-sm rounded-lg border bg-gray-50 focus:bg-white" /></div>
                 </div>
-                <div className="p-4 overflow-y-auto max-h-[60vh]">
-                    <table className="w-full text-sm">
+                <div className="p-4 overflow-y-auto">
+                    <table className="w-full text-xs">
                         <thead className="sticky top-0 bg-gray-50">
                             <tr className="text-left text-gray-600">
-                                <th className="p-3 font-semibold">Item Name</th>
-                                <th className="p-3 font-semibold">Total Quantity</th>
-                                <th className="p-3 font-semibold">Status</th>
+                                {['SKU', 'Item Name', 'Category', 'Batch No.', 'Qty & Unit', 'Status', 'Expiry', 'Supplier', 'Source'].map(h => <th key={h} className="p-3 font-semibold">{h}</th>)}
                             </tr>
                         </thead>
                         <tbody className="divide-y">
                             {filteredItems.map(item => (
                                 <tr key={item.item_name}>
+                                    <td className="p-3 font-mono text-gray-500">{item.sku || '-'}</td>
                                     <td className="p-3 font-semibold text-gray-700">{item.item_name}</td>
-                                    <td className="p-3 text-gray-600">{item.quantity} units</td>
+                                    <td className="p-3 text-gray-600">{item.category}</td>
+                                    <td className="p-3 text-gray-600">{item.batch_no || 'N/A'}</td>
+                                    <td className="p-3 font-bold text-gray-800">{item.quantity} {item.unit || 'pc'}</td>
                                     <td className="p-3"><StatusBadge status={item.status} /></td>
+                                    <td className="p-3 text-gray-600">{item.expiry_date || '-'}</td>
+                                    <td className="p-3 text-gray-600">{item.supplier || 'N/A'}</td>
+                                    <td className="p-3 text-gray-600">{item.supply_source || 'N/A'}</td>
                                 </tr>
                             ))}
                         </tbody>
                     </table>
                 </div>
-                <div className="p-4 bg-gray-50 border-t flex justify-end">
-                    <button onClick={onClose} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 font-semibold text-sm">Close</button>
-                </div>
+                <div className="p-4 bg-gray-50 border-t flex justify-end"><button onClick={onClose} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 font-semibold text-sm">Close</button></div>
             </motion.div>
         </div>
     );

@@ -4,6 +4,7 @@ import AddInventoryModal from '../../pages/bhw/AddInventoryModal';
 import { motion,AnimatePresence } from 'framer-motion';
 import { logActivity } from '../../services/activityLogger';
 import { useNotification } from '../../context/NotificationContext'; 
+import { useAuth } from '../../context/AuthContext';
 
 
 // --- ICONS ---
@@ -67,28 +68,73 @@ const DeleteConfirmationModal = ({ itemName, onConfirm, onCancel }) => (
     </div>
 );
 
-const ViewItemModal = ({ item, onClose }) => (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
-        <motion.div
-            className="bg-white rounded-lg shadow-2xl w-full max-w-md p-6"
-            initial={{ opacity: 0, y: -30 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 30 }}
-        >
-            <h2 className="text-xl font-bold text-gray-800 mb-4">{item.item_name}</h2>
-            <div className="space-y-2 text-sm">
-                <p><span className="font-semibold">Category:</span> {item.category}</p>
-                <p><span className="font-semibold">Stock:</span> {item.quantity} units</p>
-                <p><span className="font-semibold">Status:</span> <StatusBadge status={item.status.toLowerCase()} /></p>
-                <p><span className="font-semibold">Manufacture Date:</span> {item.manufacture_date || 'N/A'}</p>
-                <p><span className="font-semibold">Expiry Date:</span> {item.expiry_date || 'N/A'}</p>
-            </div>
-            <div className="flex justify-end mt-6">
-                <button onClick={onClose} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-semibold text-sm">Close</button>
-            </div>
-        </motion.div>
-    </div>
-);
+const ViewItemModal = ({ item, onClose }) => {
+    const [history, setHistory] = useState([]);
+    const [loadingHistory, setLoadingHistory] = useState(true);
+
+    useEffect(() => {
+        const fetchHistory = async () => {
+            if(!item) return;
+            // Fetch logs where the details field contains the item name
+            const { data, error } = await supabase
+                .from('activity_log')
+                .select('*, profiles(first_name, last_name, role)')
+                .ilike('details', `%${item.item_name}%`)
+                .order('created_at', { ascending: false });
+            
+            if(!error) setHistory(data || []);
+            setLoadingHistory(false);
+        };
+        fetchHistory();
+    }, [item]);
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
+            <motion.div
+                className="bg-white rounded-lg shadow-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto"
+                initial={{ opacity: 0, y: -30 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 30 }}
+            >
+                <h2 className="text-xl font-bold text-gray-800 mb-4">{item.item_name}</h2>
+                <div className="space-y-2 text-sm border-b pb-4 mb-4">
+                    <p><span className="font-semibold">SKU:</span> {item.sku || 'N/A'}</p>
+                    <p><span className="font-semibold">Category:</span> {item.category}</p>
+                    <p><span className="font-semibold">Stock:</span> {item.quantity} {item.unit}</p>
+                    <p><span className="font-semibold">Status:</span> <StatusBadge status={item.status.toLowerCase()} /></p>
+                    <p><span className="font-semibold">Batch No:</span> {item.batch_no || 'N/A'}</p>
+                    <p><span className="font-semibold">Manufacture Date:</span> {item.manufacture_date || 'N/A'}</p>
+                    <p><span className="font-semibold">Expiry Date:</span> {item.expiry_date || 'N/A'}</p>
+                    <div className="mt-2 pt-2 border-t border-dashed">
+                        <p><span className="font-semibold">Supplier:</span> {item.supplier || 'N/A'}</p>
+                        <p><span className="font-semibold">Source:</span> {item.supply_source || 'N/A'}</p>
+                    </div>
+                </div>
+
+                <h3 className="font-bold text-gray-700 text-sm mb-2">Item History (Issuance & Updates)</h3>
+                <div className="bg-gray-50 rounded-md p-2 h-48 overflow-y-auto space-y-2">
+                    {loadingHistory ? <p className="text-xs text-center">Loading history...</p> : 
+                     history.length === 0 ? <p className="text-xs text-center text-gray-500">No recorded history found.</p> :
+                     history.map(log => (
+                        <div key={log.id} className="text-xs border-b pb-1 last:border-0">
+                            <p className="font-semibold">{log.action}</p>
+                            <p className="text-gray-600">{log.details}</p>
+                            <div className="flex justify-between mt-1 text-gray-400">
+                                <span>by {log.profiles?.first_name} ({log.profiles?.role})</span>
+                                <span>{new Date(log.created_at).toLocaleDateString()}</span>
+                            </div>
+                        </div>
+                     ))
+                    }
+                </div>
+
+                <div className="flex justify-end mt-6">
+                    <button onClick={onClose} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-semibold text-sm">Close</button>
+                </div>
+            </motion.div>
+        </div>
+    );
+};
 
 const EditInventoryModal = ({ item, onClose, onSave }) => {
     const [formData, setFormData] = useState({
@@ -266,6 +312,7 @@ export default function InventoryPage() {
     const [isFilterOpen, setIsFilterOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [filters, setFilters] = useState({ category: 'All' });
+    const { user } = useAuth();
 
     const [modalMode, setModalMode] = useState(null);
     const [selectedItem, setSelectedItem] = useState(null);
@@ -351,16 +398,28 @@ export default function InventoryPage() {
     };
 
     const handleDelete = async () => {
-        if (!itemToDelete) return;
+        if (!itemToDelete || !user) return;
         
-        const { error } = await supabase.from('inventory').delete().eq('id', itemToDelete.id);
+        // Submit a request instead of deleting directly
+        const { error } = await supabase.from('requestions').insert([{
+            worker_id: user.id,
+            request_type: 'Delete',
+            target_table: 'inventory', // Targeted table for BHW inventory
+            target_record_id: itemToDelete.id,
+            request_data: { 
+                item_name: itemToDelete.item_name,
+                quantity: itemToDelete.quantity,
+                category: itemToDelete.category
+            },
+            status: 'Pending'
+        }]);
         
         if (error) {
-            addNotification(`Error: ${error.message}`, 'error'); // <-- SHOW ERROR NOTIFICATION
+            addNotification(`Error submitting delete request: ${error.message}`, 'error');
         } else {
-            addNotification('Inventory item deleted successfully.', 'success'); // <-- SHOW SUCCESS NOTIFICATION
-            logActivity('Inventory Item Deleted', `Deleted item: ${itemToDelete.item_name}`);
-            await fetchInventory();
+            addNotification('Delete request submitted for approval.', 'success');
+            logActivity('Inventory Delete Request', `Submitted request for ${itemToDelete.item_name}`);
+            // Note: We don't refetch inventory here because the item isn't deleted yet
         }
         setItemToDelete(null);
     };

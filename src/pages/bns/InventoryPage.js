@@ -42,22 +42,73 @@ const StatusLegend = () => (
     </div>
 );
 
-const ViewItemModal = ({ item, onClose }) => (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
-        <motion.div className="bg-white rounded-lg shadow-2xl w-full max-w-md p-6" initial={{ opacity: 0, y: -30 }} animate={{ opacity: 1, y: 0 }}>
-            <h2 className="text-xl font-bold text-gray-800 mb-4">{item.item_name}</h2>
-            <div className="space-y-2 text-sm">
-                <p><span className="font-semibold">Category:</span> {item.category}</p>
-                <p><span className="font-semibold">Stock:</span> {item.quantity} {item.unit}</p>
-                <p><span className="font-semibold">Status:</span> <StatusBadge status={item.status} /></p>
-                <p><span className="font-semibold">Expiration Date:</span> {item.expiration_date || 'N/A'}</p>
-            </div>
-            <div className="flex justify-end mt-6">
-                <button onClick={onClose} className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 font-semibold text-sm">Close</button>
-            </div>
-        </motion.div>
-    </div>
-);
+
+const ViewItemModal = ({ item, onClose }) => {
+    const [history, setHistory] = useState([]);
+    const [loadingHistory, setLoadingHistory] = useState(true);
+
+    useEffect(() => {
+        const fetchHistory = async () => {
+            if(!item) return;
+            // Fetch logs where the details field contains the item name
+            const { data, error } = await supabase
+                .from('activity_log')
+                .select('*, profiles(first_name, last_name, role)')
+                .ilike('details', `%${item.item_name}%`)
+                .order('created_at', { ascending: false });
+            
+            if(!error) setHistory(data || []);
+            setLoadingHistory(false);
+        };
+        fetchHistory();
+    }, [item]);
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
+            <motion.div
+                className="bg-white rounded-lg shadow-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto"
+                initial={{ opacity: 0, y: -30 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 30 }}
+            >
+                <h2 className="text-xl font-bold text-gray-800 mb-4">{item.item_name}</h2>
+                <div className="space-y-2 text-sm border-b pb-4 mb-4">
+                    <p><span className="font-semibold">SKU:</span> {item.sku || 'N/A'}</p>
+                    <p><span className="font-semibold">Category:</span> {item.category}</p>
+                    <p><span className="font-semibold">Stock:</span> {item.quantity} {item.unit}</p>
+                    <p><span className="font-semibold">Status:</span> <StatusBadge status={item.status} /></p>
+                    <p><span className="font-semibold">Batch No:</span> {item.batch_no || 'N/A'}</p>
+                    <p><span className="font-semibold">Expiration Date:</span> {item.expiration_date || 'N/A'}</p>
+                    <div className="mt-2 pt-2 border-t border-dashed">
+                        <p><span className="font-semibold">Supplier:</span> {item.supplier || 'N/A'}</p>
+                        <p><span className="font-semibold">Source:</span> {item.supply_source || 'N/A'}</p>
+                    </div>
+                </div>
+                
+                <h3 className="font-bold text-gray-700 text-sm mb-2">Item History (Issuance & Updates)</h3>
+                <div className="bg-gray-50 rounded-md p-2 h-48 overflow-y-auto space-y-2">
+                    {loadingHistory ? <p className="text-xs text-center">Loading history...</p> : 
+                     history.length === 0 ? <p className="text-xs text-center text-gray-500">No recorded history found.</p> :
+                     history.map(log => (
+                        <div key={log.id} className="text-xs border-b pb-1 last:border-0">
+                            <p className="font-semibold">{log.action}</p>
+                            <p className="text-gray-600">{log.details}</p>
+                            <div className="flex justify-between mt-1 text-gray-400">
+                                <span>by {log.profiles?.first_name} ({log.profiles?.role})</span>
+                                <span>{new Date(log.created_at).toLocaleDateString()}</span>
+                            </div>
+                        </div>
+                     ))
+                    }
+                </div>
+
+                <div className="flex justify-end mt-6">
+                    <button onClick={onClose} className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 font-semibold text-sm">Close</button>
+                </div>
+            </motion.div>
+        </div>
+    );
+};
 
 
 const Pagination = ({ currentPage, totalPages, onPageChange }) => {
@@ -159,7 +210,6 @@ export default function BnsInventoryPage() {
     const [searchTerm, setSearchTerm] = useState('');
     const [modalMode, setModalMode] = useState(null);
     const [itemToManage, setItemToManage] = useState(null);
-    const [isIssueModalOpen, setIsIssueModalOpen] = useState(false);
     const { addNotification } = useNotification();
     const [itemToDelete, setItemToDelete] = useState(null);
     const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -171,7 +221,6 @@ export default function BnsInventoryPage() {
     const [itemsPerPage] = useState(10);
     const [totalRecords, setTotalRecords] = useState(0);
     const { user } = useAuth();
-
 
     const fetchPageData = useCallback(async () => {
         setLoading(true);
@@ -190,41 +239,24 @@ export default function BnsInventoryPage() {
             const CRITICAL_THRESHOLD = 10;
             const LOW_THRESHOLD = 20;
             const updatePromises = [];
-            const headerNotificationPromises = []; // For the bell icon in the header
-            const popUpNotificationMessages = []; // For the pop-up on the page
+            const headerNotificationPromises = []; 
+            const popUpNotificationMessages = [];
 
             data.forEach(item => {
                 let newStatus = 'Normal';
-                if (item.quantity <= CRITICAL_THRESHOLD) {
-                    newStatus = 'Critical';
-                } else if (item.quantity <= LOW_THRESHOLD) {
-                    newStatus = 'Low';
-                }
+                if (item.quantity <= CRITICAL_THRESHOLD) newStatus = 'Critical';
+                else if (item.quantity <= LOW_THRESHOLD) newStatus = 'Low';
                 
                 if (item.status !== newStatus) {
-                    updatePromises.push(
-                        supabase.from('bns_inventory').update({ status: newStatus }).eq('id', item.id)
-                    );
+                    updatePromises.push(supabase.from('bns_inventory').update({ status: newStatus }).eq('id', item.id));
                     item.status = newStatus; 
 
                     if ((newStatus === 'Low' || newStatus === 'Critical') && user) {
                         const message = `${item.item_name} stock is ${newStatus.toLowerCase()} (${item.quantity} units left).`;
-
-                        // ✅ 1. Always insert into Supabase (for the bell)
-                        headerNotificationPromises.push(
-                            supabase.from('notifications').insert([{
-                                type: 'inventory_alert',
-                                message,
-                                user_id: user.id
-                            }])
-                        );
-
-                        // ✅ 2. Only push to pop-up if not already showing
+                        headerNotificationPromises.push(supabase.from('notifications').insert([{ type: 'inventory_alert', message, user_id: user.id }]));
                         setStockNotifications(prev => {
-                            if (!prev.some(n => n.message === message)) {
-                                return [...prev, { id: item.id + Date.now(), message }];
-                            }
-                            return prev; // avoid duplicate pop-ups
+                            if (!prev.some(n => n.message === message)) return [...prev, { id: item.id + Date.now(), message }];
+                            return prev;
                         });
                     }
                 }
@@ -232,9 +264,7 @@ export default function BnsInventoryPage() {
 
             if (updatePromises.length > 0) await Promise.all(updatePromises);
             if (headerNotificationPromises.length > 0) await Promise.all(headerNotificationPromises);
-            if (popUpNotificationMessages.length > 0) {
-                setStockNotifications(prev => [...prev, ...popUpNotificationMessages]);
-            }
+            if (popUpNotificationMessages.length > 0) setStockNotifications(prev => [...prev, ...popUpNotificationMessages]);
             
             setInventory(data);
             setTotalRecords(count || 0);
@@ -242,10 +272,12 @@ export default function BnsInventoryPage() {
         setLoading(false);
     }, [addNotification, currentPage, itemsPerPage, user]);
 
-    // This is now the ONLY useEffect for fetching data
-    useEffect(() => {
-        fetchPageData();
-    }, [fetchPageData]);
+    useEffect(() => { fetchPageData(); }, [fetchPageData]);
+
+    const handleEdit = (item) => {
+        setItemToManage(item);
+        setModalMode('edit');
+    };
 
     const handleDelete = async () => {
         if (!itemToDelete || !user) return;
@@ -281,7 +313,6 @@ export default function BnsInventoryPage() {
         });
     }, [inventory, searchTerm, activeCategory]);
 
-
     const totalPages = Math.ceil(totalRecords / itemsPerPage);
 
     return (
@@ -289,7 +320,7 @@ export default function BnsInventoryPage() {
             <AnimatePresence>
                 {(modalMode === 'add' || modalMode === 'edit') && ( <AddBnsInventoryModal mode={modalMode} initialData={itemToManage} onClose={() => setModalMode(null)} onSave={() => { setModalMode(null); fetchPageData(); }} /> )}
                 {modalMode === 'view' && ( <ViewItemModal item={itemToManage} onClose={() => setModalMode(null)} /> )}
-                                {itemToDelete && (
+                {itemToDelete && (
                     <DeleteConfirmationModal
                         itemName={itemToDelete.item_name}
                         onConfirm={handleDelete}
@@ -300,73 +331,55 @@ export default function BnsInventoryPage() {
             <div className="fixed top-5 right-5 z-50">
                 <AnimatePresence>
                     {stockNotifications.map(notif => (
-                        <Notification 
-                            key={notif.id} 
-                            message={notif.message} 
-                            onClear={() => setStockNotifications(current => current.filter(n => n.id !== notif.id))} 
-                        />
+                        <Notification key={notif.id} message={notif.message} onClear={() => setStockNotifications(current => current.filter(n => n.id !== notif.id))} />
                     ))}
                 </AnimatePresence>
             </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
-                {/* Main Content Area */}
-                <div className="xl:col-span-3 bg-white p-4 rounded-lg shadow-sm border">
-                    <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-3">
-                        <h2 className="text-xl font-bold text-gray-700">Inventory List</h2>
-                        <div className="flex items-center space-x-2">
+                <div className="xl:col-span-3 bg-white p-6 rounded-lg shadow-sm border">
+                    <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
+                        <div className="relative w-full md:w-auto flex-grow">
+                             <span className="absolute inset-y-0 left-0 flex items-center pl-3"><SearchIcon /></span>
+                            <input
+                                type="text"
+                                placeholder="Search Items..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full pl-10 pr-4 py-2 form-input rounded-md border-gray-300 shadow-sm text-sm"
+                            />
+                        </div>
+                        <div className="flex items-center gap-2">
                             <div className="relative">
-                                <span className="absolute inset-y-0 left-0 flex items-center pl-2"><SearchIcon /></span>
-                                <input type="text" placeholder="Search Items..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-8 pr-2 py-1.5 w-full sm:w-auto text-sm rounded-md border bg-gray-50"/>
-                            </div>
-                            
-                            {/* MODIFIED: Functional Filter Button with Dropdown */}
-                            <div className="relative">
-                                <button onClick={() => setIsFilterOpen(!isFilterOpen)} className="flex items-center space-x-2 px-3 py-1.5 text-sm border rounded-md bg-white hover:bg-gray-50">
-                                    <FilterIcon /> <span>Filter</span>
-                                </button>
-                                <AnimatePresence>
-                                    {isFilterOpen && (
-                                        <motion.div 
-                                            initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }}
-                                            className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl z-20 border"
-                                        >
-                                            <div className="p-2 text-xs font-semibold text-gray-600 border-b">Filter by Category</div>
-                                            <div className="p-2">
-                                                {['All', 'Medicines', 'Vaccines', 'Medical Supplies', 'Equipment', 'Nutrition & Feeding', 'Child Hygiene & Care'].map(category => (
-                                                    <label key={category} className="flex items-center space-x-2 p-1 rounded hover:bg-gray-100 cursor-pointer">
-                                                        <input
-                                                            type="radio"
-                                                            name="category_filter"
-                                                            value={category}
-                                                            checked={activeCategory === category}
-                                                            onChange={() => {
-                                                                setActiveCategory(category);
-                                                                setCurrentPage(1); // Reset to first page
-                                                                setIsFilterOpen(false);
-                                                            }}
-                                                        />
-                                                        <span className="text-sm">{category}</span>
-                                                    </label>
-                                                ))}
-                                            </div>
-                                        </motion.div>
-                                    )}
-                                </AnimatePresence>
+                                <button onClick={() => setIsFilterOpen(!isFilterOpen)} className="flex items-center gap-2 px-3 py-2 text-sm border rounded-lg bg-white hover:bg-gray-50"><FilterIcon /> Filter</button>
+                                {isFilterOpen && (
+                                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 border">
+                                        <div className="p-2 text-sm font-semibold border-b">Filter by Category</div>
+                                        <div className="p-2">
+                                            {['All', 'Medicines', 'Vaccines', 'Medical Supplies', 'Equipment', 'Nutrition & Feeding', 'Child Hygiene & Care'].map(category => (
+                                                 <label key={category} className="flex items-center space-x-2 text-sm p-1 hover:bg-gray-100 rounded cursor-pointer">
+                                                    <input type="radio" name="category_filter" value={category} checked={activeCategory === category} onChange={() => { setActiveCategory(category); setCurrentPage(1); setIsFilterOpen(false); }} />
+                                                    <span>{category}</span>
+                                                 </label>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
-                        <button onClick={() => { setItemToManage(null); setModalMode('add'); }} className="w-full sm:w-auto bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-blue-700 text-sm whitespace-nowrap">+ Add Item</button>
                     </div>
-
+                    
                     <div className="overflow-x-auto">
-                        <table className="w-full text-xs">
+                        <table className="w-full text-sm">
                             <thead className="bg-gray-50">
-                                <tr className="text-left text-gray-500 font-semibold">
+                                <tr className="text-left text-gray-600">
                                     {['Item Name', 'Category', 'Quantity', 'Unit', 'Expiration Date', 'Status', 'Actions'].map(h => <th key={h} className="px-2 py-2">{h}</th>)}
                                 </tr>
                             </thead>
                             <tbody className="divide-y">
-                                {loading ? ( <tr><td colSpan="7" className="text-center p-4">Loading...</td></tr> ) : (
+                                {loading ? (
+                                    <tr><td colSpan="7" className="text-center p-4">Loading...</td></tr>
+                                ) : (
                                     filteredInventory.map(item => (
                                         <tr key={item.id} className="text-gray-600 hover:bg-gray-50">
                                             <td className="px-2 py-2 font-medium">{item.item_name}</td>
@@ -391,8 +404,8 @@ export default function BnsInventoryPage() {
                     <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
                 </div>
                 
-                {/* Right Sidebar Area */}
-                <div className="xl:col-span-1 space-y-4">
+                <div className="xl:col-span-1 space-y-6">
+                    <button onClick={() => { setItemToManage(null); setModalMode('add'); }} className="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg shadow-md hover:bg-blue-700 text-sm">+ Add New Item</button>
                     <StatusLegend />
                 </div>
             </div>
