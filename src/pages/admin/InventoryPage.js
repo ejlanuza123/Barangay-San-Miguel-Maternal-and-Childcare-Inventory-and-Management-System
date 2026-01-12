@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../../services/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as XLSX from 'xlsx'; 
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 // --- ICONS ---
 const SearchIcon = () => <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>;
@@ -111,7 +113,7 @@ const ViewItemDetailsModal = ({ item, onClose }) => {
                     <p><span className="font-semibold">Stock:</span> {item.quantity} {item.unit || 'units'}</p>
                     <p><span className="font-semibold">Status:</span> <StatusBadge status={item.status} /></p>
                     <p><span className="font-semibold">Batch No:</span> {item.batch_no || 'N/A'}</p>
-                    <p><span className="font-semibold">Expiry Date:</span> {item.expiry_date || 'N/A'}</p>
+                    <p><span className="font-semibold">Expiry Date:</span> {item.expiry_date || item.expiration_date || 'N/A'}</p>
                     <div className="mt-2 pt-2 border-t border-dashed">
                         <p><span className="font-semibold">Supplier:</span> {item.supplier || 'N/A'}</p>
                         <p><span className="font-semibold">Source:</span> {item.supply_source || 'N/A'}</p>
@@ -153,20 +155,40 @@ export default function AdminInventoryPage() {
     const [isFilterOpen, setIsFilterOpen] = useState(false);
     const [activeCategory, setActiveCategory] = useState('All');
     const [selectedItem, setSelectedItem] = useState(null);
+    const [isExportOpen, setIsExportOpen] = useState(false);
+    const [exporting, setExporting] = useState(false);
 
     const fetchInventories = useCallback(async () => {
         setLoading(true);
+        
+        // Fetch only non-deleted items from both tables
         const [bhwRes, bnsRes] = await Promise.all([
-            supabase.from('inventory').select('*'),
-            supabase.from('bns_inventory').select('*')
+            supabase.from('inventory').select('*').eq('is_deleted', false),
+            supabase.from('bns_inventory').select('*').eq('is_deleted', false)
         ]);
         
+        // Combine and sort items
         const combined = [
             ...(bhwRes.data || []).map(item => ({...item, source: 'BHW'})),
             ...(bnsRes.data || []).map(item => ({...item, source: 'BNS'}))
         ];
         
-        setAllItems(combined.sort((a, b) => a.item_name.localeCompare(b.item_name)));
+        // Calculate status for each item if not already set
+        const itemsWithStatus = combined.map(item => {
+            let status = item.status;
+            if (!status || status === 'Normal') {
+                if (item.quantity <= 10) {
+                    status = 'Critical';
+                } else if (item.quantity <= 20) {
+                    status = 'Low';
+                } else {
+                    status = 'Normal';
+                }
+            }
+            return { ...item, status };
+        });
+        
+        setAllItems(itemsWithStatus.sort((a, b) => a.item_name.localeCompare(b.item_name)));
         setLoading(false);
     }, []);
 
@@ -179,7 +201,8 @@ export default function AdminInventoryPage() {
             const matchesCategory = activeCategory === 'All' || item.category === activeCategory;
             const matchesSearch = 
                 item.item_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                (item.sku && item.sku.toLowerCase().includes(searchTerm.toLowerCase()));
+                (item.sku && item.sku.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                (item.source && item.source.toLowerCase().includes(searchTerm.toLowerCase()));
             return matchesCategory && matchesSearch;
         });
     }, [allItems, searchTerm, activeCategory]);
@@ -191,24 +214,89 @@ export default function AdminInventoryPage() {
         return filteredItems.slice(from, to);
     }, [filteredItems, currentPage, itemsPerPage]);
 
-    const handleExport = () => {
-        const exportData = filteredItems.map(item => ({
-            SKU: item.sku || 'N/A',
-            'Item Name': item.item_name,
-            Category: item.category,
-            Quantity: item.quantity,
-            Unit: item.unit || 'pc',
-            'Batch No': item.batch_no || 'N/A',
-            'Expiry Date': item.expiry_date || 'N/A',
-            Supplier: item.supplier || 'N/A',
-            'Supply Source': item.supply_source || 'N/A',
-            Source: item.source
-        }));
+    // Export to Excel function
+    const exportToExcel = () => {
+        setExporting(true);
+        try {
+            const exportData = filteredItems.map(item => ({
+                SKU: item.sku || 'N/A',
+                'Item Name': item.item_name,
+                Category: item.category,
+                Quantity: item.quantity,
+                Unit: item.unit || 'pc',
+                'Batch No': item.batch_no || 'N/A',
+                'Expiry Date': item.expiry_date || item.expiration_date || 'N/A',
+                Supplier: item.supplier || 'N/A',
+                'Supply Source': item.supply_source || 'N/A',
+                'Inventory Type': item.source,
+                Status: item.status || 'Normal'
+            }));
 
-        const worksheet = XLSX.utils.json_to_sheet(exportData);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Inventory Report");
-        XLSX.writeFile(workbook, "Admin_Master_Inventory.xlsx");
+            const worksheet = XLSX.utils.json_to_sheet(exportData);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Inventory Report");
+            XLSX.writeFile(workbook, `Admin_Master_Inventory_${new Date().toISOString().slice(0, 10)}.xlsx`);
+        } catch (error) {
+            console.error('Error exporting to Excel:', error);
+        } finally {
+            setExporting(false);
+            setIsExportOpen(false);
+        }
+    };
+
+    // Export to PDF function
+    const exportToPDF = () => {
+        setExporting(true);
+        try {
+            const doc = new jsPDF();
+            
+            // Header
+            doc.setFontSize(16);
+            doc.text('Admin Master Inventory Report', 105, 15, { align: 'center' });
+            doc.setFontSize(10);
+            doc.text(`Total Items: ${filteredItems.length}`, 105, 22, { align: 'center' });
+            doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 105, 28, { align: 'center' });
+            
+            // Prepare table data
+            const tableData = filteredItems.map(item => [
+                item.sku || 'N/A',
+                item.item_name,
+                item.category,
+                `${item.quantity} ${item.unit || 'pc'}`,
+                item.batch_no || 'N/A',
+                item.expiry_date || item.expiration_date || 'N/A',
+                item.supplier || 'N/A',
+                item.source,
+                item.status || 'Normal'
+            ]);
+            
+            // Create table
+            autoTable(doc, {
+                startY: 35,
+                head: [['SKU', 'Item Name', 'Category', 'Quantity', 'Batch No', 'Expiry Date', 'Supplier', 'Type', 'Status']],
+                body: tableData,
+                theme: 'grid',
+                styles: { fontSize: 8, cellPadding: 1.5 },
+                headStyles: { fillColor: [41, 128, 185], textColor: [255, 255, 255] },
+                margin: { left: 10, right: 10 }
+            });
+            
+            // Footer
+            const pageCount = doc.getNumberOfPages();
+            for(let i = 1; i <= pageCount; i++) {
+                doc.setPage(i);
+                doc.setFontSize(8);
+                doc.text(`Page ${i} of ${pageCount}`, 105, doc.internal.pageSize.height - 10, { align: 'center' });
+            }
+            
+            // Save PDF
+            doc.save(`Admin_Inventory_${new Date().toISOString().slice(0, 10)}.pdf`);
+        } catch (error) {
+            console.error('Error exporting to PDF:', error);
+        } finally {
+            setExporting(false);
+            setIsExportOpen(false);
+        }
     };
 
     return (
@@ -231,7 +319,7 @@ export default function AdminInventoryPage() {
                                     <span className="absolute inset-y-0 left-0 flex items-center pl-3"><SearchIcon /></span>
                                     <input
                                         type="text"
-                                        placeholder="Search by Item Name or SKU..."
+                                        placeholder="Search by Item Name, SKU, or Type..."
                                         value={searchTerm}
                                         onChange={(e) => setSearchTerm(e.target.value)}
                                         className="w-full pl-10 pr-4 py-2 form-input rounded-md border-gray-300 shadow-sm text-sm"
@@ -239,11 +327,18 @@ export default function AdminInventoryPage() {
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <div className="relative">
-                                        <button onClick={() => setIsFilterOpen(!isFilterOpen)} className="flex items-center gap-2 px-3 py-2 text-sm border rounded-lg bg-white hover:bg-gray-50"><FilterIcon /> Filter</button>
+                                        <button 
+                                            onClick={() => setIsFilterOpen(!isFilterOpen)} 
+                                            className="flex items-center gap-2 px-3 py-2 text-sm border rounded-lg bg-white hover:bg-gray-50"
+                                        >
+                                            <FilterIcon /> Filter
+                                        </button>
                                         <AnimatePresence>
                                             {isFilterOpen && (
                                                 <motion.div 
-                                                    initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }}
+                                                    initial={{ opacity: 0, y: -5 }} 
+                                                    animate={{ opacity: 1, y: 0 }} 
+                                                    exit={{ opacity: 0, y: -5 }}
                                                     className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl z-20 border"
                                                 >
                                                     <div className="p-2 text-xs font-semibold text-gray-600 border-b">Filter by Category</div>
@@ -255,7 +350,11 @@ export default function AdminInventoryPage() {
                                                                     name="category_filter"
                                                                     value={cat}
                                                                     checked={activeCategory === cat}
-                                                                    onChange={() => { setActiveCategory(cat); setCurrentPage(1); setIsFilterOpen(false); }}
+                                                                    onChange={() => { 
+                                                                        setActiveCategory(cat); 
+                                                                        setCurrentPage(1); 
+                                                                        setIsFilterOpen(false); 
+                                                                    }}
                                                                 />
                                                                 <span className="text-sm">{cat}</span>
                                                             </label>
@@ -265,7 +364,65 @@ export default function AdminInventoryPage() {
                                             )}
                                         </AnimatePresence>
                                     </div>
-                                    <button onClick={handleExport} className="flex items-center gap-2 px-3 py-2 text-sm border rounded-lg bg-white hover:bg-gray-50"><ExportIcon /> Export</button>
+                                    
+                                    {/* Export Dropdown Button */}
+                                    <div className="relative">
+                                        <button 
+                                            onClick={() => setIsExportOpen(!isExportOpen)}
+                                            disabled={exporting}
+                                            className={`flex items-center gap-2 px-3 py-2 text-sm border rounded-lg bg-white hover:bg-gray-50 ${
+                                                exporting ? 'opacity-50 cursor-not-allowed' : ''
+                                            }`}
+                                        >
+                                            {exporting ? (
+                                                <>
+                                                    <svg className="animate-spin h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24">
+                                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                    </svg>
+                                                    <span>Exporting...</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <ExportIcon /> <span>Export</span>
+                                                </>
+                                            )}
+                                        </button>
+                                        <AnimatePresence>
+                                            {isExportOpen && (
+                                                <motion.div 
+                                                    initial={{ opacity: 0, y: -5 }} 
+                                                    animate={{ opacity: 1, y: 0 }} 
+                                                    exit={{ opacity: 0, y: -5 }}
+                                                    className="absolute right-0 mt-2 w-40 bg-white rounded-lg shadow-xl z-20 border"
+                                                >
+                                                    <div className="p-2 text-xs font-semibold text-gray-600 border-b">
+                                                        Export Format
+                                                    </div>
+                                                    <div className="p-1">
+                                                        <button
+                                                            onClick={exportToExcel}
+                                                            className="flex items-center w-full px-3 py-2 text-sm text-left rounded hover:bg-green-50 text-green-600 hover:text-green-700"
+                                                        >
+                                                            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                            </svg>
+                                                            Export as Excel
+                                                        </button>
+                                                        <button
+                                                            onClick={exportToPDF}
+                                                            className="flex items-center w-full px-3 py-2 text-sm text-left rounded hover:bg-red-50 text-red-600 hover:text-red-700"
+                                                        >
+                                                            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                                            </svg>
+                                                            Export as PDF
+                                                        </button>
+                                                    </div>
+                                                </motion.div>
+                                            )}
+                                        </AnimatePresence>
+                                    </div>
                                 </div>
                             </div>
                             
@@ -290,8 +447,7 @@ export default function AdminInventoryPage() {
                                         ) : paginatedItems.length === 0 ? (
                                             <tr><td colSpan="9" className="text-center p-6 text-gray-500">No items found.</td></tr>
                                         ) : paginatedItems.map((item) => (
-                                            <tr
-                                            >
+                                            <tr key={`${item.source}-${item.id}`} className="hover:bg-gray-50 transition-colors duration-150">
                                                 <td className="p-3 font-mono text-gray-500">{item.sku || '-'}</td>
                                                 <td className="p-3 font-semibold">{item.item_name}</td>
                                                 <td className="p-3">{item.category}</td>
@@ -299,7 +455,7 @@ export default function AdminInventoryPage() {
                                                 <td className="p-3">
                                                     <QuantityCell quantity={item.quantity} unit={item.unit || 'pc'} status={item.status} />
                                                 </td>
-                                                <td className="p-3">{item.expiry_date || 'N/A'}</td>
+                                                <td className="p-3">{item.expiry_date || item.expiration_date || 'N/A'}</td>
                                                 <td className="p-3">
                                                     <div className="flex flex-col">
                                                         <span>{item.supplier || 'N/A'}</span>
@@ -332,6 +488,28 @@ export default function AdminInventoryPage() {
 
                         <div className="lg:col-span-1">
                             <StatusLegend />
+                            {/* Quick Stats */}
+                            <div className="mt-4 bg-white p-4 rounded-lg shadow-sm border">
+                                <h3 className="font-bold text-gray-700 text-sm mb-3">Inventory Summary</h3>
+                                <div className="space-y-2 text-sm">
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-gray-600">Total Items</span>
+                                        <span className="font-bold text-gray-800">{allItems.length}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-gray-600">BHW Items</span>
+                                        <span className="font-bold text-blue-600">{allItems.filter(i => i.source === 'BHW').length}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-gray-600">BNS Items</span>
+                                        <span className="font-bold text-green-600">{allItems.filter(i => i.source === 'BNS').length}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-gray-600">Critical Items</span>
+                                        <span className="font-bold text-red-600">{allItems.filter(i => i.status === 'Critical').length}</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

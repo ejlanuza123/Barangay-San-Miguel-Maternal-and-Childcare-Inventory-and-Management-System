@@ -1229,6 +1229,7 @@ const MaternityManagementTab = () => {
   const [stats, setStats] = useState({ total: 0, active: 0, today: 0 });
   const [upcomingAppointments, setUpcomingAppointments] = useState([]);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [isExportOpen, setIsExportOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [filters, setFilters] = useState({
     risk_level: "All",
@@ -1240,11 +1241,11 @@ const MaternityManagementTab = () => {
   const [patientToDelete, setPatientToDelete] = useState(null);
   const { user } = useAuth();
   const { addNotification } = useNotification();
-  const [patientForQR, setPatientForQR] = useState(null); // <-- 2. ADD STATE FOR THE MODAL
+  const [patientForQR, setPatientForQR] = useState(null);
 
-  // --- NEW: Pagination State ---
+  // --- Pagination State ---
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(10); // Set how many patients per page
+  const [itemsPerPage] = useState(10);
   const [totalPatients, setTotalPatients] = useState(0);
 
   const fetchPageData = useCallback(async () => {
@@ -1253,21 +1254,50 @@ const MaternityManagementTab = () => {
     const from = (currentPage - 1) * itemsPerPage;
     const to = from + itemsPerPage - 1;
 
-    // Fetch paginated patients
+    // Build query with filters
+    let query = supabase
+      .from("patients")
+      .select("*", { count: "exact" })
+      .eq('is_deleted', false);
+
+    // Apply search filter if exists
+    if (searchTerm) {
+      if (filters.search_type === "id") {
+        query = query.ilike('patient_id', `%${searchTerm}%`);
+      } else {
+        query = query.or(`first_name.ilike.%${searchTerm}%,middle_name.ilike.%${searchTerm}%,last_name.ilike.%${searchTerm}%`);
+      }
+    }
+
+    // Apply risk level filter if not 'All'
+    if (filters.risk_level !== "All") {
+      query = query.eq('risk_level', filters.risk_level);
+    }
+
     const {
       data: patientData,
       error: patientError,
       count: patientCount,
-    } = await supabase
-      .from("patients")
-      .select("*", { count: "exact" })
+    } = await query
       .order("patient_id", { ascending: true })
       .range(from, to);
 
-    if (patientError) console.error("Error fetching patients:", patientError);
-    else {
+    if (patientError) {
+      console.error("Error fetching patients:", patientError);
+      addNotification(`Error fetching patients: ${patientError.message}`, "error");
+    } else {
       setAllPatients(patientData || []);
       setTotalPatients(patientCount || 0);
+      
+      // Update stats
+      setStats({
+        total: patientCount || 0,
+        active: patientData?.length || 0,
+        today: patientData?.filter(p => {
+          const today = new Date().toISOString().split('T')[0];
+          return p.last_visit === today;
+        }).length || 0
+      });
     }
 
     // Admin user doesn't create appointments, so check user role or id
@@ -1276,7 +1306,7 @@ const MaternityManagementTab = () => {
         await supabase
           .from("appointments")
           .select("*")
-          .eq("created_by", user.id) // Only get appointments created by the current BNS
+          .eq("created_by", user.id)
           .order("date", { ascending: true })
           .limit(3);
 
@@ -1286,7 +1316,7 @@ const MaternityManagementTab = () => {
     }
 
     setLoading(false);
-  }, [addNotification, currentPage, itemsPerPage, user]); // <-- Add 'user' as a dependency
+  }, [addNotification, currentPage, itemsPerPage, user, searchTerm, filters]);
 
   useEffect(() => {
     fetchPageData();
@@ -1299,26 +1329,26 @@ const MaternityManagementTab = () => {
   };
 
   const handleEdit = (patient) => {
-    // Admin cannot edit directly
     addNotification("Admins can only view records from this page.", "info");
   };
 
   const handleDelete = async () => {
-    // Admin cannot delete directly
     addNotification(
       "Admins must manage delete requests via the 'Requestions' page.",
       "info"
     );
-    setPatientToDelete(null); // Close the modal
+    setPatientToDelete(null);
   };
 
-  const handleExport = async () => {
+  // Export to Excel function
+  const exportToExcel = async () => {
     setLoading(true);
     try {
-      // Fetch all patients, not just the paginated ones
+      // Fetch all NON-DELETED patients
       const { data: allPatients, error } = await supabase
         .from("patients")
         .select("*")
+        .eq('is_deleted', false)
         .order("patient_id", { ascending: true });
 
       if (error) throw error;
@@ -1334,7 +1364,6 @@ const MaternityManagementTab = () => {
         Weeks: p.weeks,
         "Last Visit": p.last_visit,
         "Risk Level": p.risk_level,
-        // Flatten the medical_history JSON object
         ...(p.medical_history || {}),
       }));
 
@@ -1346,7 +1375,7 @@ const MaternityManagementTab = () => {
       // Generate buffer and trigger download
       const excelBuffer = writeFile(wb, "Maternal_Patient_Records.xlsx", { bookType: "xlsx", type: "array" });
       const dataBlob = new Blob([excelBuffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8" });
-      saveAs(dataBlob, "Maternal_Patient_Records.xlsx");
+      saveAs(dataBlob, `Maternal_Patient_Records_${new Date().toISOString().slice(0, 10)}.xlsx`);
 
       addNotification("Data exported successfully!", "success");
     } catch (error) {
@@ -1356,26 +1385,72 @@ const MaternityManagementTab = () => {
     setLoading(false);
   };
 
-  const filteredPatients = useMemo(() => {
-    // Filtering is now done on the client-side for the current page's data
-    return allPatients
-      .filter((patient) => {
-        if (filters.risk_level === "All") return true;
-        return patient.risk_level === filters.risk_level;
-      })
-      .filter((patient) => {
-        if (!searchTerm) return true;
-        const term = searchTerm.toLowerCase();
-        if (filters.search_type === "id") {
-          return patient.patient_id?.toLowerCase().includes(term);
-        } else {
-          const fullName = `${patient.first_name || ""} ${
-            patient.middle_name || ""
-          } ${patient.last_name || ""}`.toLowerCase();
-          return fullName.includes(term);
-        }
+  // Export to PDF function
+  const exportToPDF = async (filename = 'maternal_records') => {
+    try {
+      // Fetch all NON-DELETED patients
+      const { data: allPatients, error } = await supabase
+        .from("patients")
+        .select("*")
+        .eq('is_deleted', false)
+        .order("patient_id", { ascending: true });
+
+      if (error) throw error;
+
+      const doc = new jsPDF();
+      
+      // Header
+      doc.setFontSize(16);
+      doc.text('Maternal Patient Records', 105, 15, { align: 'center' });
+      doc.setFontSize(10);
+      doc.text(`Total Records: ${allPatients.length}`, 105, 22, { align: 'center' });
+      doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 105, 28, { align: 'center' });
+      
+      // Table headers
+      const headers = [
+        ['Patient ID', 'Last Name', 'First Name', 'Age', 'Contact', 'Weeks Pregnant', 
+        'Last Visit', 'Risk Level']
+      ];
+      
+      // Table data
+      const tableData = allPatients.map(patient => [
+        patient.patient_id,
+        patient.last_name || '',
+        patient.first_name || '',
+        patient.age || '',
+        patient.contact_no || '',
+        patient.weeks || '',
+        patient.last_visit || '',
+        patient.risk_level || ''
+      ]);
+      
+      // Create table
+      autoTable(doc, {
+        startY: 35,
+        head: headers,
+        body: tableData,
+        theme: 'grid',
+        styles: { fontSize: 8, cellPadding: 1.5 },
+        headStyles: { fillColor: [41, 128, 185], textColor: [255, 255, 255] },
+        margin: { left: 10, right: 10 }
       });
-  }, [allPatients, searchTerm, filters]);
+      
+      // Footer
+      const pageCount = doc.getNumberOfPages();
+      for(let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.text(`Page ${i} of ${pageCount}`, 105, doc.internal.pageSize.height - 10, { align: 'center' });
+      }
+      
+      // Save PDF
+      doc.save(`${filename}_${new Date().toISOString().slice(0, 10)}.pdf`);
+      addNotification("PDF exported successfully!", "success");
+    } catch (error) {
+      console.error('Error exporting to PDF:', error);
+      addNotification('Error exporting to PDF: ' + error.message, 'error');
+    }
+  };
 
   const totalPages = Math.ceil(totalPatients / itemsPerPage);
 
@@ -1413,8 +1488,7 @@ const MaternityManagementTab = () => {
               <div className="flex items-center space-x-2">
                 <div className="relative">
                   <span className="absolute inset-y-0 left-0 flex items-center pl-2">
-                    {" "}
-                    <SearchIcon />{" "}
+                    <SearchIcon />
                   </span>
                   <input
                     type="text"
@@ -1453,6 +1527,7 @@ const MaternityManagementTab = () => {
                                     ...filters,
                                     risk_level: e.target.value,
                                   });
+                                  setCurrentPage(1);
                                   setIsFilterOpen(false);
                                 }}
                               />
@@ -1483,6 +1558,7 @@ const MaternityManagementTab = () => {
                                   ...filters,
                                   search_type: e.target.value,
                                 });
+                                setCurrentPage(1);
                                 setIsFilterOpen(false);
                               }}
                             />
@@ -1493,13 +1569,59 @@ const MaternityManagementTab = () => {
                     </div>
                   )}
                 </div>
-                <button
-                  onClick={handleExport}
-                  disabled={loading}
-                  className="flex items-center space-x-2 px-3 py-1.5 text-sm border rounded-md bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <ExportIcon /> <span>Export</span>
-                </button>
+                
+                {/* Export Dropdown Button */}
+                <div className="relative">
+                  <button
+                    onClick={() => setIsExportOpen(!isExportOpen)}
+                    disabled={loading}
+                    className={`flex items-center space-x-2 px-3 py-1.5 text-sm border rounded-md bg-white hover:bg-gray-50 ${
+                      loading ? 'opacity-50 cursor-not-allowed' : ''
+                    }`}
+                  >
+                    <ExportIcon /> <span>Export</span>
+                  </button>
+                  <AnimatePresence>
+                    {isExportOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -5 }}
+                        className="absolute right-0 mt-2 w-40 bg-white rounded-lg shadow-xl z-20 border"
+                      >
+                        <div className="p-2 text-xs font-semibold text-gray-600 border-b">
+                          Export Format
+                        </div>
+                        <div className="p-1">
+                          <button
+                            onClick={() => {
+                              exportToExcel();
+                              setIsExportOpen(false);
+                            }}
+                            className="flex items-center w-full px-3 py-2 text-sm text-left rounded hover:bg-green-50 text-green-600 hover:text-green-700"
+                          >
+                            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            Export as Excel
+                          </button>
+                          <button
+                            onClick={() => {
+                              exportToPDF('maternal_records');
+                              setIsExportOpen(false);
+                            }}
+                            className="flex items-center w-full px-3 py-2 text-sm text-left rounded hover:bg-red-50 text-red-600 hover:text-red-700"
+                          >
+                            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                            </svg>
+                            Export as PDF
+                          </button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               </div>
             </div>
 
@@ -1515,7 +1637,6 @@ const MaternityManagementTab = () => {
                       "Weeks",
                       "Last Visit",
                       "Risk",
-                      // "Actions", // <-- HEADER REMOVED
                     ].map((header) => (
                       <th key={header} className="px-2 py-2">
                         {header}
@@ -1524,49 +1645,39 @@ const MaternityManagementTab = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {filteredPatients.map((p) => (
-                    <tr
-                      key={p.id}
-                      className="text-gray-600 hover:bg-gray-50 cursor-pointer"
-                      onClick={() => handleView(p)} // <-- Row is now clickable to view
-                    >
-                      <td className="px-2 py-2 font-medium">{p.patient_id}</td>
-                      <td className="px-2 py-2">{`${p.first_name} ${
-                        p.middle_name || ""
-                      } ${p.last_name}`}</td>
-                      <td className="px-2 py-2">{p.age}</td>
-                      <td className="px-2 py-2">{p.contact_no}</td>
-                      <td className="px-2 py-2">{p.weeks}</td>
-                      <td className="px-2 py-2">{p.last_visit}</td>
-                      <td className="px-2 py-2">
-                        <RiskLevelBadge level={p.risk_level} />
+                  {loading ? (
+                    <tr>
+                      <td colSpan="7" className="text-center p-6">
+                        Loading patients...
                       </td>
-                      {/* --- ACTIONS COLUMN REMOVED ---
-                      <td className="px-2 py-2">
-                        <div className="flex space-x-1">
-                          <button
-                            onClick={() => handleView(p)}
-                            className="text-gray-400 hover:text-blue-600 p-1"
-                          >
-                            <ViewIcon />
-                          </button>
-                          <button
-                            onClick={() => handleEdit(p)}
-                            className="text-gray-400 hover:text-green-600 p-1"
-                          >
-                            <UpdateIcon />
-                          </button>
-                          <button
-                            onClick={() => setPatientToDelete(p)}
-                            className="text-gray-400 hover:text-red-600 p-1"
-                          >
-                            <DeleteIcon />
-                          </button>
-                        </div>
-                      </td>
-                      */}
                     </tr>
-                  ))}
+                  ) : allPatients.length === 0 ? (
+                    <tr>
+                      <td colSpan="7" className="text-center p-6 text-gray-500">
+                        No patients found
+                      </td>
+                    </tr>
+                  ) : (
+                    allPatients.map((p) => (
+                      <tr
+                        key={p.id}
+                        className="text-gray-600 hover:bg-gray-50 cursor-pointer"
+                        onClick={() => handleView(p)}
+                      >
+                        <td className="px-2 py-2 font-medium">{p.patient_id}</td>
+                        <td className="px-2 py-2">{`${p.first_name} ${
+                          p.middle_name || ""
+                        } ${p.last_name}`}</td>
+                        <td className="px-2 py-2">{p.age}</td>
+                        <td className="px-2 py-2">{p.contact_no}</td>
+                        <td className="px-2 py-2">{p.weeks}</td>
+                        <td className="px-2 py-2">{p.last_visit}</td>
+                        <td className="px-2 py-2">
+                          <RiskLevelBadge level={p.risk_level} />
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -1583,11 +1694,7 @@ const MaternityManagementTab = () => {
 
         <div className="xl:col-span-1">
           <div className="space-y-4">
-            {/* --- ADD NEW PATIENT BUTTON REMOVED --- */}
             <QuickStats stats={stats} />
-            <MaternalUpcomingAppointmentsWidget
-              appointments={upcomingAppointments}
-            />
             <MaternalStatusLegend />
           </div>
         </div>
@@ -1596,6 +1703,9 @@ const MaternityManagementTab = () => {
   );
 };
 
+// ====================================================================
+// --- CHILD HEALTH TAB COMPONENT (from ChildHealthRecords.js) ---
+// ====================================================================
 // ====================================================================
 // --- CHILD HEALTH TAB COMPONENT (from ChildHealthRecords.js) ---
 // ====================================================================
@@ -1613,6 +1723,7 @@ const ChildHealthRecordsTab = () => {
   const [itemsPerPage] = useState(10);
   const [totalRecords, setTotalRecords] = useState(0);
   const [selectedChildForQR, setSelectedChildForQR] = useState(null);
+  const [isExportOpen, setIsExportOpen] = useState(false); // Add export dropdown state
   const { user } = useAuth();
   const { addNotification } = useNotification();
 
@@ -1620,15 +1731,31 @@ const ChildHealthRecordsTab = () => {
     setLoading(true);
     const from = (currentPage - 1) * itemsPerPage;
     const to = from + itemsPerPage - 1;
+    
+    // Build query with filters
+    let query = supabase
+      .from("child_records")
+      .select("*", { count: "exact" })
+      .eq('is_deleted', false); // Filter out deleted records
+
+    // Apply search filter if exists
+    if (searchTerm) {
+      query = query.or(`first_name.ilike.%${searchTerm}%,last_name.ilike.%${searchTerm}%,child_id.ilike.%${searchTerm}%`);
+    }
+
+    // Apply status filter if not 'All'
+    if (activeFilter !== 'All') {
+      query = query.eq('nutrition_status', activeFilter);
+    }
+
     const {
       data: recordsData,
       error: recordsError,
       count: recordsCount,
-    } = await supabase
-      .from("child_records")
-      .select("*", { count: "exact" })
+    } = await query
       .order("child_id", { ascending: true })
       .range(from, to);
+      
     if (recordsError) {
       addNotification(
         `Error fetching records: ${recordsError.message}`,
@@ -1639,7 +1766,7 @@ const ChildHealthRecordsTab = () => {
       setTotalRecords(recordsCount || 0);
     }
 
-    // Admin user doesn't create appointments, so check user role or id
+    // Fetch upcoming appointments for admin user
     if (user && user.id) {
       const { data: appointmentsData, error: appointmentsError } =
         await supabase
@@ -1653,7 +1780,7 @@ const ChildHealthRecordsTab = () => {
       }
     }
     setLoading(false);
-  }, [addNotification, currentPage, itemsPerPage, user]);
+  }, [addNotification, currentPage, itemsPerPage, user, searchTerm, activeFilter]);
 
   useEffect(() => {
     fetchPageData();
@@ -1682,13 +1809,14 @@ const ChildHealthRecordsTab = () => {
     setPatientToDelete(null);
   };
 
-  const handleExport = async () => {
+  const exportToExcel = async () => {
     setLoading(true);
     try {
       // Fetch all children, not just the paginated ones
       const { data: allChildren, error } = await supabase
         .from("child_records")
         .select("*")
+        .eq('is_deleted', false) // Only non-deleted records
         .order("child_id", { ascending: true });
 
       if (error) throw error;
@@ -1698,7 +1826,7 @@ const ChildHealthRecordsTab = () => {
         "Child ID": c.child_id,
         "Last Name": c.last_name,
         "First Name": c.first_name,
-        "Age (Years)": calculateAge(c.dob), // Use helper
+        "Age (Years)": calculateAge(c.dob),
         "Weight (kg)": c.weight_kg,
         "Height (cm)": c.height_cm,
         BMI: c.bmi,
@@ -1719,8 +1847,8 @@ const ChildHealthRecordsTab = () => {
 
       // Generate buffer and trigger download
       const excelBuffer = writeFile(wb, "Child_Health_Records.xlsx", { bookType: "xlsx", type: "array" });
-      const dataBlob = new Blob([excelBuffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-g" });
-      saveAs(dataBlob, "Child_Health_Records.xlsx");
+      const dataBlob = new Blob([excelBuffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8" });
+      saveAs(dataBlob, `Child_Health_Records_${new Date().toISOString().slice(0, 10)}.xlsx`);
 
       addNotification("Data exported successfully!", "success");
     } catch (error) {
@@ -1728,6 +1856,74 @@ const ChildHealthRecordsTab = () => {
       addNotification(`Export failed: ${error.message}`, "error");
     }
     setLoading(false);
+  };
+
+  const exportToPDF = async (filename = 'child_records') => {
+    try {
+      // Fetch all NON-DELETED child records
+      const { data: allChildren, error } = await supabase
+        .from("child_records")
+        .select("*")
+        .eq('is_deleted', false)
+        .order("child_id", { ascending: true });
+
+      if (error) throw error;
+
+      const doc = new jsPDF();
+      
+      // Header
+      doc.setFontSize(16);
+      doc.text('Child Health Records', 105, 15, { align: 'center' });
+      doc.setFontSize(10);
+      doc.text(`Total Records: ${allChildren.length}`, 105, 22, { align: 'center' });
+      doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 105, 28, { align: 'center' });
+      
+      // Table headers
+      const headers = [
+        ['Child ID', 'Last Name', 'First Name', 'Age', 'Sex', 'Weight (kg)', 
+        'Height (cm)', 'BMI', 'Nutrition Status', 'Last Checkup']
+      ];
+      
+      // Table data
+      const tableData = allChildren.map(child => [
+        child.child_id,
+        child.last_name || '',
+        child.first_name || '',
+        calculateAge(child.dob),
+        child.sex || '',
+        child.weight_kg || '',
+        child.height_cm || '',
+        child.bmi || '',
+        child.nutrition_status || '',
+        child.last_checkup || ''
+      ]);
+      
+      // Create table
+      autoTable(doc, {
+        startY: 35,
+        head: headers,
+        body: tableData,
+        theme: 'grid',
+        styles: { fontSize: 7, cellPadding: 1.5 },
+        headStyles: { fillColor: [52, 152, 219], textColor: [255, 255, 255] },
+        margin: { left: 10, right: 10 }
+      });
+      
+      // Footer
+      const pageCount = doc.getNumberOfPages();
+      for(let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.text(`Page ${i} of ${pageCount}`, 105, doc.internal.pageSize.height - 10, { align: 'center' });
+      }
+      
+      // Save PDF
+      doc.save(`${filename}_${new Date().toISOString().slice(0, 10)}.pdf`);
+      addNotification("PDF exported successfully!", "success");
+    } catch (error) {
+      console.error('Error exporting to PDF:', error);
+      addNotification('Error exporting to PDF: ' + error.message, 'error');
+    }
   };
 
   const filteredRecords = useMemo(() => {
@@ -1773,190 +1969,209 @@ const ChildHealthRecordsTab = () => {
         )}
         {selectedChildForQR && (
           <PatientQRCodeModal
-            subject={selectedChildForQR} // Pass the child object as 'subject'
-            idKey="child_id" // Tell the modal to use the 'child_id' field
-            idLabel="Child ID" // Tell the modal how to label the ID
+            subject={selectedChildForQR}
+            idKey="child_id"
+            idLabel="Child ID"
             onClose={() => setSelectedChildForQR(null)}
           />
         )}
       </AnimatePresence>
       
-        <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
-          <div className="xl:col-span-3">
-            <div className="bg-white p-4 rounded-lg shadow-sm border">
-              <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-3">
-                <h2 className="text-xl font-bold text-gray-700">
-                  Patient List
-                </h2>
-                <div className="flex items-center space-x-2">
-                  <div className="relative">
-                    <span className="absolute inset-y-0 left-0 flex items-center pl-2">
-                      <SearchIcon />
-                    </span>
-                    <input
-                      type="text"
-                      placeholder="Search by name..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-8 pr-2 py-1.5 w-full sm:w-auto text-sm rounded-md border bg-gray-50 focus:bg-white"
-                    />
-                  </div>
-                  <div className="relative">
-                    <button
-                      onClick={() => setIsFilterOpen(!isFilterOpen)}
-                      className="flex items-center space-x-2 px-3 py-1.5 text-sm border rounded-md bg-white hover:bg-gray-50"
-                    >
-                      <FilterIcon /> <span>Filter</span>
-                    </button>
-                    <AnimatePresence>
-                      {isFilterOpen && (
-                        <motion.div
-                          initial={{ opacity: 0, y: -5 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -5 }}
-                          className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl z-20 border"
-                        >
-                          <div className="p-2 text-xs font-semibold text-gray-600 border-b">
-                            Filter by Status
-                          </div>
-                          <div className="p-2">
-                            {["All", "H", "UW", "OW", "O"].map((status) => (
-                              <label
-                                key={status}
-                                className="flex items-center space-x-2 p-1 rounded hover:bg-gray-100 cursor-pointer"
-                              >
-                                <input
-                                  type="radio"
-                                  name="status_filter"
-                                  value={status}
-                                  checked={activeFilter === status}
-                                  onChange={() => {
-                                    setActiveFilter(status);
-                                    setCurrentPage(1);
-                                    setIsFilterOpen(false);
-                                  }}
-                                />
-                                <span className="text-sm">{status}</span>
-                              </label>
-                            ))}
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
+      <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
+        <div className="xl:col-span-3">
+          <div className="bg-white p-4 rounded-lg shadow-sm border">
+            <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-3">
+              <h2 className="text-xl font-bold text-gray-700">
+                Patient List
+              </h2>
+              <div className="flex items-center space-x-2">
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 flex items-center pl-2">
+                    <SearchIcon />
+                  </span>
+                  <input
+                    type="text"
+                    placeholder="Search by name or ID..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-8 pr-2 py-1.5 w-full sm:w-auto text-sm rounded-md border bg-gray-50 focus:bg-white"
+                  />
+                </div>
+                <div className="relative">
                   <button
-                    onClick={handleExport}
+                    onClick={() => setIsFilterOpen(!isFilterOpen)}
+                    className="flex items-center space-x-2 px-3 py-1.5 text-sm border rounded-md bg-white hover:bg-gray-50"
+                  >
+                    <FilterIcon /> <span>Filter</span>
+                  </button>
+                  <AnimatePresence>
+                    {isFilterOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -5 }}
+                        className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl z-20 border"
+                      >
+                        <div className="p-2 text-xs font-semibold text-gray-600 border-b">
+                          Filter by Status
+                        </div>
+                        <div className="p-2">
+                          {["All", "H", "UW", "OW", "O"].map((status) => (
+                            <label
+                              key={status}
+                              className="flex items-center space-x-2 p-1 rounded hover:bg-gray-100 cursor-pointer"
+                            >
+                              <input
+                                type="radio"
+                                name="status_filter"
+                                value={status}
+                                checked={activeFilter === status}
+                                onChange={() => {
+                                  setActiveFilter(status);
+                                  setCurrentPage(1);
+                                  setIsFilterOpen(false);
+                                }}
+                              />
+                              <span className="text-sm">{status}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+                
+                {/* Export Dropdown Button - Same as Maternal tab */}
+                <div className="relative">
+                  <button
+                    onClick={() => setIsExportOpen(!isExportOpen)}
                     disabled={loading}
-                    className="flex items-center space-x-2 px-3 py-1.5 text-sm border rounded-md bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className={`flex items-center space-x-2 px-3 py-1.5 text-sm border rounded-md bg-white hover:bg-gray-50 ${
+                      loading ? 'opacity-50 cursor-not-allowed' : ''
+                    }`}
                   >
                     <ExportIcon /> <span>Export</span>
                   </button>
-                </div>
-                {/* --- ADD NEW PATIENT BUTTON REMOVED --- */}
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead className="bg-gray-50">
-                    <tr className="text-left text-gray-500 font-semibold">
-                      {[
-                        "Child ID",
-                        "Last Name",
-                        "First Name",
-                        "Age",
-                        "Weight(kg)",
-                        "Height(cm)",
-                        "BMI",
-                        "Nutrition Status",
-                        "Last Check up",
-                        // "Actions", // <-- HEADER REMOVED
-                      ].map((h) => (
-                        <th key={h} className="px-2 py-2">
-                          {h}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {loading ? (
-                      <tr>
-                        <td colSpan="10" className="text-center p-4">
-                          Loading records...
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredRecords.map((record) => (
-                        <tr
-                          key={record.id}
-                          className="text-gray-600 hover:bg-gray-50 cursor-pointer"
-                          onClick={() => handleView(record)} // <-- Row is now clickable to view
-                        >
-                          <td className="px-2 py-2 font-medium">
-                            {record.child_id}
-                          </td>
-                          <td className="px-2 py-2">{record.last_name}</td>
-                          <td className="px-2 py-2">{record.first_name}</td>
-                          <td className="px-2 py-2">
-                            {calculateAge(record.dob)}
-                          </td>
-                          <td className="px-2 py-2">{record.weight_kg}</td>
-                          <td className="px-2 py-2">{record.height_cm}</td>
-                          <td className="px-2 py-2">{record.bmi}</td>
-                          <td className="px-2 py-2">
-                            <StatusBadge status={record.nutrition_status} />
-                          </td>
-                          <td className="px-2 py-2">{record.last_checkup}</td>
-                          {/* --- ACTIONS COLUMN REMOVED ---
-                          <td className="px-2 py-2">
-                            <div className="flex space-x-1">
-                              <button
-                                onClick={() => {
-                                  setSelectedChild(record);
-                                  setModalMode("view");
-                                }}
-                                className="text-gray-400 hover:text-blue-600 p-1"
-                                title="View"
-                              >
-                                <ViewIcon />
-                              </button>
-                              <button
-                                onClick={() => {
-                                  handleEdit();
-                                }}
-                                className="text-gray-400 hover:text-green-600 p-1"
-                                title="Edit"
-                              >
-                                <UpdateIcon />
-                              </button>
-                              <button
-                                onClick={() => setPatientToDelete(record)}
-                                className="text-gray-400 hover:text-red-600 p-1"
-                                title="Delete"
-                              >
-                                <DeleteIcon />
-                              </button>
-                            </div>
-                          </td>
-                          */}
-                        </tr>
-                      ))
+                  <AnimatePresence>
+                    {isExportOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -5 }}
+                        className="absolute right-0 mt-2 w-40 bg-white rounded-lg shadow-xl z-20 border"
+                      >
+                        <div className="p-2 text-xs font-semibold text-gray-600 border-b">
+                          Export Format
+                        </div>
+                        <div className="p-1">
+                          <button
+                            onClick={() => {
+                              exportToExcel();
+                              setIsExportOpen(false);
+                            }}
+                            className="flex items-center w-full px-3 py-2 text-sm text-left rounded hover:bg-green-50 text-green-600 hover:text-green-700"
+                          >
+                            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            Export as Excel
+                          </button>
+                          <button
+                            onClick={() => {
+                              exportToPDF('child_records');
+                              setIsExportOpen(false);
+                            }}
+                            className="flex items-center w-full px-3 py-2 text-sm text-left rounded hover:bg-red-50 text-red-600 hover:text-red-700"
+                          >
+                            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                            </svg>
+                            Export as PDF
+                          </button>
+                        </div>
+                      </motion.div>
                     )}
-                  </tbody>
-                </table>
+                  </AnimatePresence>
+                </div>
               </div>
-              <ChildPagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={setCurrentPage}
-              />
+              {/* Add New Patient Button Removed as requested */}
             </div>
-          </div>
-          <div className="xl:col-span-1 space-y-4">
-            <ChildStatusLegend />
-            <ChildUpcomingAppointmentsWidget
-              appointments={upcomingAppointments}
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead className="bg-gray-50">
+                  <tr className="text-left text-gray-500 font-semibold">
+                    {[
+                      "Child ID",
+                      "Last Name",
+                      "First Name",
+                      "Age",
+                      "Weight(kg)",
+                      "Height(cm)",
+                      "BMI",
+                      "Nutrition Status",
+                      "Last Check up",
+                      // "Actions", // Header removed as requested
+                    ].map((h) => (
+                      <th key={h} className="px-2 py-2">
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {loading ? (
+                    <tr>
+                      <td colSpan="9" className="text-center p-4">
+                        Loading records...
+                      </td>
+                    </tr>
+                  ) : childRecords.length === 0 ? (
+                    <tr>
+                      <td colSpan="9" className="text-center p-4 text-gray-500">
+                        No child records found
+                      </td>
+                    </tr>
+                  ) : (
+                    childRecords.map((record) => (
+                      <tr
+                        key={record.id}
+                        className="text-gray-600 hover:bg-gray-50 cursor-pointer"
+                        onClick={() => handleView(record)} // Row is now clickable to view
+                      >
+                        <td className="px-2 py-2 font-medium">
+                          {record.child_id}
+                        </td>
+                        <td className="px-2 py-2">{record.last_name}</td>
+                        <td className="px-2 py-2">{record.first_name}</td>
+                        <td className="px-2 py-2">
+                          {calculateAge(record.dob)}
+                        </td>
+                        <td className="px-2 py-2">{record.weight_kg}</td>
+                        <td className="px-2 py-2">{record.height_cm}</td>
+                        <td className="px-2 py-2">{record.bmi}</td>
+                        <td className="px-2 py-2">
+                          <StatusBadge status={record.nutrition_status} />
+                        </td>
+                        <td className="px-2 py-2">{record.last_checkup}</td>
+                        {/* Actions column removed as requested */}
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <ChildPagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={setCurrentPage}
             />
           </div>
         </div>
+        <div className="xl:col-span-1 space-y-4">
+          <ChildStatusLegend />
+          <ChildUpcomingAppointmentsWidget appointments={upcomingAppointments} />
+        </div>
+      </div>
     </>
   );
 };

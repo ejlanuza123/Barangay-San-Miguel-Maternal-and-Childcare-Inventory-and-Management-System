@@ -348,45 +348,63 @@ export default function InventoryPage() {
     }, [filteredInventory]);
 
 
-    const fetchInventory = useCallback(async () => {
-        setLoading(true);
-        const { data, error } = await supabase.from('inventory').select('*').order('created_at', { ascending: false });
-        
-        if (error) {
-            console.error("Error fetching inventory:", error);
-        } else if (data) {
-            const updatePromises = [];
-            const newNotifications = [];
+    const fetchInventory = useCallback(async () => {
+        setLoading(true);
+        
+        // ADD is_deleted filter here
+        let query = supabase
+            .from('inventory')
+            .select('*')
+            .eq('is_deleted', false); // ADD THIS LINE
 
-            data.forEach(item => {
-                let newStatus = item.status;
-                if (item.quantity <= CRITICAL_THRESHOLD) {
-                    newStatus = 'Critical';
-                } else if (item.quantity <= LOW_THRESHOLD) {
-                    newStatus = 'Low';
-                } else {
-                    newStatus = 'Normal';
-                }
+        // Apply search filter if exists
+        if (searchTerm) {
+            query = query.ilike('item_name', `%${searchTerm}%`);
+        }
 
-                if (item.status !== newStatus) {
-                    updatePromises.push(
-                        supabase.from('inventory').update({ status: newStatus }).eq('id', item.id)
-                    );
-                    newNotifications.push(`'${item.item_name}' stock is low (${item.quantity} units). Status updated to ${newStatus}.`);
-                    item.status = newStatus; // Update local data immediately
-                }
-            });
+        // Apply category filter if not 'All'
+        if (filters.category !== 'All') {
+            query = query.eq('category', filters.category);
+        }
 
-            if (updatePromises.length > 0) {
-                await Promise.all(updatePromises);
-                setNotifications(prev => [...prev, ...newNotifications]);
-            }
+        const { data, error } = await query.order('created_at', { ascending: false });
+        
+        if (error) {
+            console.error("Error fetching inventory:", error);
+            addNotification(`Error fetching inventory: ${error.message}`, 'error');
+        } else if (data) {
+            const updatePromises = [];
+            const newNotifications = [];
 
-            setInventory(data);
-            setTotalItems(data.length); 
-        }
-        setLoading(false);
-    }, []);
+            data.forEach(item => {
+                let newStatus = item.status;
+                if (item.quantity <= CRITICAL_THRESHOLD) {
+                    newStatus = 'Critical';
+                } else if (item.quantity <= LOW_THRESHOLD) {
+                    newStatus = 'Low';
+                } else {
+                    newStatus = 'Normal';
+                }
+
+                if (item.status !== newStatus) {
+                    updatePromises.push(
+                        supabase.from('inventory').update({ status: newStatus }).eq('id', item.id)
+                    );
+                    newNotifications.push(`'${item.item_name}' stock is low (${item.quantity} units). Status updated to ${newStatus}.`);
+                    item.status = newStatus;
+                }
+            });
+
+            if (updatePromises.length > 0) {
+                await Promise.all(updatePromises);
+                setNotifications(prev => [...prev, ...newNotifications]);
+            }
+
+            setInventory(data);
+            setTotalItems(data.length);
+        }
+        setLoading(false);
+    }, [searchTerm, filters.category]); // Add dependencies
 
     useEffect(() => {
         fetchInventory();

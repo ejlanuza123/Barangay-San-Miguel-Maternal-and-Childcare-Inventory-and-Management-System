@@ -854,6 +854,7 @@ export default function MaternityManagement() {
       const { data: allPatients, error } = await supabase
         .from('patients')
         .select('*')
+        .eq('is_deleted', false)
         .order('patient_id', { ascending: true });
 
       if (error) throw error;
@@ -926,6 +927,7 @@ export default function MaternityManagement() {
       const { data: allPatients, error } = await supabase
         .from('patients')
         .select('*')
+        .eq('is_deleted', false)
         .order('patient_id', { ascending: true });
 
       if (error) throw error;
@@ -1010,6 +1012,7 @@ export default function MaternityManagement() {
     } = await supabase
       .from("patients")
       .select("*", { count: "exact" })
+      .eq('is_deleted', false)
       .order("patient_id", { ascending: true })
       .range(from, to);
 

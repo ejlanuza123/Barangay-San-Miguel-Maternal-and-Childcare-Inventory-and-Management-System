@@ -224,53 +224,80 @@ export default function BnsInventoryPage() {
 
     const fetchPageData = useCallback(async () => {
         setLoading(true);
-        const from = (currentPage - 1) * itemsPerPage;
-        const to = from + itemsPerPage - 1;
-
-        const { data, error, count } = await supabase
-            .from('bns_inventory')
-            .select('*', { count: 'exact' })
-            .order('item_name', { ascending: true })
-            .range(from, to);
         
-        if (error) {
-            addNotification(`Error fetching inventory: ${error.message}`, 'error');
-        } else if (data) {
-            const CRITICAL_THRESHOLD = 10;
-            const LOW_THRESHOLD = 20;
-            const updatePromises = [];
-            const headerNotificationPromises = []; 
-            const popUpNotificationMessages = [];
+        try {
+            // First, get filtered count for pagination
+            let query = supabase
+                .from('bns_inventory')
+                .select('*', { count: 'exact', head: false })
+                .eq('is_deleted', false); // Filter out deleted items
 
-            data.forEach(item => {
-                let newStatus = 'Normal';
-                if (item.quantity <= CRITICAL_THRESHOLD) newStatus = 'Critical';
-                else if (item.quantity <= LOW_THRESHOLD) newStatus = 'Low';
-                
-                if (item.status !== newStatus) {
-                    updatePromises.push(supabase.from('bns_inventory').update({ status: newStatus }).eq('id', item.id));
-                    item.status = newStatus; 
-
-                    if ((newStatus === 'Low' || newStatus === 'Critical') && user) {
-                        const message = `${item.item_name} stock is ${newStatus.toLowerCase()} (${item.quantity} units left).`;
-                        headerNotificationPromises.push(supabase.from('notifications').insert([{ type: 'inventory_alert', message, user_id: user.id }]));
-                        setStockNotifications(prev => {
-                            if (!prev.some(n => n.message === message)) return [...prev, { id: item.id + Date.now(), message }];
-                            return prev;
-                        });
-                    }
-                }
-            });
-
-            if (updatePromises.length > 0) await Promise.all(updatePromises);
-            if (headerNotificationPromises.length > 0) await Promise.all(headerNotificationPromises);
-            if (popUpNotificationMessages.length > 0) setStockNotifications(prev => [...prev, ...popUpNotificationMessages]);
+            // Apply search filter if exists
+            if (searchTerm) {
+                query = query.ilike('item_name', `%${searchTerm}%`);
+            }
             
-            setInventory(data);
+            // Apply category filter if not 'All'
+            if (activeCategory !== 'All') {
+                query = query.eq('category', activeCategory);
+            }
+
+            // Get total count
+            const { count, error: countError } = await query;
+            
+            if (countError) throw countError;
+            
             setTotalRecords(count || 0);
+            
+            // Now fetch the paginated data
+            const from = (currentPage - 1) * itemsPerPage;
+            const to = from + itemsPerPage - 1;
+            
+            const { data, error } = await query
+                .order('item_name', { ascending: true })
+                .range(from, to);
+            
+            if (error) throw error;
+            
+            if (data) {
+                const CRITICAL_THRESHOLD = 10;
+                const LOW_THRESHOLD = 20;
+                const updatePromises = [];
+                const headerNotificationPromises = [];
+                const popUpNotificationMessages = [];
+
+                data.forEach(item => {
+                    let newStatus = 'Normal';
+                    if (item.quantity <= CRITICAL_THRESHOLD) newStatus = 'Critical';
+                    else if (item.quantity <= LOW_THRESHOLD) newStatus = 'Low';
+                    
+                    if (item.status !== newStatus) {
+                        updatePromises.push(supabase.from('bns_inventory').update({ status: newStatus }).eq('id', item.id));
+                        item.status = newStatus;
+
+                        if ((newStatus === 'Low' || newStatus === 'Critical') && user) {
+                            const message = `${item.item_name} stock is ${newStatus.toLowerCase()} (${item.quantity} units left).`;
+                            headerNotificationPromises.push(supabase.from('notifications').insert([{ type: 'inventory_alert', message, user_id: user.id }]));
+                            setStockNotifications(prev => {
+                                if (!prev.some(n => n.message === message)) return [...prev, { id: item.id + Date.now(), message }];
+                                return prev;
+                            });
+                        }
+                    }
+                });
+
+                if (updatePromises.length > 0) await Promise.all(updatePromises);
+                if (headerNotificationPromises.length > 0) await Promise.all(headerNotificationPromises);
+                if (popUpNotificationMessages.length > 0) setStockNotifications(prev => [...prev, ...popUpNotificationMessages]);
+                
+                setInventory(data);
+            }
+        } catch (error) {
+            addNotification(`Error fetching inventory: ${error.message}`, 'error');
         }
+        
         setLoading(false);
-    }, [addNotification, currentPage, itemsPerPage, user]);
+    }, [addNotification, currentPage, itemsPerPage, user, searchTerm, activeCategory]);
 
     useEffect(() => { fetchPageData(); }, [fetchPageData]);
 

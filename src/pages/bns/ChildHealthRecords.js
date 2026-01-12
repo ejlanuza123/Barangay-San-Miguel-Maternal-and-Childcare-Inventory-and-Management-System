@@ -565,6 +565,7 @@ export default function ChildHealthRecords() {
       const { data: allChildren, error } = await supabase
         .from('child_records')
         .select('*')
+        .eq('is_deleted', false)
         .order('child_id', { ascending: true });
 
       if (error) throw error;
@@ -640,6 +641,7 @@ export default function ChildHealthRecords() {
       const { data: allChildren, error } = await supabase
         .from('child_records')
         .select('*')
+        .eq('is_deleted', false)
         .order('child_id', { ascending: true });
 
       if (error) throw error;
@@ -734,6 +736,7 @@ export default function ChildHealthRecords() {
     } = await supabase
       .from("child_records")
       .select("*", { count: "exact" })
+      .eq('is_deleted', false)
       .order("child_id", { ascending: true })
       .range(from, to);
     if (recordsError) {

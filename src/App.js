@@ -76,7 +76,6 @@ function App() {
               <Route element={<RoleGuard allowedRoles={['Midwife']} />}>
                 <Route path="midwife/dashboard" element={<MidwifeDashboard />} />
                 <Route path="midwife/requestions" element={<RequestionsPage />} /> 
-                {/* --- NEW DROPDOWN ROUTES --- */}
                 <Route path="midwife/maternity-records" element={<MidwifeMaternityManagement />} />
                 <Route path="midwife/child-records" element={<MidwifeChildHealthRecords />} />
                 <Route path="midwife/inventory" element={<AdminInventoryPage />} />
