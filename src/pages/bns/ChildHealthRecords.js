@@ -202,10 +202,14 @@ const PrescriptionModal = ({ child, onClose, onSave }) => {
   const [searchInputs, setSearchInputs] = useState({});
   const [filteredInventories, setFilteredInventories] = useState({});
 
+  // Load BNS Inventory - FIXED
   useEffect(() => {
     const fetchInventory = async () => {
-      // Use bns_inventory for children
-      const { data } = await supabase.from('bns_inventory').select('*').gt('quantity', 0);
+      const { data } = await supabase
+        .from('bns_inventory')
+        .select('*')
+        .gt('quantity', 0)
+        .eq('is_deleted', false); // <--- Added this filter
       setInventoryItems(data || []);
     };
     fetchInventory();

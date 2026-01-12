@@ -267,9 +267,14 @@ const PrescriptionModal = ({ patient, onClose, onSave }) => {
   const [searchInputs, setSearchInputs] = useState({});
   const [filteredInventories, setFilteredInventories] = useState({});
 
+  // Load Inventory for Dropdown (BHW Inventory) - FIXED
   useEffect(() => {
     const fetchInventory = async () => {
-      const { data } = await supabase.from('inventory').select('*').gt('quantity', 0);
+      const { data } = await supabase
+        .from('inventory')
+        .select('*')
+        .gt('quantity', 0)
+        .eq('is_deleted', false); // <--- Added this filter
       setInventoryItems(data || []);
     };
     fetchInventory();
