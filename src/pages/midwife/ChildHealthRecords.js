@@ -729,12 +729,31 @@ export default function ChildHealthRecords() {
     setLoading(true);
     const from = (currentPage - 1) * itemsPerPage;
     const to = from + itemsPerPage - 1;
-    const { data: recordsData, error: recordsError, count: recordsCount } = await supabase
+
+    // Build the query
+    let query = supabase
       .from("child_records")
       .select("*", { count: "exact" })
-      .eq('is_deleted', false) // <--- ADD THIS LINE
+      .eq('is_deleted', false);
+
+    // Apply search filter if exists
+    if (searchTerm) {
+      const searchTermLower = `%${searchTerm.toLowerCase()}%`;
+      query = query.or(
+        `first_name.ilike.${searchTermLower},last_name.ilike.${searchTermLower},mother_name.ilike.${searchTermLower}`
+      );
+    }
+
+    // Apply nutrition status filter if not 'All'
+    if (activeFilter !== "All") {
+      query = query.eq('nutrition_status', activeFilter);
+    }
+
+    // Execute the query with pagination
+    const { data: recordsData, error: recordsError, count: recordsCount } = await query
       .order("child_id", { ascending: true })
       .range(from, to);
+      
     if (recordsError) {
       addNotification(
         `Error fetching records: ${recordsError.message}`,
@@ -744,17 +763,20 @@ export default function ChildHealthRecords() {
       setChildRecords(recordsData || []);
       setTotalRecords(recordsCount || 0);
     }
+
+    // Rest of your existing code for appointments...
     const { data: appointmentsData, error: appointmentsError } = await supabase
       .from("appointments")
       .select("*")
       .eq("created_by", user.id)
       .order("date", { ascending: true })
       .limit(3);
+      
     if (!appointmentsError) {
       setUpcomingAppointments(appointmentsData || []);
     }
     setLoading(false);
-  }, [addNotification, currentPage, itemsPerPage, user]);
+  }, [addNotification, currentPage, itemsPerPage, user, searchTerm, activeFilter]); // Add searchTerm and activeFilter to dependencies
 
   useEffect(() => {
     fetchPageData();
@@ -982,7 +1004,7 @@ export default function ChildHealthRecords() {
                         </td>
                       </tr>
                     ) : (
-                      filteredRecords.map((record) => (
+                      childRecords.map((record) => (
                         <tr
                           key={record.id}
                           className="text-gray-600 hover:bg-gray-50"

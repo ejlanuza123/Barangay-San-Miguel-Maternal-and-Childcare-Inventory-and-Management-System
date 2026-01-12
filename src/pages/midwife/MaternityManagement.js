@@ -1002,10 +1002,45 @@ export default function MaternityManagement() {
     setLoading(true);
     const from = (currentPage - 1) * itemsPerPage;
     const to = from + itemsPerPage - 1;
-    const { data: patientData, error: patientError, count: patientCount } = await supabase
+
+    // Build the query
+    let query = supabase
       .from("patients")
       .select("*", { count: "exact" })
-      .eq('is_deleted', false) // <--- ADD THIS LINE
+      .eq('is_deleted', false);
+
+    // Apply search filter if exists
+    if (searchTerm) {
+      if (filters.search_type === "id") {
+        query = query.ilike('patient_id', `%${searchTerm}%`);
+      } else {
+        // Search by name - handle both full name and partial matches
+        const searchTermLower = searchTerm.toLowerCase().trim();
+        // Split search term into parts for better searching
+        const searchParts = searchTermLower.split(/\s+/);
+        
+        // Create an OR condition for each part of the search term
+        let orConditions = [];
+        searchParts.forEach(part => {
+          if (part.length > 0) {
+            orConditions.push(`first_name.ilike.%${part}%`);
+            orConditions.push(`last_name.ilike.%${part}%`);
+          }
+        });
+        
+        if (orConditions.length > 0) {
+          query = query.or(orConditions.join(','));
+        }
+      }
+    }
+
+    // Apply risk level filter if not 'All'
+    if (filters.risk_level !== "All") {
+      query = query.eq('risk_level', filters.risk_level);
+    }
+
+    // Execute the query with pagination
+    const { data: patientData, error: patientError, count: patientCount } = await query
       .order("patient_id", { ascending: true })
       .range(from, to);
 
@@ -1015,10 +1050,11 @@ export default function MaternityManagement() {
       setTotalPatients(patientCount || 0);
     }
 
+    // Rest of your existing code for appointments...
     const { data: appointmentsData, error: appointmentsError } = await supabase
       .from("appointments")
       .select("*")
-      .eq("created_by", user.id) // Only get appointments created by the current BNS
+      .eq("created_by", user.id)
       .order("date", { ascending: true })
       .limit(3);
 
@@ -1027,7 +1063,7 @@ export default function MaternityManagement() {
     }
 
     setLoading(false);
-  }, [addNotification, currentPage, itemsPerPage, user]); // <-- Add 'user' as a dependency
+  }, [addNotification, currentPage, itemsPerPage, user, searchTerm, filters]); // Add searchTerm and filters to dependencies
 
   useEffect(() => {
     fetchPageData();
@@ -1067,8 +1103,8 @@ export default function MaternityManagement() {
   };
 
   const filteredPatients = useMemo(() => {
-    // Filtering is now done on the client-side for the current page's data
-    return allPatients
+    // First, filter the current page's data for display
+    const currentPagePatients = allPatients
       .filter((patient) => {
         if (filters.risk_level === "All") return true;
         return patient.risk_level === filters.risk_level;
@@ -1085,6 +1121,8 @@ export default function MaternityManagement() {
           return fullName.includes(term);
         }
       });
+    
+    return currentPagePatients;
   }, [allPatients, searchTerm, filters]);
 
   const totalPages = Math.ceil(totalPatients / itemsPerPage);
@@ -1294,7 +1332,7 @@ export default function MaternityManagement() {
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {filteredPatients.map((p) => (
+                  {allPatients.map((p) => (
                     <tr key={p.id} className="text-gray-600">
                       <td className="px-2 py-2 font-medium">{p.patient_id}</td>
                       <td className="px-2 py-2">{`${p.first_name} ${

@@ -12,7 +12,13 @@ import * as XLSX from 'xlsx';
 import PatientQRCode from "../../components/reusables/PatientQRCode";
 import PatientQRCodeModal from "../../components/reusables/PatientQRCodeModal";
 
+
 // --- ICONS ---
+
+const PillIcon = () => ( <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg> );
+const PlusIcon = () => ( <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg> );
+const TrashIcon = () => ( <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg> );
+
 const ExportIcon = () => (
   <svg
     className="w-5 h-5 text-gray-500"
@@ -245,6 +251,442 @@ const StatusLegend = () => (
   </div>
 );
 
+const PrescriptionModal = ({ patient, onClose, onSave }) => {
+  const [activeTab, setActiveTab] = useState('dispense');
+  const [inventoryItems, setInventoryItems] = useState([]);
+  const [itemsToDispense, setItemsToDispense] = useState([{ 
+    id: Date.now(), 
+    itemId: "", 
+    quantity: 1, 
+    instructions: "",
+    searchTerm: ""
+  }]);
+  const [loading, setLoading] = useState(false);
+  const { addNotification } = useNotification();
+  const { profile } = useAuth();
+  const [searchInputs, setSearchInputs] = useState({});
+  const [filteredInventories, setFilteredInventories] = useState({});
+
+  useEffect(() => {
+    const fetchInventory = async () => {
+      const { data } = await supabase.from('inventory').select('*').gt('quantity', 0);
+      setInventoryItems(data || []);
+    };
+    fetchInventory();
+  }, []);
+
+  const handleAddItem = () => {
+    const newId = Date.now();
+    setItemsToDispense([...itemsToDispense, { 
+      id: newId, 
+      itemId: "", 
+      quantity: 1, 
+      instructions: "",
+      searchTerm: ""
+    }]);
+  };
+
+  const handleRemoveItem = (id) => {
+    if (itemsToDispense.length === 1) {
+      addNotification("At least one item is required", "warning");
+      return;
+    }
+    setItemsToDispense(itemsToDispense.filter(item => item.id !== id));
+  };
+
+  const handleItemChange = (id, field, value) => {
+    const updatedItems = itemsToDispense.map(item => {
+      if (item.id === id) {
+        const updatedItem = { ...item, [field]: value };
+        
+        if (field === 'itemId') {
+          updatedItem.searchTerm = "";
+        }
+        
+        if (field === 'searchTerm') {
+          updatedItem.itemId = "";
+          
+          const filtered = inventoryItems.filter(inv => 
+            inv.item_name.toLowerCase().includes(value.toLowerCase()) &&
+            inv.quantity > 0
+          );
+          setFilteredInventories(prev => ({ ...prev, [id]: filtered }));
+        }
+        
+        return updatedItem;
+      }
+      return item;
+    });
+    setItemsToDispense(updatedItems);
+  };
+
+  const handleDispense = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+
+    for (const itemRequest of itemsToDispense) {
+      if (!itemRequest.itemId) {
+        addNotification("Please select an item for all rows.", "error");
+        setLoading(false);
+        return;
+      }
+      const inventoryItem = inventoryItems.find(i => i.id === itemRequest.itemId);
+      if (!inventoryItem || inventoryItem.quantity < itemRequest.quantity) {
+        addNotification(`Insufficient stock for ${inventoryItem ? inventoryItem.item_name : 'item'}. Available: ${inventoryItem?.quantity || 0}`, "error");
+        setLoading(false);
+        return;
+      }
+    }
+
+    try {
+      const newRecords = [];
+      const updatePromises = [];
+
+      for (const itemRequest of itemsToDispense) {
+        const inventoryItem = inventoryItems.find(i => i.id === itemRequest.itemId);
+
+        updatePromises.push(
+          supabase.from('inventory')
+            .update({ quantity: inventoryItem.quantity - parseInt(itemRequest.quantity) })
+            .eq('id', inventoryItem.id)
+        );
+
+        newRecords.push({
+          date: new Date().toISOString(),
+          itemName: inventoryItem.item_name,
+          quantity: itemRequest.quantity,
+          instructions: itemRequest.instructions,
+          issuer: `${profile.first_name} ${profile.last_name}`
+        });
+        
+        await logActivity("Medicine Dispensed", `Dispensed ${itemRequest.quantity} ${inventoryItem.item_name} to ${patient.first_name} ${patient.last_name}`);
+      }
+
+      await Promise.all(updatePromises);
+
+      const currentHistory = patient.medical_history || {};
+      const prescriptions = currentHistory.prescriptions || [];
+      const { error: patError } = await supabase
+        .from('patients')
+        .update({ medical_history: { ...currentHistory, prescriptions: [...newRecords, ...prescriptions] } })
+        .eq('id', patient.id);
+        
+      if (patError) throw patError;
+      
+      addNotification("Medicines dispensed successfully.", "success");
+      onSave(); 
+      onClose();
+    } catch (error) {
+      console.error("Prescription error:", error);
+      addNotification("Failed to dispense medicines.", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const history = patient.medical_history?.prescriptions || [];
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95 }} 
+        animate={{ opacity: 1, scale: 1 }}
+        className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden border border-gray-200"
+      >
+        {/* Header - Fixed */}
+        <div className="p-5 bg-gradient-to-r from-blue-50 to-indigo-50 border-b flex-shrink-0">
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                </svg>
+                Prescription & Dispensing
+              </h2>
+              <p className="text-sm text-gray-600 mt-1">
+                Patient: <span className="font-semibold">{patient.first_name} {patient.last_name}</span>
+              </p>
+            </div>
+            <button 
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-full transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+        
+        {/* Tabs - Fixed */}
+        <div className="flex border-b flex-shrink-0">
+          <button 
+            onClick={() => setActiveTab('dispense')} 
+            className={`flex-1 py-3 text-sm font-semibold transition-all ${activeTab === 'dispense' 
+              ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50' 
+              : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'}`}
+          >
+            <div className="flex items-center justify-center gap-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+              Dispense New
+            </div>
+          </button>
+          <button 
+            onClick={() => setActiveTab('history')} 
+            className={`flex-1 py-3 text-sm font-semibold transition-all ${activeTab === 'history' 
+              ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50' 
+              : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'}`}
+          >
+            <div className="flex items-center justify-center gap-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+              History
+            </div>
+          </button>
+        </div>
+
+        {/* Scrollable Content Area */}
+        <div className="flex-1 overflow-y-auto p-6">
+          {activeTab === 'dispense' ? (
+            <form onSubmit={handleDispense} id="prescription-form" className="space-y-4">
+              <div className="space-y-3">
+                {itemsToDispense.map((item, index) => {
+                  const selectedItem = inventoryItems.find(i => i.id === item.itemId);
+                  const filteredItems = filteredInventories[item.id] || inventoryItems.filter(i => i.quantity > 0);
+                  
+                  return (
+                    <div key={item.id} className="bg-gradient-to-r from-gray-50 to-white p-4 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                      <div className="flex items-start gap-3">
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between mb-2">
+                            <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider">Item #{index + 1}</label>
+                            {itemsToDispense.length > 1 && (
+                              <button 
+                                type="button" 
+                                onClick={() => handleRemoveItem(item.id)}
+                                className="text-red-400 hover:text-red-600 p-1 rounded-full hover:bg-red-50 transition-colors"
+                                title="Remove item"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            )}
+                          </div>
+                          
+                          <div className="relative mb-2">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                              </svg>
+                            </div>
+                            <input
+                              type="text"
+                              className="w-full pl-10 pr-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                              placeholder="Search medicine..."
+                              value={item.searchTerm || (selectedItem ? selectedItem.item_name : '')}
+                              onChange={(e) => handleItemChange(item.id, 'searchTerm', e.target.value)}
+                              onFocus={() => {
+                                if (!item.itemId) {
+                                  handleItemChange(item.id, 'searchTerm', '');
+                                }
+                              }}
+                            />
+                            
+                            {item.searchTerm && filteredItems.length > 0 && (
+                              <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                                {filteredItems.map(invItem => (
+                                  <div
+                                    key={invItem.id}
+                                    className="px-4 py-2 hover:bg-blue-50 cursor-pointer text-sm border-b last:border-b-0"
+                                    onClick={() => {
+                                      handleItemChange(item.id, 'itemId', invItem.id);
+                                      setFilteredInventories(prev => ({ ...prev, [item.id]: [] }));
+                                    }}
+                                  >
+                                    <div className="flex justify-between items-center">
+                                      <span className="font-medium">{invItem.item_name}</span>
+                                      <span className={`text-xs px-2 py-1 rounded-full ${invItem.quantity > 10 ? 'bg-green-100 text-green-800' : invItem.quantity > 0 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}`}>
+                                        Stock: {invItem.quantity}
+                                      </span>
+                                    </div>
+                                    <div className="text-xs text-gray-500 mt-1">{invItem.category || 'Uncategorized'}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          
+                          {selectedItem && (
+                            <div className="mb-2 p-2 bg-blue-50 rounded border border-blue-100">
+                              <div className="flex justify-between items-center text-sm">
+                                <div>
+                                  <span className="font-medium">{selectedItem.item_name}</span>
+                                  <span className="text-gray-500 ml-2">({selectedItem.category})</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className={`px-2 py-1 text-xs rounded-full ${selectedItem.quantity > 10 ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                                    Available: {selectedItem.quantity}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Quantity</label>
+                              <div className="relative">
+                                <input 
+                                  type="number" 
+                                  min="1" 
+                                  max={selectedItem?.quantity || 999}
+                                  className="w-full p-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                  value={item.quantity}
+                                  onChange={(e) => handleItemChange(item.id, 'quantity', Math.max(1, parseInt(e.target.value) || 1))}
+                                  required 
+                                />
+                                {selectedItem && (
+                                  <div className="absolute right-2 top-1/2 transform -translate-y-1/2 text-xs text-gray-500">
+                                    Max: {selectedItem.quantity}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Instructions</label>
+                              <input 
+                                type="text" 
+                                className="w-full p-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                placeholder="e.g., 1 tablet daily after meal"
+                                value={item.instructions}
+                                onChange={(e) => handleItemChange(item.id, 'instructions', e.target.value)}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </form>
+          ) : (
+            <div>
+              {history.length === 0 ? (
+                <div className="text-center py-8">
+                  <svg className="w-16 h-16 mx-auto text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <p className="text-sm text-gray-500 mt-3">No prescription history found.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {history.map((rec, idx) => (
+                    <div key={idx} className="bg-gradient-to-r from-gray-50 to-white p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="font-bold text-gray-800">{rec.itemName}</span>
+                            <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded-full">
+                              Qty: {rec.quantity}
+                            </span>
+                          </div>
+                          {rec.instructions && (
+                            <p className="text-sm text-gray-600 mb-2">
+                              <span className="font-semibold">Instructions:</span> {rec.instructions}
+                            </p>
+                          )}
+                          <div className="flex items-center gap-4 text-xs text-gray-500">
+                            <span className="flex items-center gap-1">
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                              {new Date(rec.date).toLocaleDateString()}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                              </svg>
+                              {rec.issuer || 'Unknown'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Fixed Footer with Action Buttons */}
+        <div className="p-4 border-t bg-white flex-shrink-0">
+          {activeTab === 'dispense' ? (
+            <div className="flex justify-between items-center">
+              <button 
+                type="button" 
+                onClick={handleAddItem}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-all"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                </svg>
+                Add Another Item
+              </button>
+              <div className="flex gap-3">
+                <button 
+                  type="button"
+                  onClick={onClose}
+                  className="px-5 py-2.5 text-sm font-semibold text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all border border-gray-300"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  form="prescription-form"
+                  disabled={loading}
+                  className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-lg hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2 shadow-md hover:shadow-lg"
+                >
+                  {loading ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                      </svg>
+                      Dispense All Items
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex justify-end">
+              <button 
+                type="button"
+                onClick={onClose}
+                className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-md hover:shadow-lg"
+              >
+                Close
+              </button>
+            </div>
+          )}
+        </div>
+      </motion.div>
+    </div>
+  );
+};
 // --- NEW/UPDATED MODALS ---
 const DeleteConfirmationModal = ({ patientName, onConfirm, onCancel }) => (
   <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
@@ -846,6 +1288,7 @@ export default function MaternityManagement() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10); // Set how many patients per page
   const [totalPatients, setTotalPatients] = useState(0);
+  const [isPrescriptionModalOpen, setIsPrescriptionModalOpen] = useState(false);
 
   // Export functions for Maternity Management
   const exportToPDF = async (filename = 'maternity_records') => {
@@ -1000,19 +1443,47 @@ export default function MaternityManagement() {
 
   const fetchPageData = useCallback(async () => {
     setLoading(true);
-
     const from = (currentPage - 1) * itemsPerPage;
     const to = from + itemsPerPage - 1;
 
-    // Fetch paginated patients
-    const {
-      data: patientData,
-      error: patientError,
-      count: patientCount,
-    } = await supabase
+    // Build the query
+    let query = supabase
       .from("patients")
       .select("*", { count: "exact" })
-      .eq('is_deleted', false)
+      .eq('is_deleted', false);
+
+    // Apply search filter if exists
+    if (searchTerm) {
+      if (filters.search_type === "id") {
+        query = query.ilike('patient_id', `%${searchTerm}%`);
+      } else {
+        // Search by name - handle both full name and partial matches
+        const searchTermLower = searchTerm.toLowerCase().trim();
+        // Split search term into parts for better searching
+        const searchParts = searchTermLower.split(/\s+/);
+        
+        // Create an OR condition for each part of the search term
+        let orConditions = [];
+        searchParts.forEach(part => {
+          if (part.length > 0) {
+            orConditions.push(`first_name.ilike.%${part}%`);
+            orConditions.push(`last_name.ilike.%${part}%`);
+          }
+        });
+        
+        if (orConditions.length > 0) {
+          query = query.or(orConditions.join(','));
+        }
+      }
+    }
+
+    // Apply risk level filter if not 'All'
+    if (filters.risk_level !== "All") {
+      query = query.eq('risk_level', filters.risk_level);
+    }
+
+    // Execute the query with pagination
+    const { data: patientData, error: patientError, count: patientCount } = await query
       .order("patient_id", { ascending: true })
       .range(from, to);
 
@@ -1022,10 +1493,11 @@ export default function MaternityManagement() {
       setTotalPatients(patientCount || 0);
     }
 
+    // Rest of your existing code for appointments...
     const { data: appointmentsData, error: appointmentsError } = await supabase
       .from("appointments")
       .select("*")
-      .eq("created_by", user.id) // Only get appointments created by the current BNS
+      .eq("created_by", user.id)
       .order("date", { ascending: true })
       .limit(3);
 
@@ -1034,7 +1506,7 @@ export default function MaternityManagement() {
     }
 
     setLoading(false);
-  }, [addNotification, currentPage, itemsPerPage, user]); // <-- Add 'user' as a dependency
+  }, [addNotification, currentPage, itemsPerPage, user, searchTerm, filters]); // Add searchTerm and filters to dependencies // <-- Add 'user' as a dependency
 
   useEffect(() => {
     fetchPageData();
@@ -1084,6 +1556,11 @@ export default function MaternityManagement() {
     setPatientToDelete(null); // Close the modal
   };
 
+  const handlePrescribe = (patient) => {
+      setSelectedPatient(patient);
+      setIsPrescriptionModalOpen(true);
+  };
+
   const filteredPatients = useMemo(() => {
     // Filtering is now done on the client-side for the current page's data
     return allPatients
@@ -1110,6 +1587,13 @@ export default function MaternityManagement() {
   return (
     <>
       <AnimatePresence>
+        {isPrescriptionModalOpen && selectedPatient && (
+            <PrescriptionModal 
+                patient={selectedPatient}
+                onClose={() => setIsPrescriptionModalOpen(false)}
+                onSave={fetchPageData}
+            />
+        )}
         {(modalMode === "add" || modalMode === "edit") && (
           <AddPatientModal
             mode={modalMode}
@@ -1312,7 +1796,7 @@ export default function MaternityManagement() {
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {filteredPatients.map((p) => (
+                  {allPatients.map((p) => (
                     <tr key={p.id} className="text-gray-600">
                       <td className="px-2 py-2 font-medium">{p.patient_id}</td>
                       <td className="px-2 py-2">{`${p.first_name} ${
@@ -1327,6 +1811,9 @@ export default function MaternityManagement() {
                       </td>
                       <td className="px-2 py-2">
                         <div className="flex space-x-1">
+                          <button onClick={() => handlePrescribe(p)} className="text-purple-500 hover:text-purple-700 p-1 bg-purple-50 rounded" title="Prescribe Medicine">
+                             <PillIcon />
+                          </button>
                           <button
                             onClick={() => handleView(p)}
                             className="text-gray-400 hover:text-blue-600 p-1"
