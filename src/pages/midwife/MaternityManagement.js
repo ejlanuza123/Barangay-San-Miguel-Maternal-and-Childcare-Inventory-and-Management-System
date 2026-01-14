@@ -695,6 +695,7 @@ const PrescriptionModal = ({ patient, onClose, onSave }) => {
     </div>
   );
 };
+
 // --- NEW/UPDATED MODALS ---
 const DeleteConfirmationModal = ({ patientName, onConfirm, onCancel }) => (
   <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
@@ -729,10 +730,109 @@ const DeleteConfirmationModal = ({ patientName, onConfirm, onCancel }) => (
 );
 
 // MODIFIED: ViewPatientModal now displays all medical history details
+// MODIFIED: ViewPatientModal now displays all medical history details
 const ViewPatientModal = ({ patient, onClose }) => {
   // Safely get the detailed records, or an empty object if it's null
   const [isQrModalVisible, setIsQrModalVisible] = useState(false);
+  const [children, setChildren] = useState([]);
+  const [loadingChildren, setLoadingChildren] = useState(false);
   const details = patient.medical_history || {};
+
+  // Fetch children data when modal opens
+  useEffect(() => {
+    const fetchChildren = async () => {
+      if (!patient) return;
+      
+      setLoadingChildren(true);
+      try {
+        // Search for children by mother's name - using EXACT or SIMILAR matching
+        const motherFullName = `${patient.first_name} ${patient.last_name}`;
+        console.log("Searching for children of mother:", motherFullName);
+        
+        // Try to find exact match first, then try partial matches
+        // We'll use database-level search for efficiency
+        const { data: exactMatch, error: exactError } = await supabase
+          .from('child_records')
+          .select('*')
+          .eq('is_deleted', false)
+          .or(`mother_name.ilike.%${motherFullName}%`)
+          .order('dob', { ascending: false });
+        
+        if (exactError) {
+          console.error("Error fetching children:", exactError);
+          throw exactError;
+        }
+        
+        console.log("Exact match children:", exactMatch);
+        
+        // If no exact matches found, try searching by first name only
+        // but be more careful about false positives
+        let filteredChildren = exactMatch || [];
+        
+        if (filteredChildren.length === 0) {
+          console.log("No exact matches found, trying first name search...");
+          
+          // Get all children to filter on client side
+          const { data: allChildren, error: allError } = await supabase
+            .from('child_records')
+            .select('*')
+            .eq('is_deleted', false)
+            .order('dob', { ascending: false });
+          
+          if (allError) throw allError;
+          
+          // Filter with more precise logic
+          filteredChildren = allChildren.filter(child => {
+            const motherName = child.mother_name || '';
+            const lowerMotherName = motherName.toLowerCase().trim();
+            
+            // Create search patterns
+            const searchPatterns = [
+              motherFullName.toLowerCase().trim(),
+              `${patient.first_name} ${patient.last_name}`.toLowerCase().trim(),
+              // If mother has middle name in medical history, try that too
+              details.middle_name ? `${patient.first_name} ${details.middle_name} ${patient.last_name}`.toLowerCase().trim() : ''
+            ].filter(pattern => pattern);
+            
+            // Check if mother name matches any pattern
+            for (const pattern of searchPatterns) {
+              if (lowerMotherName === pattern) {
+                return true; // Exact match
+              }
+              // Check if mother name starts with the pattern (more precise than includes)
+              if (pattern && lowerMotherName.startsWith(pattern)) {
+                return true;
+              }
+            }
+            
+            // Also check if mother name contains first name AND last name
+            const hasFirstName = lowerMotherName.includes(patient.first_name.toLowerCase());
+            const hasLastName = lowerMotherName.includes(patient.last_name.toLowerCase());
+            
+            // Only return true if BOTH first and last name are present
+            if (hasFirstName && hasLastName) {
+              return true;
+            }
+            
+            return false;
+          });
+          
+          console.log("Filtered children after broader search:", filteredChildren);
+        }
+        
+        setChildren(filteredChildren);
+        
+      } catch (error) {
+        console.error('Error fetching children:', error);
+        setChildren([]);
+      } finally {
+        setLoadingChildren(false);
+      }
+    };
+
+    fetchChildren();
+  }, [patient, details.middle_name]);
+
   const handleDownloadPdf = () => {
     const doc = new jsPDF();
 
@@ -944,15 +1044,51 @@ const ViewPatientModal = ({ patient, onClose }) => {
       { maxWidth: 180 }
     );
 
+    // --- Add Children Records Page ---
+    if (children.length > 0) {
+      doc.addPage();
+      doc.setFontSize(14).setFont(undefined, "bold");
+      doc.text("Children Records", 14, 20);
+      doc.setFontSize(10).setFont(undefined, "normal");
+      doc.text(`Mother: ${patient.first_name} ${patient.last_name}`, 14, 30);
+      doc.text(`Total Children: ${children.length}`, 14, 35);
+
+      const childrenData = children.map((child) => [
+        child.child_id || "N/A",
+        child.first_name || "N/A",
+        child.last_name || "N/A",
+        child.dob ? new Date(child.dob).toLocaleDateString() : "N/A",
+        child.sex || "N/A",
+        child.birth_weight || "N/A",
+        child.place_of_birth || "N/A",
+      ]);
+
+      autoTable(doc, {
+        startY: 45,
+        head: [
+          [
+            "Child ID",
+            "First Name",
+            "Last Name",
+            "Date of Birth",
+            "Sex",
+            "Birth Weight",
+            "Place of Birth",
+          ],
+        ],
+        body: childrenData,
+        theme: "grid",
+        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: [66, 139, 202], textColor: 255 },
+      });
+    }
+
     doc.save(`ITR_${patient.last_name}_${patient.first_name}.pdf`);
     logActivity(
       "Downloaded PDF Record",
       `Generated PDF for patient: ${patient.patient_id}`
     );
   };
-  <div className="md:col-span-1">
-    <PatientQRCode patient={patient} />
-  </div>;
 
   // Helper components for styling the document view
   const SectionHeader = ({ title }) => (
@@ -993,41 +1129,138 @@ const ViewPatientModal = ({ patient, onClose }) => {
     </div>
   );
 
+  // Children Section Component
+  const ChildrenSection = () => (
+    <div className="mt-6">
+      <div className="flex items-center justify-between mb-2">
+        <SectionHeader title="Children Records" />
+        {children.length > 0 && !loadingChildren && (
+          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+            {children.length} child{children.length !== 1 ? 'ren' : ''}
+          </span>
+        )}
+      </div>
+      
+      {loadingChildren ? (
+        <div className="text-center py-4">
+          <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+          <p className="text-sm text-gray-500 mt-2">Loading children records...</p>
+        </div>
+      ) : children.length === 0 ? (
+        <div className="text-center py-4 bg-gray-50 rounded-md border border-dashed border-gray-200">
+          <svg className="w-12 h-12 mx-auto text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5 3.75a2.5 2.5 0 01-2.5 2.5H3.75a2.5 2.5 0 01-2.5-2.5V6.75a2.5 2.5 0 012.5-2.5h16.5a2.5 2.5 0 012.5 2.5v12.5z" />
+          </svg>
+          <p className="text-sm text-gray-500 mt-2">No children records found for this mother.</p>
+          <p className="text-xs text-gray-400 mt-1">
+            Mother's name: {patient.first_name} {patient.last_name}
+          </p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto border rounded-lg">
+          <table className="w-full text-xs">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="p-2 border text-left font-semibold text-gray-600">Child ID</th>
+                <th className="p-2 border text-left font-semibold text-gray-600">Child Name</th>
+                <th className="p-2 border text-left font-semibold text-gray-600">Mother's Name</th>
+                <th className="p-2 border text-left font-semibold text-gray-600">Date of Birth</th>
+                <th className="p-2 border text-left font-semibold text-gray-600">Sex</th>
+                <th className="p-2 border text-left font-semibold text-gray-600">Birth Weight</th>
+                <th className="p-2 border text-left font-semibold text-gray-600">Place of Birth</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {children.map((child) => (
+                <tr key={child.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="p-2 border font-medium text-blue-600">
+                    {child.child_id}
+                  </td>
+                  <td className="p-2 border font-medium">
+                    {/* Display child name - check both child_name and first_name/last_name fields */}
+                    {child.child_name || `${child.first_name || ''} ${child.last_name || ''}`.trim() || 'N/A'}
+                  </td>
+                  <td className="p-2 border text-gray-500">
+                    {child.mother_name || 'N/A'}
+                  </td>
+                  <td className="p-2 border">
+                    {child.dob ? new Date(child.dob).toLocaleDateString() : 'N/A'}
+                  </td>
+                  <td className="p-2 border">
+                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                      child.sex === 'Male' ? 'bg-blue-100 text-blue-800' : 
+                      child.sex === 'Female' ? 'bg-pink-100 text-pink-800' : 
+                      'bg-gray-100 text-gray-800'
+                    }`}>
+                      {child.sex || 'N/A'}
+                    </span>
+                  </td>
+                  <td className="p-2 border">{child.birth_weight || 'N/A'}</td>
+                  <td className="p-2 border">{child.place_of_birth || 'N/A'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="bg-gray-50 px-3 py-2 border-t text-xs text-gray-500">
+            Showing {children.length} child{children.length !== 1 ? 'ren' : ''} registered under this mother
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <>
       {isQrModalVisible && (
         <PatientQRCodeModal
-          subject={patient} // <-- Change 'patient' to 'subject'
-          idKey="patient_id" // <-- Add this prop
-          idLabel="Patient ID" // <-- Add this prop
+          subject={patient}
+          idKey="patient_id"
+          idLabel="Patient ID"
           onClose={() => setIsQrModalVisible(false)}
         />
       )}
       <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
         <motion.div
-          className="bg-white rounded-lg shadow-2xl w-full max-w-4xl overflow-hidden"
+          className="bg-white rounded-lg shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col"
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.95 }}
         >
           {/* Header Section */}
           <div className="p-4 bg-gray-50 border-b">
-            <h2 className="text-lg font-bold text-gray-800">
-              Maternal Record
-            </h2>
-            <p className="text-sm text-gray-600">
-              Viewing record for{" "}
-              <span className="font-semibold">
-                {patient.first_name} {patient.last_name}
-              </span>{" "}
-              (ID: {patient.patient_id})
-            </p>
+            <div className="flex justify-between items-start">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg font-bold text-gray-800">Maternal Record</h2>
+                  {children.length > 0 && !loadingChildren && (
+                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      {children.length} child{children.length !== 1 ? 'ren' : ''}
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-gray-600 mt-1">
+                  Viewing record for{" "}
+                  <span className="font-semibold">
+                    {patient.first_name} {patient.last_name}
+                  </span>{" "}
+                  (ID: {patient.patient_id})
+                </p>
+              </div>
+              <button
+                onClick={onClose}
+                className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-1 rounded-full transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
           </div>
 
           {/* Main Content Body with Scrolling */}
-          <div className="p-6 overflow-y-auto max-h-[70vh]">
+          <div className="p-6 overflow-y-auto flex-1">
             <SectionHeader title="Personal Information" />
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-6">
               <Field
                 label="Full Name"
                 value={`${patient.first_name || ""} ${
@@ -1052,7 +1285,7 @@ const ViewPatientModal = ({ patient, onClose }) => {
             </div>
 
             <SectionHeader title="Obstetrical History" />
-            <div className="grid grid-cols-3 md:grid-cols-6 gap-4 text-sm">
+            <div className="grid grid-cols-3 md:grid-cols-6 gap-4 text-sm mb-6">
               <Field label="Gravida (G)" value={details.g_score} />
               <Field label="Para (P)" value={details.p_score} />
               <Field label="Term" value={details.term} />
@@ -1063,7 +1296,7 @@ const ViewPatientModal = ({ patient, onClose }) => {
 
             {/* ADDED: Pregnancy History Table */}
             <SectionHeader title="Pregnancy History Details" />
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto mb-6">
               <table className="w-full text-center text-xs border">
                 <thead className="bg-gray-100 font-semibold">
                   <tr>
@@ -1103,7 +1336,7 @@ const ViewPatientModal = ({ patient, onClose }) => {
             </div>
 
             <SectionHeader title="Menstrual & Pregnancy Details" />
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-6">
               <Field label="LMP" value={details.lmp} />
               <Field label="EDC" value={details.edc} />
               <Field label="Age of Menarche" value={details.age_of_menarche} />
@@ -1121,7 +1354,7 @@ const ViewPatientModal = ({ patient, onClose }) => {
             </div>
 
             <SectionHeader title="Vaccination Record (Tetanus Toxoid)" />
-            <div className="grid grid-cols-3 md:grid-cols-6 gap-4 text-sm">
+            <div className="grid grid-cols-3 md:grid-cols-6 gap-4 text-sm mb-6">
               {["TT1", "TT2", "TT3", "TT4", "TT5", "FIM"].map((vaccine) => (
                 <Field
                   key={vaccine}
@@ -1132,7 +1365,7 @@ const ViewPatientModal = ({ patient, onClose }) => {
             </div>
 
             <SectionHeader title="Medical History" />
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm mb-6">
               <div>
                 <h4 className="font-semibold mb-2">Personal</h4>
                 {[
@@ -1185,7 +1418,7 @@ const ViewPatientModal = ({ patient, onClose }) => {
 
             {/* ADDED: Allergy and Family Planning History */}
             <SectionHeader title="Additional Information" />
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm mb-6">
               <div>
                 <h4 className="font-semibold text-gray-700 mb-2">
                   History of Allergy and Drugs
@@ -1204,26 +1437,28 @@ const ViewPatientModal = ({ patient, onClose }) => {
                 </div>
               </div>
             </div>
+
+            {/* NEW: Add Children Section */}
+            <ChildrenSection />
           </div>
 
           {/* Footer */}
           <div className="p-4 bg-gray-50 border-t flex justify-end gap-3">
             <button
               onClick={onClose}
-              className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md font-semibold text-sm"
+              className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md font-semibold text-sm hover:bg-gray-300 transition-colors"
             >
               Close
             </button>
-            {/* --- NEW DOWNLOAD BUTTON --- */}
             <button
               onClick={() => setIsQrModalVisible(true)}
-              className="px-4 py-2 bg-green-600 text-white rounded-md font-semibold text-sm"
+              className="px-4 py-2 bg-green-600 text-white rounded-md font-semibold text-sm hover:bg-green-700 transition-colors"
             >
               View QR Code
             </button>
             <button
               onClick={handleDownloadPdf}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md font-semibold text-sm"
+              className="px-4 py-2 bg-blue-600 text-white rounded-md font-semibold text-sm hover:bg-blue-700 transition-colors"
             >
               Download as PDF
             </button>
