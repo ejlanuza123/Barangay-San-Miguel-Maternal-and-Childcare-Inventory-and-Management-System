@@ -216,7 +216,14 @@ export default function Sidebar({ role, openSettings }) {
           { name: "Admin Dashboard", path: "/admin/dashboard", icon: <DashboardIcon /> },
           { name: "Requestions", path: "/admin/requestions", icon: <RequestionsIcon /> },
           { name: "Employees", path: "/admin/employees", icon: <EmployeesIcon /> },
-          { name: "Patient Records", path: "/admin/patient-records", icon: <MaternityIcon /> },
+          { 
+            name: "Patient Records", 
+            icon: <MaternityIcon />,
+            subItems: [
+              { name: "Maternal Records", path: "/admin/maternity-records", icon: <MaternalSubIcon /> },
+              { name: "Childcare Records", path: "/admin/child-records", icon: <ChildIcon /> }
+            ]
+          },
           { name: "Inventory", path: "/admin/inventory", icon: <InventoryIcon /> },
         ];
       case "Midwife":
@@ -318,11 +325,6 @@ export default function Sidebar({ role, openSettings }) {
           </div>
         ))}
       </nav>
-      {(role === 'Admin' || role === 'Midwife') && (
-            <NavLink to={`/${role === 'Admin' ? 'admin' : 'midwife'}/recycle-bin`} className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-800 transition-colors">
-                <RecycleIcon /> <span className="text-sm font-semibold">Recycle Bin</span>
-            </NavLink>
-        )}
       <div className="px-3 py-2 border-t flex-shrink-0">
         <button onClick={handleLogout} className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-800">
           <LogOutIcon /> <span className="text-sm font-semibold">Log Out</span>

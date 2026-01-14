@@ -1114,8 +1114,7 @@ export default function AdminDashboard() {
 
         try {
             const [
-                bhwInventoryRes, 
-                bnsInventoryRes, 
+                InventoryRes,  
                 requestionsRes,
                 newMaternityCountRes,
                 newInfantCountRes,
@@ -1145,12 +1144,12 @@ export default function AdminDashboard() {
 
             // Combine inventory from both tables and calculate accurate status
             const allInventory = [
-                ...(bhwInventoryRes.data || []).map(item => ({
+                ...(InventoryRes.data || []).map(item => ({
                     ...item,
                     type: 'BHW',
                     status: calculateInventoryStatus(item.quantity)
                 })),
-                ...(bnsInventoryRes.data || []).map(item => ({
+                ...(InventoryRes.data || []).map(item => ({
                     ...item,
                     type: 'BNS',
                     status: calculateInventoryStatus(item.quantity)

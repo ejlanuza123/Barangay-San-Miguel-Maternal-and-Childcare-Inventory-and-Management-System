@@ -20,6 +20,8 @@ import RequestionsPage from "./pages/admin/RequestionsPage";
 import EmployeesPage from "./pages/admin/EmployeesPage";
 import PatientRecordsPage from "./pages/admin/PatientRecordsPage";
 import AdminInventoryPage from "./pages/admin/InventoryPage";
+import AdminMaternityManagement from "./pages/midwife/MaternityManagement"; // NEW IMPORT
+import AdminChildHealthRecords from "./pages/midwife/ChildHealthRecords";
 
 import BhwDashboard from "./pages/bhw/BhwDashboard";
 import MaternityManagement from "./pages/bhw/MaternityManagement";
@@ -67,7 +69,8 @@ function App() {
                 <Route path="admin/dashboard" element={<AdminDashboard />} />
                 <Route path="admin/requestions" element={<RequestionsPage />} />
                 <Route path="admin/employees" element={<EmployeesPage />} />
-                <Route path="admin/patient-records" element={<PatientRecordsPage />} />
+                <Route path="admin/maternity-records" element={<AdminMaternityManagement />} />
+                <Route path="admin/child-records" element={<AdminChildHealthRecords />} />
                 <Route path="admin/inventory" element={<AdminInventoryPage />} />
                 <Route path="admin/recycle-bin" element={<RecycleBinPage />} /> 
               </Route>

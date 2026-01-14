@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '../../services/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as XLSX from 'xlsx'; 
@@ -7,6 +7,13 @@ import { logActivity } from '../../services/activityLogger';
 import AddInventoryModal from '../bhw/AddInventoryModal'; 
 import AddBnsInventoryModal from '../bns/AddBnsInventoryModal'; 
 import { useAuth } from '../../context/AuthContext';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
+
+// --- Import your logo images ---
+import leftLogo from '../../assets/leftLogo.png';
+import rightLogo from '../../assets/logo.png';
+import barangayLogo from '../../assets/logo.png';
 
 // --- ICONS ---
 const SearchIcon = () => <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>;
@@ -14,9 +21,9 @@ const FilterIcon = () => <svg className="w-4 h-4" fill="none" stroke="currentCol
 const ExportIcon = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v13"></path></svg>;
 const ViewIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>;
 const UpdateIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>;
-const DeleteIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>;
-// Refill Icon
+const HistoryIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
 const RefillIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
+const ReportIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>;
 
 // --- HELPER COMPONENTS ---
 
@@ -26,7 +33,6 @@ const StatusBadge = ({ status }) => {
         Low: 'bg-yellow-100 text-yellow-700',
         Critical: 'bg-red-100 text-red-700',
     };
-    // Normalize status case
     const normalizedStatus = status ? status.charAt(0).toUpperCase() + status.slice(1).toLowerCase() : 'Normal';
     return <span className={`px-2 py-0.5 text-xs font-bold rounded-md ${styles[normalizedStatus] || 'bg-gray-100'}`}>{normalizedStatus}</span>;
 };
@@ -102,16 +108,21 @@ const RefillItemModal = ({ item, onClose, onSave }) => {
         }
 
         const newQuantity = (item.quantity || 0) + qtyToAdd;
-        const table = item.source === 'BNS' ? 'bns_inventory' : 'inventory';
+        
+        // No need to check source - always use 'inventory' table
+        // The item is already in the inventory table with owner_role
 
-        // Update Status based on new quantity
         let newStatus = 'Normal';
         if (newQuantity <= 10) newStatus = 'Critical';
         else if (newQuantity <= 20) newStatus = 'Low';
 
         const { error } = await supabase
-            .from(table)
-            .update({ quantity: newQuantity, status: newStatus, updated_at: new Date().toISOString() })
+            .from('inventory') // Always use inventory table
+            .update({ 
+                quantity: newQuantity, 
+                status: newStatus, 
+                updated_at: new Date().toISOString() 
+            })
             .eq('id', item.id);
 
         if (error) {
@@ -154,8 +165,6 @@ const RefillItemModal = ({ item, onClose, onSave }) => {
     );
 };
 
-
-// --- NEW: VIEW ITEM DETAILS MODAL ---
 const ViewItemDetailsModal = ({ item, onClose }) => {
     const [history, setHistory] = useState([]);
     const [loadingHistory, setLoadingHistory] = useState(true);
@@ -163,7 +172,6 @@ const ViewItemDetailsModal = ({ item, onClose }) => {
     useEffect(() => {
         const fetchHistory = async () => {
             if (!item) return;
-            // Fetch logs from activity_log where details contain the item name
             const { data, error } = await supabase
                 .from('activity_log')
                 .select('*, profiles(first_name, last_name, role)')
@@ -191,11 +199,10 @@ const ViewItemDetailsModal = ({ item, onClose }) => {
                     <p><span className="font-semibold">Stock:</span> {item.quantity} {item.unit || 'units'}</p>
                     <p><span className="font-semibold">Status:</span> <StatusBadge status={item.status} /></p>
                     <p><span className="font-semibold">Batch No:</span> {item.batch_no || 'N/A'}</p>
-                    <p><span className="font-semibold">Expiry Date:</span> {item.expiry_date || item.expiration_date || 'N/A'}</p>
+                    <p><span className="font-semibold">Expiry Date:</span> {item.expiry_date || 'N/A'}</p>
                     <div className="mt-2 pt-2 border-t border-dashed">
-                        <p><span className="font-semibold">Supplier:</span> {item.supplier || 'N/A'}</p>
-                        <p><span className="font-semibold">Source:</span> {item.supply_source || 'N/A'}</p>
-                        <p><span className="font-semibold">Inventory Type:</span> {item.source}</p>
+                        <p><span className="font-semibold">Supplier/Source:</span> {item.supply_source || item.supplier || 'N/A'}</p>
+                        <p><span className="font-semibold">Inventory Type:</span> {item.owner_role}</p>
                     </div>
                 </div>
 
@@ -222,10 +229,408 @@ const ViewItemDetailsModal = ({ item, onClose }) => {
             </motion.div>
         </div>
     );
+}
+
+// --- NEW: Inventory Report Section with PDF Generation ---
+const InventoryReportSection = ({ allItems }) => {
+    const [showReport, setShowReport] = useState(false);
+    const [generatingPDF, setGeneratingPDF] = useState(false);
+    const reportRef = useRef(null);
+    
+    // Calculate statistics
+    const calculateStats = useMemo(() => {
+        const totalItems = allItems.length;
+        const totalQuantity = allItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
+        
+        // Count by status
+        const normalCount = allItems.filter(item => item.status?.toLowerCase() === 'normal').length;
+        const lowCount = allItems.filter(item => item.status?.toLowerCase() === 'low').length;
+        const criticalCount = allItems.filter(item => item.status?.toLowerCase() === 'critical').length;
+        
+        // Count by source
+        const bhwCount = allItems.filter(item => item.owner_role === 'BHW').length;
+        const bnsCount = allItems.filter(item => item.owner_role === 'BNS').length;
+        
+        // Count by category
+        const categoryCounts = {};
+        allItems.forEach(item => {
+            const category = item.category || 'Uncategorized';
+            categoryCounts[category] = (categoryCounts[category] || 0) + 1;
+        });
+        
+        // Expiring soon (within 30 days)
+        const today = new Date();
+        const thirtyDaysFromNow = new Date();
+        thirtyDaysFromNow.setDate(today.getDate() + 30);
+        
+        const expiringSoon = allItems.filter(item => {
+            if (!item.expiry_date) return false;
+            const expiryDate = new Date(item.expiry_date);
+            return expiryDate >= today && expiryDate <= thirtyDaysFromNow;
+        }).length;
+        
+        // Expired items
+        const expiredItems = allItems.filter(item => {
+            if (!item.expiry_date) return false;
+            return new Date(item.expiry_date) < today;
+        }).length;
+        
+        // Top 5 items by quantity
+        const topItemsByQuantity = [...allItems]
+            .sort((a, b) => (b.quantity || 0) - (a.quantity || 0))
+            .slice(0, 5);
+            
+        // Low stock items (Critical status)
+        const lowStockItems = allItems.filter(item => 
+            item.status?.toLowerCase() === 'critical' || 
+            item.status?.toLowerCase() === 'low'
+        );
+        
+        return {
+            totalItems,
+            totalQuantity,
+            normalCount,
+            lowCount,
+            criticalCount,
+            bhwCount,
+            bnsCount,
+            categoryCounts,
+            expiringSoon,
+            expiredItems,
+            topItemsByQuantity,
+            lowStockItems
+        };
+    }, [allItems]);
+    
+    const handlePrintReport = () => {
+        const printContent = document.getElementById('inventory-report-content');
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(`
+            <html>
+                <head>
+                    <title>Inventory Report - Barangay San Miguel</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; margin: 20px; }
+                        .header { text-align: center; margin-bottom: 30px; }
+                        .logo { height: 60px; margin: 10px; }
+                        .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-bottom: 30px; }
+                        .stat-card { border: 1px solid #ccc; padding: 15px; border-radius: 5px; }
+                        .table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                        .table th, .table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                        .table th { background-color: #f4f4f4; }
+                        .section-title { font-size: 18px; font-weight: bold; margin: 25px 0 15px 0; border-bottom: 2px solid #333; padding-bottom: 5px; }
+                        .date { text-align: right; font-size: 12px; color: #666; margin-bottom: 20px; }
+                    </style>
+                </head>
+                <body>
+                    ${printContent.innerHTML}
+                </body>
+            </html>
+        `);
+        printWindow.document.close();
+        printWindow.print();
+    };
+
+    const generatePDF = async () => {
+        if (!reportRef.current) return;
+        
+        setGeneratingPDF(true);
+        
+        try {
+            // Dynamically import the required libraries
+            const html2canvas = (await import('html2canvas')).default;
+            const jsPDF = (await import('jspdf')).default;
+            
+            // Capture the report content
+            const canvas = await html2canvas(reportRef.current, {
+                scale: 2,
+                useCORS: true,
+                logging: false,
+                backgroundColor: '#ffffff'
+            });
+            
+            const imgData = canvas.toDataURL('image/png');
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const imgWidth = 190;
+            const pageHeight = 295;
+            const imgHeight = (canvas.height * imgWidth) / canvas.width;
+            let heightLeft = imgHeight;
+            let position = 10;
+            
+            pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+            heightLeft -= pageHeight;
+            
+            while (heightLeft >= 0) {
+                position = heightLeft - imgHeight;
+                pdf.addPage();
+                pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+                heightLeft -= pageHeight;
+            }
+            
+            const reportDate = new Date().toISOString().split('T')[0];
+            pdf.save(`Inventory_Report_${reportDate}.pdf`);
+            
+        } catch (error) {
+            console.error('Error generating PDF:', error);
+            alert('Error generating PDF. Please try again.');
+        } finally {
+            setGeneratingPDF(false);
+        }
+    };
+
+    return (
+        <div className="bg-white p-4 rounded-lg shadow-sm border mb-6">
+            <div className="flex justify-between items-center mb-4">
+                <h2 className="text-lg font-bold text-gray-800">Inventory Reports & Statistics</h2>
+                <div className="flex gap-2">
+                    <button 
+                        onClick={() => setShowReport(!showReport)} 
+                        className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 font-semibold text-sm"
+                    >
+                        <ReportIcon />
+                        {showReport ? 'Hide Report' : 'Show Report'}
+                    </button>
+                    {showReport && (
+                        <>
+                            <button 
+                                onClick={generatePDF}
+                                disabled={generatingPDF}
+                                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-semibold text-sm flex items-center gap-2"
+                            >
+                                {generatingPDF ? (
+                                    <>
+                                        <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                        </svg>
+                                        Generating...
+                                    </>
+                                ) : (
+                                    'Download PDF'
+                                )}
+                            </button>
+                        </>
+                    )}
+                </div>
+            </div>
+            
+            {showReport && (
+                <motion.div 
+                    ref={reportRef}
+                    id="inventory-report-content"
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    className="overflow-hidden"
+                >
+                    {/* Report Header with Logos */}
+                    <div className="text-center mb-6 border-b pb-4">
+                        <div className="flex justify-between items-center mb-2">
+                            <div className="w-24 h-24 flex items-center justify-center">
+                                <img 
+                                    src={leftLogo} 
+                                    alt="Barangay Seal" 
+                                    className="h-20 w-auto object-contain"
+                                    onError={(e) => {
+                                        e.target.onerror = null;
+                                        e.target.src = barangayLogo;
+                                    }}
+                                />
+                            </div>
+                            <div className="text-center">
+                                <h1 className="text-xl font-bold text-gray-800">BARANGAY SAN MIGUEL</h1>
+                                <h2 className="text-lg font-semibold text-gray-700">Puerto Princesa City, Palawan</h2>
+                                <h3 className="text-md font-semibold text-gray-600">HEALTH CENTER INVENTORY REPORT</h3>
+                                <p className="text-sm text-gray-500 mt-1">Master Inventory Management System</p>
+                            </div>
+                            <div className="w-24 h-24 flex items-center justify-center">
+                                <img 
+                                    src={rightLogo} 
+                                    alt="Health Center Logo" 
+                                    className="h-20 w-auto object-contain"
+                                    onError={(e) => {
+                                        e.target.onerror = null;
+                                        e.target.src = barangayLogo;
+                                    }}
+                                />
+                            </div>
+                        </div>
+                        <div className="mt-2 text-sm text-gray-600">
+                            <p>Report Date: {new Date().toLocaleDateString('en-PH', { 
+                                weekday: 'long', 
+                                year: 'numeric', 
+                                month: 'long', 
+                                day: 'numeric' 
+                            })}</p>
+                        </div>
+                    </div>
+                    
+                    {/* Summary Statistics */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                            <h4 className="text-sm font-semibold text-blue-800">Total Items</h4>
+                            <p className="text-2xl font-bold text-blue-600">{calculateStats.totalItems}</p>
+                            <p className="text-xs text-blue-500">Unique inventory items</p>
+                        </div>
+                        <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                            <h4 className="text-sm font-semibold text-green-800">Total Stock Units</h4>
+                            <p className="text-2xl font-bold text-green-600">{calculateStats.totalQuantity}</p>
+                            <p className="text-xs text-green-500">Sum of all quantities</p>
+                        </div>
+                        <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+                            <h4 className="text-sm font-semibold text-yellow-800">Low Stock Items</h4>
+                            <p className="text-2xl font-bold text-yellow-600">{calculateStats.lowCount + calculateStats.criticalCount}</p>
+                            <p className="text-xs text-yellow-500">Needs attention</p>
+                        </div>
+                        <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+                            <h4 className="text-sm font-semibold text-red-800">Expiring Soon</h4>
+                            <p className="text-2xl font-bold text-red-600">{calculateStats.expiringSoon}</p>
+                            <p className="text-xs text-red-500">Within 30 days</p>
+                        </div>
+                    </div>
+                    
+                    {/* Detailed Statistics */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                        {/* Status Distribution */}
+                        <div className="border rounded-lg p-4">
+                            <h4 className="font-semibold text-gray-700 mb-3">Stock Status Distribution</h4>
+                            <div className="space-y-3">
+                                <div>
+                                    <div className="flex justify-between text-sm mb-1">
+                                        <span className="font-medium">Normal Stock</span>
+                                        <span className="font-bold text-green-600">{calculateStats.normalCount} items</span>
+                                    </div>
+                                    <div className="w-full bg-gray-200 rounded-full h-2">
+                                        <div 
+                                            className="bg-green-500 h-2 rounded-full" 
+                                            style={{ width: `${(calculateStats.normalCount / calculateStats.totalItems) * 100 || 0}%` }}
+                                        ></div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div className="flex justify-between text-sm mb-1">
+                                        <span className="font-medium">Low Stock</span>
+                                        <span className="font-bold text-yellow-600">{calculateStats.lowCount} items</span>
+                                    </div>
+                                    <div className="w-full bg-gray-200 rounded-full h-2">
+                                        <div 
+                                            className="bg-yellow-500 h-2 rounded-full" 
+                                            style={{ width: `${(calculateStats.lowCount / calculateStats.totalItems) * 100 || 0}%` }}
+                                        ></div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div className="flex justify-between text-sm mb-1">
+                                        <span className="font-medium">Critical Stock</span>
+                                        <span className="font-bold text-red-600">{calculateStats.criticalCount} items</span>
+                                    </div>
+                                    <div className="w-full bg-gray-200 rounded-full h-2">
+                                        <div 
+                                            className="bg-red-500 h-2 rounded-full" 
+                                            style={{ width: `${(calculateStats.criticalCount / calculateStats.totalItems) * 100 || 0}%` }}
+                                        ></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        {/* Inventory Source Distribution */}
+                        <div className="border rounded-lg p-4">
+                            <h4 className="font-semibold text-gray-700 mb-3">Inventory Source</h4>
+                            <div className="space-y-4">
+                                <div>
+                                    <div className="flex justify-between text-sm mb-1">
+                                        <span className="font-medium">BHW Inventory</span>
+                                        <span className="font-bold text-blue-600">{calculateStats.bhwCount} items</span>
+                                    </div>
+                                    <div className="w-full bg-gray-200 rounded-full h-2">
+                                        <div 
+                                            className="bg-blue-500 h-2 rounded-full" 
+                                            style={{ width: `${(calculateStats.bhwCount / calculateStats.totalItems) * 100 || 0}%` }}
+                                        ></div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div className="flex justify-between text-sm mb-1">
+                                        <span className="font-medium">BNS Inventory</span>
+                                        <span className="font-bold text-green-600">{calculateStats.bnsCount} items</span>
+                                    </div>
+                                    <div className="w-full bg-gray-200 rounded-full h-2">
+                                        <div 
+                                            className="bg-green-500 h-2 rounded-full" 
+                                            style={{ width: `${(calculateStats.bnsCount / calculateStats.totalItems) * 100 || 0}%` }}
+                                        ></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {/* Category Breakdown */}
+                    <div className="mb-6">
+                        <h4 className="font-semibold text-gray-700 mb-3">Category Distribution</h4>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            {Object.entries(calculateStats.categoryCounts).map(([category, count]) => (
+                                <div key={category} className="bg-gray-50 p-3 rounded border">
+                                    <p className="text-sm font-medium text-gray-700">{category}</p>
+                                    <p className="text-lg font-bold text-gray-800">{count} items</p>
+                                    <p className="text-xs text-gray-500">
+                                        {((count / calculateStats.totalItems) * 100).toFixed(1)}% of total
+                                    </p>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                    
+                    {/* Critical Items Table */}
+                    {calculateStats.lowStockItems.length > 0 && (
+                        <div className="mb-6">
+                            <h4 className="font-semibold text-gray-700 mb-3 text-red-600">⚠️ Critical & Low Stock Items (Needs Replenishment)</h4>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-xs">
+                                    <thead className="bg-red-50">
+                                        <tr>
+                                            <th className="p-2 font-semibold text-red-700">Item Name</th>
+                                            <th className="p-2 font-semibold text-red-700">Category</th>
+                                            <th className="p-2 font-semibold text-red-700">Current Stock</th>
+                                            <th className="p-2 font-semibold text-red-700">Status</th>
+                                            <th className="p-2 font-semibold text-red-700">Source</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {calculateStats.lowStockItems.slice(0, 10).map(item => (
+                                            <tr key={item.id} className="border-b hover:bg-red-50">
+                                                <td className="p-2">{item.item_name}</td>
+                                                <td className="p-2">{item.category}</td>
+                                                <td className="p-2 font-bold">{item.quantity} {item.unit}</td>
+                                                <td className="p-2"><StatusBadge status={item.status} /></td>
+                                                <td className="p-2">{item.owner_role || 'BHW'}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                                {calculateStats.lowStockItems.length > 10 && (
+                                    <p className="text-xs text-gray-500 mt-2 text-center">
+                                        ...and {calculateStats.lowStockItems.length - 10} more items
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                    
+                    {/* Report Footer */}
+                    <div className="mt-8 pt-4 border-t text-center text-sm text-gray-600">
+                        <p>Generated by: Health Center Inventory Management System</p>
+                        <p>Barangay San Miguel Health Center, Puerto Princesa City, Palawan</p>
+                        <p className="mt-2">Report ID: INV-{new Date().getFullYear()}-{String(new Date().getMonth() + 1).padStart(2, '0')}-{String(new Date().getDate()).padStart(2, '0')}</p>
+                    </div>
+                </motion.div>
+            )}
+        </div>
+    );
 };
 
 export default function AdminInventoryPage() {
-    const { profile } = useAuth(); // 1. Get profile to check role
+    const { profile } = useAuth();
     const [allItems, setAllItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -234,24 +639,29 @@ export default function AdminInventoryPage() {
     const [isFilterOpen, setIsFilterOpen] = useState(false);
     const [activeCategory, setActiveCategory] = useState('All');
     const [selectedItem, setSelectedItem] = useState(null);
-    const [modalMode, setModalMode] = useState(null); // 'view', 'edit', 'add', 'refill'
+    const [modalMode, setModalMode] = useState(null);
     const { addNotification } = useNotification();
+    const [showReport, setShowReport] = useState(false);
 
     const fetchInventories = useCallback(async () => {
         setLoading(true);
-        const [bhwRes, bnsRes] = await Promise.all([
-            supabase.from('inventory').select('*').eq('is_deleted', false),
-            supabase.from('bns_inventory').select('*').eq('is_deleted', false)
-        ]);
         
-        const combined = [
-            ...(bhwRes.data || []).map(item => ({...item, source: 'BHW'})),
-            ...(bnsRes.data || []).map(item => ({...item, source: 'BNS'}))
-        ];
+        const { data, error } = await supabase
+            .from('inventory')
+            .select('*')
+            .eq('is_deleted', false)
+            .order('item_name', { ascending: true });
         
-        setAllItems(combined.sort((a, b) => a.item_name.localeCompare(b.item_name)));
+        if (error) {
+            console.error('Error fetching inventory:', error);
+            addNotification('Error loading inventory', 'error');
+        } else {
+            // DO NOT create a source field - just set the data directly
+            setAllItems(data || []);
+        }
+        
         setLoading(false);
-    }, []);
+    }, [addNotification]);
 
     useEffect(() => {
         fetchInventories();
@@ -259,13 +669,13 @@ export default function AdminInventoryPage() {
 
     const handleEdit = (item) => {
         setSelectedItem(item);
-        setModalMode(item.source === 'BNS' ? 'edit-bns' : 'edit-bhw');
+        // Check owner_role
+        setModalMode(item.owner_role === 'BNS' ? 'edit-bns' : 'edit-bhw');
     };
 
     const handleDelete = async (item) => {
         if (!window.confirm(`Are you sure you want to delete ${item.item_name}?`)) return;
-        const table = item.source === 'BNS' ? 'bns_inventory' : 'inventory';
-        const { error } = await supabase.from(table).update({ is_deleted: true, deleted_at: new Date() }).eq('id', item.id);
+        const { error } = await supabase.from('inventory').update({ is_deleted: true, deleted_at: new Date() }).eq('id', item.id);
         
         if (error) addNotification("Error deleting item.", "error");
         else {
@@ -303,7 +713,7 @@ export default function AdminInventoryPage() {
             'Expiry Date': item.expiry_date || 'N/A',
             Supplier: item.supplier || 'N/A',
             'Supply Source': item.supply_source || 'N/A',
-            Source: item.source
+            Source: item.owner_role || 'BHW'
         }));
 
         const worksheet = XLSX.utils.json_to_sheet(exportData);
@@ -334,6 +744,9 @@ export default function AdminInventoryPage() {
 
             <div className="p-6 bg-gray-50 min-h-screen">
                 <div className="max-w-8xl mx-auto">
+                    {/* Inventory Report Section */}
+                    <InventoryReportSection allItems={allItems} />
+                    
                     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                         <div className="lg:col-span-3 bg-white p-4 rounded-lg shadow-sm border">
                             <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
@@ -401,7 +814,7 @@ export default function AdminInventoryPage() {
                                             <tr><td colSpan="9" className="text-center p-6 text-gray-500">No items found.</td></tr>
                                         ) : paginatedItems.map((item) => (
                                             <tr 
-                                                key={`${item.id}-${item.source}`} 
+                                                key={`${item.id}-${item.owner_role}`} 
                                                 className="text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
                                                 onClick={() => { setSelectedItem(item); setModalMode('view'); }}
                                             >
@@ -420,13 +833,12 @@ export default function AdminInventoryPage() {
                                                     </div>
                                                 </td>
                                                 <td className="p-3">
-                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.source === 'BHW' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
-                                                        {item.source}
+                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.owner_role === 'BHW' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
+                                                        {item.owner_role || 'BHW'}
                                                     </span>
                                                 </td>
                                                 <td className="p-3">
                                                     <div className="flex items-center gap-1">
-                                                        {/* --- 2. CONDITIONAL REFILL BUTTON FOR MIDWIFE --- */}
                                                         {profile?.role === 'Midwife' && (
                                                             <button 
                                                                 onClick={(e) => { e.stopPropagation(); setSelectedItem(item); setModalMode('refill'); }} 
@@ -442,13 +854,6 @@ export default function AdminInventoryPage() {
                                                             title="Edit"
                                                         >
                                                             <UpdateIcon />
-                                                        </button>
-                                                        <button 
-                                                            onClick={(e) => { e.stopPropagation(); handleDelete(item); }} 
-                                                            className="text-red-600 hover:text-red-800 bg-red-50 p-1.5 rounded-md border border-red-200"
-                                                            title="Delete"
-                                                        >
-                                                            <DeleteIcon />
                                                         </button>
                                                     </div>
                                                 </td>

@@ -80,8 +80,7 @@ export default function AdminInventoryPage() {
     const fetchInventories = useCallback(async () => {
         setLoading(true);
         const [bhwRes, bnsRes] = await Promise.all([
-            supabase.from('inventory').select('*'),
-            supabase.from('bns_inventory').select('*')
+            supabase.from('inventory').select('*')
         ]);
         
         const combined = [

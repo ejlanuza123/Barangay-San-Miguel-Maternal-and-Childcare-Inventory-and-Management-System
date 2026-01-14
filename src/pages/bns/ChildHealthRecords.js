@@ -9,11 +9,14 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from 'xlsx';
 import PatientQRCodeModal from "../../components/reusables/PatientQRCodeModal";
+import HistoryModal from "../../components/reusables/HistoryModal"; // Import
+
 
 // --- ICONS ---
 const PillIcon = () => ( <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg> );
 const PlusIcon = () => ( <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg> );
 const TrashIcon = () => ( <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg> );
+const HistoryIcon = () => ( <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" > <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /> </svg> );
 
 const ExportIcon = () => (
   <svg
@@ -179,8 +182,8 @@ const StatusLegend = () => (
         <span>Update</span>
       </div>
       <div className="flex items-center space-x-2 text-gray-700">
-        <DeleteIcon />
-        <span>Delete</span>
+        <HistoryIcon />
+        <span>History/Log</span>
       </div>
     </div>
   </div>
@@ -206,10 +209,11 @@ const PrescriptionModal = ({ child, onClose, onSave }) => {
   useEffect(() => {
     const fetchInventory = async () => {
       const { data } = await supabase
-        .from('bns_inventory')
+        .from('inventory')
         .select('*')
         .gt('quantity', 0)
-        .eq('is_deleted', false); // <--- Added this filter
+        .eq('is_deleted', false) // <--- Added this filter
+        .eq('owner_role', 'BNS');
       setInventoryItems(data || []);
     };
     fetchInventory();
@@ -727,6 +731,7 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
 
 const ViewChildModal = ({ child, onClose, onViewQRCode }) => {
   const details = child.health_details || {};
+  
   const handleDownloadPdf = () => {
     const doc = new jsPDF();
     doc.setFontSize(10);
@@ -740,147 +745,270 @@ const ViewChildModal = ({ child, onClose, onViewQRCode }) => {
     doc.text("INDIVIDUAL TREATMENT RECORD (ITR)", 105, 40, { align: "center" });
     doc.setFontSize(9);
     doc.setFont(undefined, "normal");
+    
     autoTable(doc, {
       startY: 45,
       theme: "plain",
       body: [
-        [
-          `Name of BHS: ${details.bhs_name || "San Miguel"}`,
-          `NHTS No.: ${details.nhts_no || "N/A"}`,
-        ],
-        [
-          `Name of Child: ${child.first_name} ${child.last_name}`,
-          `PhilHealth No.: ${details.philhealth_no || "N/A"}`,
-        ],
+        [`Name of BHS: ${details.bhs_name || "San Miguel"}`, `NHTS No.: ${details.nhts_no || "N/A"}`],
+        [`Name of Child: ${child.first_name} ${child.last_name}`, `PhilHealth No.: ${details.philhealth_no || "N/A"}`],
         [`Date of Birth: ${child.dob || "N/A"}`, `Sex: ${child.sex || "N/A"}`],
-        [
-          `Place of Birth: ${details.place_of_birth || "N/A"}`,
-          `Birth Weight: ${child.weight_kg || "N/A"} kg`,
-        ],
-        [
-          `Name of Mother: ${child.mother_name || "N/A"}`,
-          `Name of Father: ${details.father_name || "N/A"}`,
-        ],
-        [
-          `Name of Guardian: ${child.guardian_name || "N/A"}`,
-          `Relationship: ${details.guardian_relationship || "N/A"}`,
-        ],
+        [`Time of Delivery: ${details.delivery_time || "N/A"}`, `Birth Weight: ${details.birth_weight || "N/A"} kg`],
+        [`Place of Birth: ${details.place_of_birth || "N/A"}`, `Place of Delivery: ${details.place_of_delivery || "N/A"}`],
+        [`Birth Order: ${details.birth_order || "N/A"}`, `Type of Delivery: ${details.delivery_type || "N/A"}`],
+        [`Name of Mother: ${child.mother_name || "N/A"}`, `Age: ${details.mother_age || "N/A"}`],
+        [`Name of Father: ${details.father_name || "N/A"}`, `Contact Number: ${details.contact_no || "N/A"}`],
+        [`Name of Guardian: ${child.guardian_name || "N/A"}`, `Relationship: ${details.guardian_relationship || "N/A"}`],
+        [`Address: ${child.address || "N/A"}`, `Nearest Landmark: ${details.nearest_landmark || "N/A"}`],
+        [`NBS Referral Date: ${details.nbs_referral_date || "N/A"}`, `NBS Result: ${details.nbs_result || "N/A"}`],
+        [`Attendant at Birth: ${details.birth_attendant || "N/A"}`, `AOG at Birth: ${details.aog_at_birth || "N/A"}`],
+        [`Smoking History: ${details.smoking_history || "No"}`, `Family Number: ${details.family_number || "N/A"}`],
       ],
-      styles: { fontSize: 9, cellPadding: 0.5 },
+      styles: { fontSize: 8, cellPadding: 1 },
     });
-    doc
-      .setFontSize(10)
-      .setFont(undefined, "bold")
-      .text("MOTHER'S IMMUNIZATION STATUS", 14, doc.lastAutoTable.finalY + 10);
+    
+    doc.setFontSize(10).setFont(undefined, "bold")
+       .text("MOTHER'S IMMUNIZATION STATUS", 14, doc.lastAutoTable.finalY + 10);
+    
     autoTable(doc, {
       startY: doc.lastAutoTable.finalY + 12,
       theme: "grid",
       head: [["Antigen", "Td1", "Td2", "Td3", "Td4", "Td5", "FIM"]],
-      body: [
-        [
-          "Date Given",
-          details.mother_immunization_Td1 || "",
-          details.mother_immunization_Td2 || "",
-          details.mother_immunization_Td3 || "",
-          details.mother_immunization_Td4 || "",
-          details.mother_immunization_Td5 || "",
-          details.mother_immunization_FIM || "",
-        ],
-      ],
+      body: [[
+        "Date Given",
+        details.mother_immunization_Td1 || "-",
+        details.mother_immunization_Td2 || "-",
+        details.mother_immunization_Td3 || "-",
+        details.mother_immunization_Td4 || "-",
+        details.mother_immunization_Td5 || "-",
+        details.mother_immunization_FIM || "-",
+      ]],
       styles: { fontSize: 8, halign: "center" },
     });
+    
+    // Immunization Table
+    const immunizationRows = [];
+    const immunizations = [
+      'BCG', 'Hepa B w/In 24 hrs', 'Pentavalent 1', 'Pentavalent 2', 'Pentavalent 3',
+      'OPV1', 'OPV2', 'OPV3', 'IPV 1', 'IPV 2', 'PCV 1', 'PCV 2', 'PCV 3',
+      'MCV 1', 'MCV 2', 'FIC'
+    ];
+    
+    immunizations.forEach((imm, index) => {
+      const immId = imm.toLowerCase().replace(/[\/\s]/g, '_').replace(/w\/in_24_hrs/, 'hepa_b');
+      immunizationRows.push([
+        imm,
+        details[`immunization_${immId}_date`] || "-",
+        details[`immunization_${immId}_age`] || "-",
+        details[`immunization_${immId}_weight`] || "-",
+        details[`immunization_${immId}_height`] || "-",
+        details[`immunization_${immId}_nutritional`] || "-",
+        details[`immunization_${immId}_admitted_by`] || "-",
+        details[`immunization_${immId}_immunized_by`] || "-",
+        details[`immunization_${immId}_next_visit`] || "-",
+        details[`immunization_${immId}_remarks`] || "-",
+      ]);
+    });
+    
+    autoTable(doc, {
+      startY: doc.lastAutoTable.finalY + 15,
+      theme: "grid",
+      head: [["Immunization", "Date Given", "Age", "Weight", "Height", "Nutritional", "Admitted By", "Immunized By", "Next Visit", "Remarks"]],
+      body: immunizationRows,
+      styles: { fontSize: 6, cellPadding: 1 },
+      headStyles: { fontSize: 6 },
+    });
+    
     doc.save(`ITR_${child.last_name}_${child.first_name}.pdf`);
-    logActivity(
-      "Downloaded PDF Record",
-      `Generated PDF for child: ${child.child_id}`
-    );
+    logActivity("Downloaded PDF Record", `Generated PDF for child: ${child.child_id}`);
   };
+
   const SectionHeader = ({ title }) => (
-    <h3 className="font-bold text-gray-700 text-sm mt-6 mb-2 pb-1 border-b">
+    <h3 className="font-bold text-gray-700 text-sm mt-6 mb-3 pb-2 border-b">
       {title}
     </h3>
   );
+
   const Field = ({ label, value }) => (
-    <div>
+    <div className="mb-2">
       <p className="text-xs text-gray-500">{label}</p>
-      <p className="font-semibold text-gray-800">{value || "N/A"}</p>
+      <p className="font-semibold text-gray-800 text-sm">{value || "N/A"}</p>
     </div>
   );
+
   const CheckboxDisplay = ({ label, isChecked }) => (
-    <div className="flex items-center space-x-2">
-      <div
-        className={`w-4 h-4 border-2 rounded ${
-          isChecked ? "bg-blue-500 border-blue-500" : "border-gray-300"
-        }`}
-      >
+    <div className="flex items-center space-x-2 mb-1">
+      <div className={`w-4 h-4 border-2 rounded flex items-center justify-center ${isChecked ? "bg-blue-500 border-blue-500" : "border-gray-300"}`}>
         {isChecked && (
-          <svg
-            className="w-full h-full text-white"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="3"
-              d="M5 13l4 4L19 7"
-            />
+          <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
           </svg>
         )}
       </div>
-      <span className="text-sm">{label}</span>
+      <span className="text-xs">{label}</span>
     </div>
   );
+
+  const ImmunizationTable = () => {
+    const immunizations = [
+      { id: 'bcg', label: 'BCG' },
+      { id: 'hepa_b', label: 'Hepa B w/In 24 hrs' },
+      { id: 'pentavalent_1', label: 'Pentavalent 1' },
+      { id: 'pentavalent_2', label: 'Pentavalent 2' },
+      { id: 'pentavalent_3', label: 'Pentavalent 3' },
+      { id: 'opv_1', label: 'OPV 1' },
+      { id: 'opv_2', label: 'OPV 2' },
+      { id: 'opv_3', label: 'OPV 3' },
+      { id: 'ipv_1', label: 'IPV 1' },
+      { id: 'ipv_2', label: 'IPV 2' },
+      { id: 'pcv_1', label: 'PCV 1' },
+      { id: 'pcv_2', label: 'PCV 2' },
+      { id: 'pcv_3', label: 'PCV 3' },
+      { id: 'mcv_1', label: 'MCV 1' },
+      { id: 'mcv_2', label: 'MCV 2' },
+      { id: 'fic', label: 'FIC' }
+    ];
+
+    return (
+      <div className="overflow-x-auto border rounded-md mt-2 max-h-60 overflow-y-auto">
+        <table className="min-w-full text-xs">
+          <thead className="bg-gray-100 sticky top-0">
+            <tr>
+              <th className="p-1 border w-20">Immunization</th>
+              <th className="p-1 border w-16">Date Given</th>
+              <th className="p-1 border w-12">Age</th>
+              <th className="p-1 border w-12">Weight</th>
+              <th className="p-1 border w-12">Height</th>
+              <th className="p-1 border w-12">Nutritional</th>
+              <th className="p-1 border w-16">Admitted By</th>
+              <th className="p-1 border w-16">Immunized By</th>
+              <th className="p-1 border w-16">Next Visit</th>
+              <th className="p-1 border w-16">Remarks</th>
+            </tr>
+          </thead>
+          <tbody>
+            {immunizations.map((immunization) => (
+              <tr key={immunization.id} className="hover:bg-gray-50">
+                <td className="p-1 border font-semibold">{immunization.label}</td>
+                <td className="p-1 border">{details[`immunization_${immunization.id}_date`] || "-"}</td>
+                <td className="p-1 border">{details[`immunization_${immunization.id}_age`] || "-"}</td>
+                <td className="p-1 border">{details[`immunization_${immunization.id}_weight`] || "-"}</td>
+                <td className="p-1 border">{details[`immunization_${immunization.id}_height`] || "-"}</td>
+                <td className="p-1 border">{details[`immunization_${immunization.id}_nutritional`] || "-"}</td>
+                <td className="p-1 border">{details[`immunization_${immunization.id}_admitted_by`] || "-"}</td>
+                <td className="p-1 border">{details[`immunization_${immunization.id}_immunized_by`] || "-"}</td>
+                <td className="p-1 border">{details[`immunization_${immunization.id}_next_visit`] || "-"}</td>
+                <td className="p-1 border">{details[`immunization_${immunization.id}_remarks`] || "-"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  const TimeField = ({ label, value }) => (
+    <div>
+      <p className="text-xs text-gray-500">{label}</p>
+      <div className="flex space-x-2">
+        {['admission', 'departure'].map((type) => (
+          <div key={type} className="flex-1">
+            <p className="text-xs text-gray-400 capitalize">{type}</p>
+            <p className="font-semibold text-gray-800 text-sm">
+              {details[`immunization_time_${type}`] || "-"}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
       <motion.div
-        className="bg-white rounded-lg shadow-2xl w-full max-w-3xl overflow-hidden"
+        className="bg-white rounded-lg shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col"
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
       >
-        <div className="p-4 bg-gray-50 border-b">
-          <h2 className="text-lg font-bold text-gray-800">
-            Child Immunization Record
-          </h2>
-          <p className="text-sm text-gray-600">
-            Viewing record for{" "}
-            <span className="font-semibold">
-              {child.first_name} {child.last_name}
-            </span>{" "}
-            (ID: {child.child_id})
-          </p>
-        </div>
-        <div className="p-6 overflow-y-auto max-h-[70vh]">
-          <SectionHeader title="Personal & Family Information" />
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-            <Field label="Date of Birth" value={child.dob} />
-            <Field label="Sex" value={child.sex} />
-            <Field label="Place of Birth" value={details.place_of_birth} />
-            <Field label="Mother's Name" value={child.mother_name} />
-            <Field label="Father's Name" value={details.father_name} />
-            <Field label="Guardian's Name" value={child.guardian_name} />
-          </div>
-          <SectionHeader title="Nutritional Measurements" />
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm items-center">
-            <Field label="Weight" value={`${child.weight_kg || "N/A"} kg`} />
-            <Field label="Height" value={`${child.height_cm || "N/A"} cm`} />
-            <Field label="Body Mass Index (BMI)" value={child.bmi} />
+        {/* Header */}
+        <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-b flex-shrink-0">
+          <div className="flex justify-between items-start">
             <div>
-              <p className="text-xs text-gray-500">Nutrition Status</p>
-              <div className="mt-1">
-                <StatusBadge status={child.nutrition_status} />
-              </div>
+              <h2 className="text-xl font-bold text-gray-800">
+                Child Immunization Record
+              </h2>
+              <p className="text-sm text-gray-600">
+                Viewing record for{" "}
+                <span className="font-semibold">
+                  {child.first_name} {child.last_name}
+                </span>{" "}
+                (ID: {child.child_id})
+              </p>
+            </div>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-full transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto p-6">
+          {/* Section 1: Personal & Family Information */}
+          <SectionHeader title="1. Personal & Family Information" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+            <Field label="Name of BHS" value={details.bhs_name || "San Miguel"} />
+            <Field label="Family Number" value={details.family_number} />
+            <Field label="Child's Name" value={`${child.first_name} ${child.last_name}`} />
+            <Field label="Sex" value={child.sex} />
+            <Field label="Date of Birth" value={child.dob} />
+            <Field label="Time of Delivery" value={details.delivery_time} />
+            <Field label="Birth Weight" value={`${details.birth_weight || "N/A"} kg`} />
+            <Field label="Place of Birth" value={details.place_of_birth} />
+            <Field label="Place of Delivery" value={details.place_of_delivery} />
+            <Field label="Birth Order" value={details.birth_order} />
+            <Field label="Type of Delivery" value={details.delivery_type} />
+          </div>
+
+          {/* ID Numbers */}
+          <div className="mb-4 p-3 border rounded-lg bg-gray-50">
+            <h4 className="font-semibold text-gray-700 mb-2 text-sm">ID Numbers</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Field label="NHTS No." value={details.nhts_no} />
+              <Field label="PhilHealth No." value={details.philhealth_no} />
             </div>
           </div>
-          <SectionHeader title="ID Numbers" />
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-            <Field label="NHTS No." value={details.nhts_no} />
-            <Field label="PhilHealth No." value={details.philhealth_no} />
+
+          {/* Section 2: Parent/Guardian Information */}
+          <SectionHeader title="2. Parent/Guardian Information" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+            <Field label="Name of Mother" value={child.mother_name} />
+            <Field label="Age of Mother" value={details.mother_age} />
+            <Field label="Name of Father" value={details.father_name} />
+            <Field label="Contact Number" value={details.contact_no} />
+            <Field label="Name of Guardian" value={child.guardian_name} />
+            <Field label="Relationship" value={details.guardian_relationship} />
+            <Field label="Address" value={child.address} />
+            <Field label="Nearest Landmark" value={details.nearest_landmark} />
           </div>
-          <SectionHeader title="Mother's Immunization Status" />
-          <div className="overflow-x-auto">
+
+          {/* Health Details */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <Field label="Date Referred for Newborn Screening" value={details.nbs_referral_date} />
+            <Field label="NBS Done (Result)" value={details.nbs_result} />
+            <Field label="Attendant at Birth" value={details.birth_attendant} />
+            <Field label="AOG at Birth" value={details.aog_at_birth} />
+            <Field label="Parent/Guardian Smoking History" value={details.smoking_history} />
+          </div>
+
+          {/* Section 3: Mother's Immunization */}
+          <SectionHeader title="3. Mother's Immunization Status" />
+          <div className="overflow-x-auto mb-6">
             <table className="w-full text-center text-xs border">
               <thead className="bg-gray-100 font-semibold">
                 <tr>
@@ -902,56 +1030,84 @@ const ViewChildModal = ({ child, onClose, onViewQRCode }) => {
               </tbody>
             </table>
           </div>
-          <SectionHeader title="Additional Health Records" />
-          <div className="space-y-3">
+
+          {/* Section 4: Exclusive Breastfeeding */}
+          <SectionHeader title="4. Exclusive Breastfeeding" />
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 mb-6">
+            {["1st", "2nd", "3rd", "4th", "5th", "6th"].map((month, i) => (
+              <div key={i} className="text-center p-2 border rounded bg-gray-50">
+                <p className="font-bold text-xs">{month} Month</p>
+                <CheckboxDisplay 
+                  label="" 
+                  isChecked={details[`breastfeeding_month_${i+1}`]} 
+                />
+              </div>
+            ))}
+          </div>
+
+          {/* Section 5: Immunization Schedule */}
+          <SectionHeader title="5. Immunization Schedule" />
+          <div className="mb-4">
+            <ImmunizationTable />
+          </div>
+
+          {/* Additional Medical Information */}
+          <SectionHeader title="6. Additional Medical Information" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <p className="text-xs text-gray-500 mb-1">
-                Exclusive Breastfeeding
-              </p>
-              <div className="flex flex-wrap gap-4">
-                {[
-                  "1st Month",
-                  "2nd Month",
-                  "3rd Month",
-                  "4th Month",
-                  "5th Month",
-                  "6th Month",
-                ].map((month) => (
-                  <CheckboxDisplay
-                    key={month}
-                    label={month}
-                    isChecked={
-                      details[`breastfeeding_${month.replace(" ", "_")}`]
-                    }
-                  />
-                ))}
+              <Field label="Vitamin A Supplementation Date" value={details.vitamin_a_date} />
+              <Field label="Vitamin A Amount" value={details.vitamin_a_amount} />
+            </div>
+            <div>
+            </div>
+          </div>
+
+          {/* Current Measurements */}
+          <SectionHeader title="7. Current Measurements" />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+            <Field label="Weight (kg)" value={child.weight_kg} />
+            <Field label="Height (cm)" value={child.height_cm} />
+            <Field label="BMI" value={child.bmi} />
+            <div>
+              <p className="text-xs text-gray-500">Nutrition Status</p>
+              <div className="mt-1">
+                <StatusBadge status={child.nutrition_status} />
               </div>
             </div>
-            <Field
-              label="Vitamin A (Date Given)"
-              value={details.vitamin_a_date}
-            />
           </div>
         </div>
-        <div className="p-4 bg-gray-50 border-t flex justify-end gap-3">
-          <button
-            onClick={() => onViewQRCode(child)} // This passes the child object up
-            className="px-4 py-2 bg-purple-600 text-white rounded-md font-semibold text-sm hover:bg-purple-700"
-        >
-            View QR Code
-        </button>
-          <button
-            onClick={handleDownloadPdf}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md font-semibold text-sm hover:bg-blue-700"
-          >
-            Download as PDF
-          </button>
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md font-semibold text-sm hover:bg-gray-300"
-          >
-            Close
-          </button>
+
+        {/* Footer with Action Buttons */}
+        <div className="p-4 bg-gray-50 border-t flex justify-between items-center flex-shrink-0">
+          <div className="text-xs text-gray-500">
+            Last Updated: {new Date(child.updated_at || child.created_at).toLocaleDateString()}
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={() => onViewQRCode(child)}
+              className="px-4 py-2 bg-purple-600 text-white rounded-md font-semibold text-sm hover:bg-purple-700 flex items-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+              </svg>
+              View QR Code
+            </button>
+            <button
+              onClick={handleDownloadPdf}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md font-semibold text-sm hover:bg-blue-700 flex items-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Download PDF
+            </button>
+            <button
+              onClick={onClose}
+              className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md font-semibold text-sm hover:bg-gray-300"
+            >
+              Close
+            </button>
+          </div>
         </div>
       </motion.div>
     </div>
@@ -1008,6 +1164,8 @@ export default function ChildHealthRecords() {
   const { addNotification } = useNotification();
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isPrescriptionModalOpen, setIsPrescriptionModalOpen] = useState(false);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false); // NEW
+
 
   // Export functions
   const exportToPDF = async (filename = 'child_records') => {
@@ -1173,6 +1331,11 @@ export default function ChildHealthRecords() {
       console.error('Error exporting to Excel:', error);
       addNotification('Error exporting to Excel: ' + error.message, 'error');
     }
+  };
+
+  const handleShowHistory = (record) => {
+      setSelectedChild(record);
+      setIsHistoryModalOpen(true);
   };
 
   const fetchPageData = useCallback(async () => {
@@ -1346,6 +1509,13 @@ export default function ChildHealthRecords() {
                 idKey="child_id"                  // Tell the modal to use the 'child_id' field
                 idLabel="Child ID"                // Tell the modal how to label the ID
                 onClose={() => setSelectedChildForQR(null)} 
+            />
+        )}
+        {isHistoryModalOpen && selectedChild && (
+            <HistoryModal 
+                title={`${selectedChild.first_name} ${selectedChild.last_name}`}
+                queryTerm={selectedChild.first_name} // Searching by name
+                onClose={() => setIsHistoryModalOpen(false)}
             />
         )}
       </AnimatePresence>
@@ -1539,13 +1709,7 @@ export default function ChildHealthRecords() {
                               >
                                 <UpdateIcon />
                               </button>
-                              <button
-                                onClick={() => setPatientToDelete(record)}
-                                className="text-gray-400 hover:text-red-600 p-1"
-                                title="Delete"
-                              >
-                                <DeleteIcon />
-                              </button>
+                              <button onClick={() => handleShowHistory(record)} className="text-gray-400 hover:text-orange-600 p-1" title="View History"><HistoryIcon /></button>
                             </div>
                           </td>
                         </tr>
