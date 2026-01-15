@@ -386,7 +386,7 @@ export default function BnsInventoryPage() {
                 {(modalMode === 'add' || modalMode === 'edit') && ( <AddBnsInventoryModal mode={modalMode} initialData={itemToManage} onClose={() => setModalMode(null)} onSave={() => { setModalMode(null); fetchPageData(); }} /> )}
                 {modalMode === 'view' && (
                     <ViewItemModal
-                        item={selectedItem}
+                        item={itemToManage}
                         onClose={() => setModalMode(null)}
                     />
                 )}
@@ -464,7 +464,7 @@ export default function BnsInventoryPage() {
                                             <td className="px-2 py-2">{item.category}</td>
                                             <td className="px-2 py-2">{item.quantity}</td>
                                             <td className="px-2 py-2">{item.unit}</td>
-                                            <td className="px-2 py-2">{item.expiration_date}</td>
+                                            <td className="px-2 py-2">{item.expiry_date}</td>
                                             <td className="px-2 py-2"><StatusBadge status={item.status} /></td>
                                             <td className="px-2 py-2">
                                                 <div className="flex items-center space-x-1">

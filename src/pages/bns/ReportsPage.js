@@ -1,20 +1,38 @@
+// src\pages\bns\ReportsPage.js
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../../services/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
 import { logActivity } from '../../services/activityLogger';
 import { useNotification } from '../../context/NotificationContext';
+import { useAuth } from '../../context/AuthContext';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import logo from '../../assets/logo.jpg'; // Uncomment if you have the logo
-
+import leftLogoIcon from '../../assets/leftLogo.png';
+import rightLogoIcon from '../../assets/rightLogo.png';
 // --- ICONS ---
 const DownloadIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>;
 const ViewIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>;
 const SearchIcon = () => <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>;
 const ChevronLeftIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>;
 const ChevronRightIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>;
-
+const loadImage = (src) => {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.src = src;
+        img.onload = () => resolve(img);
+        img.onerror = () => resolve(null); // Resolve with null if image fails to load
+    });
+};
 // --- HELPER FUNCTIONS ---
+const getRemainingShelfLife = (expiryDate) => {
+    if (!expiryDate) return 'N/A';
+    const today = new Date();
+    const expiry = new Date(expiryDate);
+    const diffTime = expiry - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+};
+
 const getQuarterMonths = (q) => {
     return [
         [0, 1, 2],    // Q1: Jan, Feb, Mar
@@ -24,144 +42,205 @@ const getQuarterMonths = (q) => {
     ][q - 1];
 };
 
-const formatBytes = (bytes, decimals = 2) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const dm = decimals < 0 ? 0 : decimals;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+const formatDate = (date) => {
+    if (!date) return 'N/A';
+    return new Date(date).toLocaleDateString('en-PH', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+    });
 };
 
-// --- WIDGETS ---
-const Calendar = () => {
-    const [currentDate, setCurrentDate] = useState(new Date());
-    const daysOfWeek = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
-    const changeMonth = (amount) => {
-        setCurrentDate(prev => {
-            const newDate = new Date(prev);
-            newDate.setMonth(newDate.getMonth() + amount);
-            return newDate;
-        });
-    };
-    const generateDates = () => {
-        const year = currentDate.getFullYear();
-        const month = currentDate.getMonth();
-        const firstDay = new Date(year, month, 1).getDay();
-        const daysInMonth = new Date(year, month + 1, 0).getDate();
-        const dates = [];
-        for (let i = 0; i < firstDay; i++) { dates.push(<div key={`pad-${i}`} className="p-2"></div>); }
-        for (let i = 1; i <= daysInMonth; i++) {
-            const isToday = new Date(year, month, i).toDateString() === new Date().toDateString();
-            dates.push(<div key={i} className={`p-2 rounded-full text-center text-sm cursor-pointer ${isToday ? 'bg-blue-500 text-white font-bold' : 'hover:bg-gray-100'}`}>{i}</div>);
-        }
-        return dates;
-    };
-    return (
-        <div className="bg-white p-4 rounded-lg shadow-sm border h-full">
-            <div className="flex justify-between items-center mb-3">
-                <button onClick={() => changeMonth(-1)} className="p-1 hover:bg-gray-100 rounded-full">&lt;</button>
-                <h3 className="font-bold text-gray-700">{currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}</h3>
-                <button onClick={() => changeMonth(1)} className="p-1 hover:bg-gray-100 rounded-full">&gt;</button>
-            </div>
-            <div className="grid grid-cols-7 gap-1 text-center text-xs text-gray-500 font-semibold">{daysOfWeek.map(day => <div key={day}>{day}</div>)}</div>
-            <div className="grid grid-cols-7 gap-1 mt-2">{generateDates()}</div>
-        </div>
-    );
-};
-
-const ViewQuarterModal = ({ quarter, onClose, allData, onDownloadMonth }) => {
-    const months = getQuarterMonths(quarter.id);
-    const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-    const year = quarter.year;
+// Calculate age from date of birth
+const calculateAge = (dob) => {
+    if (!dob) return 'N/A';
+    const birthDate = new Date(dob);
+    const today = new Date();
+    let years = today.getFullYear() - birthDate.getFullYear();
+    let months = today.getMonth() - birthDate.getMonth();
     
-    // 1. New Children Registered
-    const newChildren = allData.children.filter(c => {
-        const d = new Date(c.created_at);
-        return months.includes(d.getMonth()) && d.getFullYear() === year;
+    if (months < 0) {
+        years--;
+        months += 12;
+    }
+    
+    if (years === 0) {
+        return `${months} months`;
+    } else {
+        return `${years} years ${months} months`;
+    }
+};
+
+// Calculate child health summary statistics
+const calculateChildHealthSummary = (childrenData, startDate, endDate) => {
+    const now = new Date();
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    
+    let summary = {
+        totalChildren: childrenData.length,
+        // Age groups
+        age0to11: 0,
+        age1to4: 0,
+        age5plus: 0,
+        // Nutrition status
+        underweight: 0,
+        stunted: 0,
+        normal: 0,
+        overweight: 0,
+        obese: 0,
+        severelyUnderweight: 0,
+        wasted: 0,
+        // New registrations
+        newRegistrations: 0,
+        // Checkup status
+        withRecentCheckup: 0,
+        withoutRecentCheckup: 0
+    };
+
+    childrenData.forEach(child => {
+        // Age calculation
+        if (child.dob) {
+            const birthDate = new Date(child.dob);
+            const ageInMonths = (now.getFullYear() - birthDate.getFullYear()) * 12 + (now.getMonth() - birthDate.getMonth());
+            
+            if (ageInMonths < 12) {
+                summary.age0to11++;
+            } else if (ageInMonths <= 48) {
+                summary.age1to4++;
+            } else {
+                summary.age5plus++;
+            }
+        }
+
+        // Nutrition status
+        const nutritionStatus = child.nutrition_status || 'Normal';
+        if (nutritionStatus.includes('Underweight') || nutritionStatus === 'Underweight') {
+            summary.underweight++;
+        } else if (nutritionStatus.includes('Severely') || nutritionStatus === 'Severely Underweight') {
+            summary.severelyUnderweight++;
+        } else if (nutritionStatus === 'Stunted') {
+            summary.stunted++;
+        } else if (nutritionStatus === 'Normal') {
+            summary.normal++;
+        } else if (nutritionStatus === 'Overweight') {
+            summary.overweight++;
+        } else if (nutritionStatus === 'Obese') {
+            summary.obese++;
+        } else if (nutritionStatus === 'Wasted') {
+            summary.wasted++;
+        }
+
+        // New registrations in period
+        if (child.created_at) {
+            const createdDate = new Date(child.created_at);
+            if (createdDate >= startDate && createdDate <= endDate) {
+                summary.newRegistrations++;
+            }
+        }
+
+        // Checkup status
+        if (child.last_checkup) {
+            const lastCheckup = new Date(child.last_checkup);
+            if (lastCheckup >= sixMonthsAgo) {
+                summary.withRecentCheckup++;
+            } else {
+                summary.withoutRecentCheckup++;
+            }
+        } else {
+            summary.withoutRecentCheckup++;
+        }
     });
 
-    // 2. Active Checkups (Based on last_checkup)
-    const activeCheckups = allData.children.filter(c => {
-        if (!c.last_checkup) return false;
-        const d = new Date(c.last_checkup);
-        return months.includes(d.getMonth()) && d.getFullYear() === year;
-    });
+    return summary;
+};
 
-    const inventory = allData.inventory.filter(i => {
-        const d = new Date(i.updated_at || i.created_at);
-        return months.includes(d.getMonth()) && d.getFullYear() === year;
-    });
-
-    // Simple malnutrition check (on new/active combined or just new? Let's use new for stats)
-    const malnutritionCount = newChildren.filter(c => {
-        const status = c.nutrition_status || 'H';
-        return status === 'UW' || status === 'O' || status === 'OW';
-    }).length;
+// --- MODAL COMPONENTS ---
+const ViewReportModal = ({ reportItem, onClose, onDownload }) => {
+    const { name, year, type, data } = reportItem;
+    
+    // Calculate summary stats
+    let summaryStats = [];
+    if (type === 'inventory') {
+        const {
+            totalItems,
+            totalQuantity,
+            normalCount,
+            lowCount,
+            criticalCount,
+            expiredCount,
+            nearExpiryCount
+        } = data.summary;
+        
+        summaryStats = [
+            { label: 'Total Items', value: totalItems, color: 'text-blue-600', bg: 'bg-blue-50' },
+            { label: 'Total Quantity', value: totalQuantity, color: 'text-green-600', bg: 'bg-green-50' },
+            { label: 'Low Stock', value: lowCount, color: 'text-yellow-600', bg: 'bg-yellow-50' },
+            { label: 'Critical', value: criticalCount, color: 'text-red-600', bg: 'bg-red-50' },
+            { label: 'Expired', value: expiredCount, color: 'text-red-700', bg: 'bg-red-100' },
+            { label: 'Near Expiry', value: nearExpiryCount, color: 'text-orange-600', bg: 'bg-orange-50' }
+        ];
+    } else {
+        // Child health report stats
+        const summary = data.summary;
+        summaryStats = [
+            { label: 'Total Children', value: summary.totalChildren, color: 'text-cyan-600', bg: 'bg-cyan-50' },
+            { label: 'New Registrations', value: summary.newRegistrations, color: 'text-blue-600', bg: 'bg-blue-50' },
+            { label: 'Age 0-11 months', value: summary.age0to11, color: 'text-purple-600', bg: 'bg-purple-50' },
+            { label: 'Age 1-4 years', value: summary.age1to4, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+            { label: 'Underweight', value: summary.underweight, color: 'text-yellow-600', bg: 'bg-yellow-50' },
+            { label: 'Normal Nutrition', value: summary.normal, color: 'text-green-600', bg: 'bg-green-50' }
+        ];
+    }
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-40 p-4">
             <motion.div 
-                className="bg-white rounded-lg shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]"
+                className="bg-white rounded-lg shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]"
                 initial={{ opacity: 0, y: -30 }} 
                 animate={{ opacity: 1, y: 0 }} 
                 exit={{ opacity: 0, y: 30 }}
             >
                 <div className="p-6 border-b">
-                    <h2 className="text-xl font-bold text-gray-800">Quarterly Summary: {quarter.name}</h2>
-                    <p className="text-sm text-gray-500">Year: {quarter.year}</p>
+                    <h2 className="text-xl font-bold text-gray-800">Report Summary: {name}</h2>
+                    <p className="text-sm text-gray-500">
+                        Year: {year} | Type: {type === 'inventory' ? 'Inventory Report' : 'Child Health Report'}
+                    </p>
                 </div>
                 
                 <div className="p-6 space-y-6 overflow-y-auto">
                     {/* Stats Grid */}
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-blue-50 p-4 rounded-lg text-center">
-                            <p className="text-2xl font-bold text-blue-600">{newChildren.length}</p>
-                            <p className="text-xs text-gray-600 uppercase font-semibold">New Children</p>
-                        </div>
-                        <div className="bg-green-50 p-4 rounded-lg text-center">
-                            <p className="text-2xl font-bold text-green-600">{activeCheckups.length}</p>
-                            <p className="text-xs text-gray-600 uppercase font-semibold">Active Checkups</p>
-                        </div>
-                        <div className="bg-yellow-50 p-4 rounded-lg text-center">
-                            <p className="text-2xl font-bold text-yellow-600">{inventory.length}</p>
-                            <p className="text-xs text-gray-600 uppercase font-semibold">Items Updated</p>
-                        </div>
-                        <div className="bg-red-50 p-4 rounded-lg text-center">
-                            <p className="text-2xl font-bold text-red-600">{malnutritionCount}</p>
-                            <p className="text-xs text-gray-600 uppercase font-semibold">Malnutrition Cases</p>
-                        </div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                        {summaryStats.map((s, i) => (
+                            <div key={i} className={`${s.bg} p-4 rounded-lg text-center`}>
+                                <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
+                                <p className="text-xs text-gray-600 uppercase font-semibold">{s.label}</p>
+                            </div>
+                        ))}
                     </div>
-                    
-                    {/* Monthly Breakdown List */}
-                    <div>
-                        <h4 className="font-semibold text-gray-700 mb-3 text-sm border-b pb-2">Monthly Breakdown</h4>
-                        <div className="space-y-3">
-                            {months.map(m => {
-                                const mName = monthNames[m];
-                                const mVisits = allData.children.filter(c => {
-                                    if(!c.last_checkup) return false;
-                                    const d = new Date(c.last_checkup);
-                                    return d.getMonth() === m && d.getFullYear() === year;
-                                }).length;
 
-                                return (
-                                    <div key={m} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border hover:bg-gray-100 transition-colors">
-                                        <div>
-                                            <p className="font-bold text-gray-800 text-sm">{mName}</p>
-                                            <p className="text-xs text-gray-500">{mVisits} Checkups Recorded</p>
-                                        </div>
-                                        <button
-                                            onClick={() => onDownloadMonth(m, quarter.year)}
-                                            className="flex items-center space-x-2 text-xs bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-md hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300 transition-all shadow-sm"
-                                        >
-                                            <DownloadIcon />
-                                            <span>Download PDF</span>
-                                        </button>
-                                    </div>
-                                );
-                            })}
+                    {/* Additional Info for Child Reports */}
+                    {type === 'children' && (
+                        <div className="bg-cyan-50 p-4 rounded-lg border border-cyan-200">
+                            <h3 className="font-bold text-gray-700 mb-2">Child Health Overview:</h3>
+                            <div className="text-sm text-gray-600">
+                                <p>• Comprehensive child health and nutrition report</p>
+                                <p>• Tracks growth monitoring and nutrition status</p>
+                                <p>• Identifies at-risk children for intervention</p>
+                            </div>
                         </div>
+                    )}
+
+                    <div className="bg-blue-50 p-4 rounded-lg border text-center border-blue-200">
+                        <p className="text-sm text-blue-600 mb-4 font-semibold">
+                            Click below to generate the full PDF report with detailed tables, analytics, and official signatures.
+                        </p>
+                        <button
+                            onClick={() => onDownload(reportItem)}
+                            className="flex items-center justify-center gap-2 w-full py-3 bg-blue-600 text-white rounded-md font-bold hover:bg-blue-700 transition-colors"
+                        >
+                            <DownloadIcon /> Download Full PDF Report
+                        </button>
                     </div>
                 </div>
                 
@@ -175,341 +254,1328 @@ const ViewQuarterModal = ({ quarter, onClose, allData, onDownloadMonth }) => {
 
 const GeneratingModal = () => (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
-        <motion.div className="bg-white rounded-lg shadow-2xl p-8 flex flex-col items-center" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}>
-            <svg className="animate-spin h-10 w-10 text-blue-600" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-            <p className="mt-4 text-gray-700 font-semibold">Generating PDF Report...</p>
-            <p className="text-xs text-gray-500 mt-1">Analyzing data & compiling analytics...</p>
+        <motion.div className="bg-white rounded-lg shadow-2xl p-8 flex flex-col items-center" 
+            initial={{ opacity: 0, scale: 0.9 }} 
+            animate={{ opacity: 1, scale: 1 }}
+        >
+            <svg className="animate-spin h-10 w-10 text-blue-600" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <p className="mt-4 text-gray-700 font-semibold">Generating Comprehensive PDF Report...</p>
+            <p className="text-xs text-gray-500 mt-1">Compiling analytics, tables, and summary data...</p>
         </motion.div>
     </div>
 );
 
 // --- MAIN COMPONENT ---
 export default function BnsReportsPage() {
-    const [selectedQuarter, setSelectedQuarter] = useState(null);
-    const [allData, setAllData] = useState({ children: [], inventory: [], appointments: [] });
+    const [selectedReport, setSelectedReport] = useState(null);
+    const [allData, setAllData] = useState({ 
+        child_records: [], 
+        inventory: [],
+        profiles: [] 
+    });
     const [loading, setLoading] = useState(true);
     const [isGenerating, setIsGenerating] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [showNoDataPop, setShowNoDataPop] = useState(false);
-    
-    // --- NEW: Current Year State ---
-    const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
-    
     const { addNotification } = useNotification();
+    const { user } = useAuth();
+    
+    // Report Configuration States
+    const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
+    const [reportType, setReportType] = useState('children'); // 'children' or 'inventory'
+    const [frequency, setFrequency] = useState('quarterly'); // 'quarterly' or 'monthly'
+    const [filterCategory, setFilterCategory] = useState('All');
+    const [filterStatus, setFilterStatus] = useState('All');
+    const [filterOwnerRole, setFilterOwnerRole] = useState('All');
+
+    // Get current user's profile
+    const [currentUserProfile, setCurrentUserProfile] = useState(null);
+    const isBNS = currentUserProfile?.role === 'BNS';
 
     const fetchAllData = useCallback(async () => {
         setLoading(true);
-        // We fetch ALL data initially, then filter by year on client-side
-        const [childrenRes, inventoryRes, appointmentsRes] = await Promise.all([
-            supabase.from('child_records').select('*'),
-            supabase.from('bns_inventory').select('*'),
-            supabase.from('appointments').select('*, profiles(first_name, last_name)')
-        ]);
-        setAllData({
-            children: childrenRes.data || [],
-            inventory: inventoryRes.data || [],
-            appointments: appointmentsRes.data || []
-        });
+        try {
+            // Fetch all necessary data for BNS
+            const [
+                childRecordsRes, 
+                inventoryRes, 
+                profilesRes, 
+                userProfileRes
+            ] = await Promise.all([
+                supabase.from('child_records').select('*').eq('is_deleted', false),
+                supabase.from('inventory').select('*').eq('is_deleted', false),
+                supabase.from('profiles').select('*'),
+                supabase.from('profiles').select('*').eq('id', user?.id).single()
+            ]);
+
+            setAllData({
+                child_records: childRecordsRes.data || [],
+                inventory: inventoryRes.data || [],
+                profiles: profilesRes.data || []
+            });
+
+            if (userProfileRes.data) {
+                setCurrentUserProfile(userProfileRes.data);
+                // Auto-set owner filter to BNS
+                setFilterOwnerRole('BNS');
+            }
+        } catch (error) {
+            addNotification(`Error fetching data: ${error.message}`, 'error');
+        }
         setLoading(false);
-    }, []);
+    }, [addNotification, user?.id]);
 
-    useEffect(() => { fetchAllData(); }, [fetchAllData]);
+    useEffect(() => { 
+        fetchAllData(); 
+    }, [fetchAllData]);
 
-    // --- REUSABLE PDF GENERATOR FOR BNS ---
-    const generateReport = async (fileName, periodLabel, targetMonths, year) => {
-        // 1. Filter Data for target months AND YEAR
+    // Calculate inventory summary statistics
+    const calculateInventorySummary = (inventoryData) => {
+        const today = new Date();
+        const nearExpiryThreshold = 30; // days
         
-        // New Registrations
-        const newChildren = allData.children.filter(c => {
-            const d = new Date(c.created_at);
-            return targetMonths.includes(d.getMonth()) && d.getFullYear() === year;
+        let summary = {
+            totalItems: inventoryData.length,
+            totalQuantity: 0,
+            normalCount: 0,
+            lowCount: 0,
+            criticalCount: 0,
+            expiredCount: 0,
+            nearExpiryCount: 0,
+            byCategory: {},
+            bySource: {},
+            byOwnerRole: {}
+        };
+
+        inventoryData.forEach(item => {
+            // Quantity summary
+            summary.totalQuantity += item.quantity || 0;
+            
+            // Status counts
+            const status = item.status?.toLowerCase();
+            if (status === 'normal') summary.normalCount++;
+            if (status === 'low') summary.lowCount++;
+            if (status === 'critical') summary.criticalCount++;
+
+            // Expiry analysis
+            if (item.expiry_date) {
+                const expiryDate = new Date(item.expiry_date);
+                const diffTime = expiryDate - today;
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                
+                if (diffDays < 0) {
+                    summary.expiredCount++;
+                } else if (diffDays <= nearExpiryThreshold) {
+                    summary.nearExpiryCount++;
+                }
+            }
+
+            // Group by category
+            summary.byCategory[item.category] = (summary.byCategory[item.category] || 0) + 1;
+            
+            // Group by source
+            const source = item.supply_source || 'Unknown';
+            summary.bySource[source] = (summary.bySource[source] || 0) + 1;
+            
+            // Group by owner role
+            const ownerRole = item.owner_role || 'Unknown';
+            summary.byOwnerRole[ownerRole] = (summary.byOwnerRole[ownerRole] || 0) + 1;
         });
 
-        // Active Checkups (Last Checkup)
-        const activeCheckups = allData.children.filter(c => {
-            if (!c.last_checkup) return false;
-            const d = new Date(c.last_checkup);
-            return targetMonths.includes(d.getMonth()) && d.getFullYear() === year;
-        });
+        return summary;
+    };
 
-        const inventory = allData.inventory.filter(i => {
-            const d = new Date(i.updated_at || i.created_at);
-            return targetMonths.includes(d.getMonth()) && d.getFullYear() === year;
-        });
-
-        if (newChildren.length === 0 && activeCheckups.length === 0 && inventory.length === 0) {
+    // Generate comprehensive child health report PDF
+    const generateChildHealthReport = async (reportItem) => {
+        const { name, year, data } = reportItem;
+        
+        // Check if data exists
+        if (!data.children || data.children.length === 0) {
             setShowNoDataPop(true);
             setTimeout(() => setShowNoDataPop(false), 2000);
+            addNotification('No child data available for this period.', 'warning');
             return;
         }
 
         setIsGenerating(true);
-        
-        // 2. BNS Analytics Calculations
-        const totalNew = newChildren.length;
-        const totalCheckups = activeCheckups.length;
-        
-        // Combine new and active for nutrition stats
-        const uniqueActive = [...new Set([...newChildren, ...activeCheckups])];
-        const nutritionDist = { H: 0, UW: 0, OW: 0, O: 0 };
-        
-        uniqueActive.forEach(c => {
-            const status = c.nutrition_status || 'H';
-            if (nutritionDist[status] !== undefined) nutritionDist[status]++;
-        });
 
-        const lowStockItems = inventory.filter(i => i.quantity <= 20).length;
-
-        // 3. Initialize PDF
-        const doc = new jsPDF();
+        const leftLogo = await loadImage(leftLogoIcon);
+        const rightLogo = await loadImage(rightLogoIcon);
+        
+        const doc = new jsPDF('portrait');
         const pageWidth = doc.internal.pageSize.width;
+        const pageHeight = doc.internal.pageSize.height;
         
-        // --- HEADER ---
-        doc.setFontSize(14).setFont(undefined, 'bold').text("Barangay San Miguel Health Center", pageWidth / 2, 20, { align: "center" });
-        doc.setFontSize(10).setFont(undefined, 'normal').text("Child Health & Nutrition Report", pageWidth / 2, 26, { align: "center" });
-        doc.line(15, 32, pageWidth - 15, 32);
+        // --- HEADER SECTION ---
+        doc.setDrawColor(200);
+        // Left Logo Placeholder
+        if (leftLogo) {
+            // doc.addImage(imgData, format, x, y, width, height)
+            doc.addImage(leftLogo, 'PNG', 15, 10, 25, 25);
+        } else {
+            // Fallback if image fails
+            doc.rect(15, 10, 25, 25); 
+            doc.setFontSize(8).setTextColor(150, 150, 150).text("LOGO", 18, 23);
+        }
+        
+        // Right Logo
+        if (rightLogo) {
+            doc.addImage(rightLogo, 'PNG', pageWidth - 40, 10, 25, 25);
+        } else {
+            // Fallback
+            doc.rect(pageWidth - 40, 10, 25, 25);
+            doc.text("LOGO", pageWidth - 36, 23);
+        }
 
-        // --- REPORT INFO ---
-        doc.setFontSize(11).setFont(undefined, 'bold');
-        doc.text(`Period: ${periodLabel}`, 15, 42);
-        doc.text(`Generated: ${new Date().toLocaleDateString()}`, pageWidth - 15, 42, { align: "right" });
-
-        // --- SECTION 1: ANALYTICS SUMMARY ---
-        doc.setFontSize(12).setTextColor(39, 174, 96).text("1. Executive Summary & Nutrition Analytics", 15, 55);
-        doc.setTextColor(0, 0, 0);
-
-        const statsY = 62;
+        // Main Title
+        doc.setFontSize(12).setFont(undefined, 'bold').setTextColor(0, 0, 0);
+        doc.text("BARANGAY SAN MIGUEL HEALTH CENTER", pageWidth / 2, 20, { align: "center" });
         doc.setFontSize(10);
+        doc.text("CHILD HEALTH & NUTRITION RECORDS REPORT", pageWidth / 2, 28, { align: "center" });
         
-        // Box 1: New Children
-        doc.setDrawColor(200); doc.setFillColor(245, 247, 250); doc.rect(15, statsY, 55, 25, 'F'); doc.rect(15, statsY, 55, 25, 'S');
-        doc.setFont(undefined, 'bold').text(`${totalNew}`, 25, statsY + 10);
-        doc.setFont(undefined, 'normal').text("New Children Registered", 25, statsY + 18);
-
-        // Box 2: Checkups
-        doc.setFillColor(240, 253, 244); doc.rect(75, statsY, 55, 25, 'F'); doc.rect(75, statsY, 55, 25, 'S');
-        doc.setFont(undefined, 'bold').text(`${totalCheckups}`, 85, statsY + 10);
-        doc.setFont(undefined, 'normal').text("Checkups Completed", 85, statsY + 18);
-
-        // Box 3: Inventory
-        doc.setFillColor(255, 247, 237); doc.rect(135, statsY, 55, 25, 'F'); doc.rect(135, statsY, 55, 25, 'S');
-        doc.setFont(undefined, 'bold').text(`${inventory.length}`, 145, statsY + 10);
-        doc.setFont(undefined, 'normal').text("Items Updated", 145, statsY + 18);
-
-        // Nutrition Text
-        doc.text("Nutritional Status Overview (Active Patients):", 15, statsY + 35);
-        doc.setFontSize(9).setTextColor(100);
-        doc.text(`- Healthy (H): ${nutritionDist.H}`, 20, statsY + 42);
-        doc.text(`- Underweight (UW): ${nutritionDist.UW}`, 20, statsY + 48);
-        doc.text(`- Overweight/Obese (OW/O): ${nutritionDist.OW + nutritionDist.O}`, 20, statsY + 54);
-        doc.setTextColor(0);
-
-        // --- SECTION 2: NEW REGISTRATIONS ---
-        let currentY = statsY + 65;
-        doc.setFontSize(12).setTextColor(39, 174, 96).text("2. New Child Registrations", 15, currentY);
+        // Report Details
+        doc.setFontSize(10);
+        doc.text(`Report Period: ${name} ${year}`, 15, 40);
+        doc.text(`Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`, pageWidth - 15, 40, { align: "right" });
         
-        const childRows = newChildren.map(c => [
-            c.child_id,
-            `${c.last_name}, ${c.first_name}`,
-            c.sex,
-            c.weight_kg ? `${c.weight_kg}kg` : 'N/A',
-            c.nutrition_status || 'H',
-            new Date(c.created_at).toLocaleDateString()
+        // Generated By (BNS)
+        if (currentUserProfile) {
+            doc.text(`Generated By: ${currentUserProfile.first_name} ${currentUserProfile.last_name} (BNS)`, 15, 45);
+        }
+
+        doc.line(15, 50, pageWidth - 15, 50);
+
+        let currentY = 60;
+
+        // --- 1. CHILD POPULATION SUMMARY ---
+        doc.setFontSize(12).setFont(undefined, 'bold').setTextColor(41, 128, 185); // Blue
+        doc.text("1. CHILD POPULATION SUMMARY", 15, currentY);
+        doc.setFontSize(10).setFont(undefined, 'normal').setTextColor(0, 0, 0);
+        
+        const summary = data.summary;
+        
+        // Add spacing after section title
+        currentY += 8;
+        
+        // Summary statistics in two columns
+        const col1 = 15;
+        const col2 = 90;
+        
+        doc.text(`Total Registered Children: ${summary.totalChildren}`, col1, currentY);
+        doc.text(`New Child Registrations: ${summary.newRegistrations}`, col1, currentY + 6);
+        doc.text(`Children aged 0-11 months: ${summary.age0to11}`, col1, currentY + 12);
+        doc.text(`Children aged 1-4 years: ${summary.age1to4}`, col1, currentY + 18);
+        
+        doc.text(`Underweight Children: ${summary.underweight}`, col2, currentY);
+        doc.text(`Stunted Children: ${summary.stunted}`, col2, currentY + 6);
+        doc.text(`Normal Nutrition Status: ${summary.normal}`, col2, currentY + 12);
+        doc.text(`Children 5+ years: ${summary.age5plus}`, col2, currentY + 18);
+
+        currentY += 30; // Space after summary section
+
+        // Check if we need a new page
+        if (currentY > pageHeight - 50) {
+            doc.addPage();
+            currentY = 20;
+        }
+
+        // --- 2. CHILD REGISTRY (MASTER LIST) ---
+        doc.setFontSize(12).setFont(undefined, 'bold').setTextColor(39, 174, 96); // Green
+        doc.text("2. CHILD REGISTRY (MASTER LIST)", 15, currentY);
+        
+        const allChildren = data.children.sort((a, b) => {
+            const nameA = `${a.last_name || ''} ${a.first_name || ''}`.toLowerCase();
+            const nameB = `${b.last_name || ''} ${b.first_name || ''}`.toLowerCase();
+            return nameA.localeCompare(nameB);
+        });
+        
+        const registryRows = allChildren.map(child => [
+            child.child_id || '-',
+            child.child_name || `${child.first_name || ''} ${child.last_name || ''}`,
+            child.sex || '-',
+            child.dob ? formatDate(child.dob) : '-',
+            calculateAge(child.dob),
+            child.address || '-',
+            child.guardian_name || '-',
+            child.bhs_name || '-',
+            child.family_number || '-'
         ]);
 
+        if (registryRows.length > 0) {
+            autoTable(doc, {
+                startY: currentY + 8, // Add spacing after title
+                head: [['Child ID', 'Child Name', 'Sex', 'Date of Birth', 'Age', 'Address', 'Guardian', 'BHS Name', 'Family No.']],
+                body: registryRows,
+                theme: 'striped',
+                headStyles: { fillColor: [39, 174, 96] },
+                styles: { fontSize: 7 },
+                margin: { left: 15, right: 15 },
+                columnStyles: {
+                    0: { cellWidth: 20 }, // ID
+                    1: { cellWidth: 30 }, // Name
+                    2: { cellWidth: 15 }, // Sex
+                    3: { cellWidth: 25 }, // DOB
+                    4: { cellWidth: 20 }, // Age
+                    5: { cellWidth: 25 }, // Address
+                    6: { cellWidth: 25 }, // Guardian
+                    7: { cellWidth: 20 }, // BHS
+                    8: { cellWidth: 20 }  // Family No
+                }
+            });
+            currentY = doc.lastAutoTable.finalY + 15; // Add space after table
+        } else {
+            currentY += 8; // Space after title
+            doc.setFontSize(10).setTextColor(150, 150, 150);
+            doc.text("No child records available.", 20, currentY);
+            currentY += 15;
+        }
+
+        // Check if we need a new page
+        if (currentY > pageHeight - 50) {
+            doc.addPage();
+            currentY = 20;
+        }
+
+        // --- 3. NUTRITION & GROWTH MONITORING ---
+        doc.setFontSize(12).setFont(undefined, 'bold').setTextColor(192, 57, 43); // Red
+        doc.text("3. NUTRITION & GROWTH MONITORING", 15, currentY);
+        
+        const nutritionRows = data.children
+            .filter(child => child.weight_kg || child.height_cm || child.nutrition_status)
+            .map(child => [
+                child.child_name || `${child.first_name || ''} ${child.last_name || ''}`,
+                calculateAge(child.dob),
+                child.weight_kg ? `${child.weight_kg} kg` : '-',
+                child.height_cm ? `${child.height_cm} cm` : '-',
+                child.bmi ? child.bmi.toFixed(1) : '-',
+                child.nutrition_status || '-'
+            ]);
+
+        if (nutritionRows.length > 0) {
+            autoTable(doc, {
+                startY: currentY + 8, // Add spacing after title
+                head: [['Child Name', 'Age', 'Weight', 'Height', 'BMI', 'Nutrition Status']],
+                body: nutritionRows,
+                theme: 'grid',
+                headStyles: { fillColor: [192, 57, 43] },
+                styles: { fontSize: 8 },
+                margin: { left: 15, right: 15 },
+                columnStyles: {
+                    0: { cellWidth: 35 }, // Name
+                    1: { cellWidth: 20 }, // Age
+                    2: { cellWidth: 20 }, // Weight
+                    3: { cellWidth: 20 }, // Height
+                    4: { cellWidth: 15 }, // BMI
+                    5: { cellWidth: 30 }  // Status
+                }
+            });
+            currentY = doc.lastAutoTable.finalY + 15; // Add space after table
+        } else {
+            currentY += 8; // Space after title
+            doc.setFontSize(10).setTextColor(150, 150, 150);
+            doc.text("No nutrition data available.", 20, currentY);
+            currentY += 15;
+        }
+
+        // Check if we need a new page
+        if (currentY > pageHeight - 50) {
+            doc.addPage();
+            currentY = 20;
+        }
+
+        // --- 4. AT-RISK CHILDREN ---
+        doc.setFontSize(12).setFont(undefined, 'bold').setTextColor(230, 126, 34); // Orange
+        doc.text("4. AT-RISK CHILDREN", 15, currentY);
+        
+        const atRiskChildren = data.children.filter(child => {
+            // Abnormal nutrition status
+            const abnormalNutrition = child.nutrition_status && 
+                !child.nutrition_status.includes('Normal') && 
+                child.nutrition_status !== 'Normal';
+            
+            // Missing last checkup
+            const missingCheckup = !child.last_checkup;
+            
+            // Low birth weight
+            const lowBirthWeight = child.birth_weight && 
+                (child.birth_weight.includes('Low') || 
+                 (parseFloat(child.birth_weight) < 2.5 && !isNaN(parseFloat(child.birth_weight))));
+            
+            return abnormalNutrition || missingCheckup || lowBirthWeight;
+        });
+        
+        const atRiskRows = atRiskChildren.map(child => [
+            child.child_name || `${child.first_name || ''} ${child.last_name || ''}`,
+            child.nutrition_status || '-',
+            child.last_checkup ? formatDate(child.last_checkup) : 'No checkup',
+            child.guardian_name || '-',
+            child.contact_no || '-'
+        ]);
+
+        if (atRiskRows.length > 0) {
+            autoTable(doc, {
+                startY: currentY + 8, // Add spacing after title
+                head: [['Child Name', 'Nutrition Status', 'Last Checkup', 'Guardian', 'Contact']],
+                body: atRiskRows,
+                theme: 'striped',
+                headStyles: { fillColor: [230, 126, 34] },
+                styles: { fontSize: 8 },
+                margin: { left: 15, right: 15 },
+                columnStyles: {
+                    0: { cellWidth: 35 }, // Name
+                    1: { cellWidth: 25 }, // Status
+                    2: { cellWidth: 25 }, // Checkup
+                    3: { cellWidth: 25 }, // Guardian
+                    4: { cellWidth: 30 }  // Contact
+                }
+            });
+            currentY = doc.lastAutoTable.finalY + 15; // Add space after table
+        } else {
+            currentY += 8; // Space after title
+            doc.setFontSize(10).setTextColor(150, 150, 150);
+            doc.text("No at-risk children identified.", 20, currentY);
+            currentY += 15;
+        }
+
+        // Check if we need a new page
+        if (currentY > pageHeight - 50) {
+            doc.addPage();
+            currentY = 20;
+        }
+
+        // --- 5. BIRTH & NEWBORN DETAILS ---
+        doc.setFontSize(12).setFont(undefined, 'bold').setTextColor(142, 68, 173); // Purple
+        doc.text("5. BIRTH & NEWBORN DETAILS", 15, currentY);
+        
+        const birthDetails = data.children.filter(child => 
+            child.place_of_delivery || 
+            child.delivery_type || 
+            child.birth_attendant || 
+            child.birth_weight || 
+            child.aog_at_birth || 
+            child.nbs_result || 
+            child.vitamin_a_date
+        );
+        
+        const birthRows = birthDetails.map(child => [
+            child.child_name || `${child.first_name || ''} ${child.last_name || ''}`,
+            child.place_of_delivery || '-',
+            child.delivery_type || '-',
+            child.birth_attendant || '-',
+            child.birth_weight || '-',
+            child.aog_at_birth || '-',
+            child.nbs_result || '-',
+            child.vitamin_a_date ? formatDate(child.vitamin_a_date) : '-',
+            child.vitamin_a_amount || '-'
+        ]);
+
+        if (birthRows.length > 0) {
+            autoTable(doc, {
+                startY: currentY + 8, // Add spacing after title
+                head: [['Child Name', 'Place of Delivery', 'Delivery Type', 'Birth Attendant', 'Birth Weight', 'AOG at Birth', 'NBS Result', 'Vit. A Date', 'Vit. A Amount']],
+                body: birthRows,
+                theme: 'grid',
+                headStyles: { fillColor: [142, 68, 173] },
+                styles: { fontSize: 7 },
+                margin: { left: 15, right: 15 },
+                columnStyles: {
+                    0: { cellWidth: 25 }, // Name
+                    1: { cellWidth: 25 }, // Place
+                    2: { cellWidth: 20 }, // Type
+                    3: { cellWidth: 20 }, // Attendant
+                    4: { cellWidth: 20 }, // Weight
+                    5: { cellWidth: 20 }, // AOG
+                    6: { cellWidth: 20 }, // NBS
+                    7: { cellWidth: 25 }, // Vit A Date
+                    8: { cellWidth: 20 }  // Vit A Amount
+                }
+            });
+            currentY = doc.lastAutoTable.finalY + 15; // Add space after table
+        } else {
+            currentY += 8; // Space after title
+            doc.setFontSize(10).setTextColor(150, 150, 150);
+            doc.text("No birth/newborn details available.", 20, currentY);
+            currentY += 15;
+        }
+
+        // Check if we need a new page
+        if (currentY > pageHeight - 50) {
+            doc.addPage();
+            currentY = 20;
+        }
+
+        // --- 6. IMMUNIZATION & SUPPLEMENT SUMMARY ---
+        doc.setFontSize(12).setFont(undefined, 'bold').setTextColor(52, 152, 219); // Light Blue
+        doc.text("6. IMMUNIZATION & SUPPLEMENT SUMMARY", 15, currentY);
+        doc.setFontSize(10).setFont(undefined, 'normal').setTextColor(0, 0, 0);
+        
+        // Extract health details from JSON
+        let supplementData = [];
+        data.children.forEach(child => {
+            if (child.health_details) {
+                try {
+                    const healthDetails = typeof child.health_details === 'string' 
+                        ? JSON.parse(child.health_details) 
+                        : child.health_details;
+                    
+                    if (healthDetails && typeof healthDetails === 'object') {
+                        const childName = child.child_name || `${child.first_name || ''} ${child.last_name || ''}`;
+                        
+                        // Check for immunization data
+                        if (healthDetails.immunizations) {
+                            supplementData.push({
+                                child: childName,
+                                type: 'Immunization',
+                                details: JSON.stringify(healthDetails.immunizations).substring(0, 50) + '...'
+                            });
+                        }
+                        
+                        // Check for supplement data
+                        if (healthDetails.supplements) {
+                            supplementData.push({
+                                child: childName,
+                                type: 'Supplements',
+                                details: JSON.stringify(healthDetails.supplements).substring(0, 50) + '...'
+                            });
+                        }
+                        
+                        // Check for vitamin A specifically
+                        if (child.vitamin_a_date) {
+                            supplementData.push({
+                                child: childName,
+                                type: 'Vitamin A',
+                                details: `${child.vitamin_a_amount || 'N/A'} on ${formatDate(child.vitamin_a_date)}`
+                            });
+                        }
+                    }
+                } catch (e) {
+                    // If not JSON, just show the string
+                    const childName = child.child_name || `${child.first_name || ''} ${child.last_name || ''}`;
+                    supplementData.push({
+                        child: childName,
+                        type: 'Health Details',
+                        details: String(child.health_details).substring(0, 100) + '...'
+                    });
+                }
+            }
+        });
+
+        currentY += 8; // Space after title
+        
+        if (supplementData.length > 0) {
+            // Show only first 10 entries to save space
+            const entriesToShow = supplementData.slice(0, 10);
+            entriesToShow.forEach((entry, index) => {
+                if (currentY > pageHeight - 20) {
+                    doc.addPage();
+                    currentY = 20;
+                }
+                doc.text(`• ${entry.child}: ${entry.type} - ${entry.details}`, 20, currentY);
+                currentY += 6;
+            });
+            
+            if (supplementData.length > 10) {
+                doc.text(`... and ${supplementData.length - 10} more entries`, 20, currentY);
+                currentY += 10;
+            }
+        } else {
+            doc.text("No immunization/supplement data recorded.", 20, currentY);
+            currentY += 15;
+        }
+
+        // --- 7. SIGNATURES ---
+        // Ensure we have enough space for signatures
+        if (currentY > pageHeight - 60) {
+            doc.addPage();
+            currentY = 20;
+        } else {
+            currentY += 10; // Add some space before signatures
+        }
+        
+        doc.setFontSize(10).setFont(undefined, 'bold').setTextColor(0, 0, 0);
+        doc.text("PREPARED BY (BNS):", 15, currentY);
+        doc.line(15, currentY + 5, 70, currentY + 5);
+        doc.setFontSize(8).setFont(undefined, 'normal');
+        if (currentUserProfile) {
+            doc.text(`${currentUserProfile.first_name} ${currentUserProfile.last_name}`, 15, currentY + 10);
+            doc.text(`Barangay Nutrition Scholar`, 15, currentY + 15);
+        }
+        doc.text(`Date: ${new Date().toLocaleDateString()}`, 15, currentY + 20);
+
+        doc.setFontSize(10).setFont(undefined, 'bold');
+        doc.text("NOTED BY (MIDWIFE):", pageWidth/2, currentY);
+        doc.line(pageWidth/2, currentY + 5, pageWidth/2 + 60, currentY + 5);
+        doc.setFontSize(8).setFont(undefined, 'normal');
+        doc.text("___________________________", pageWidth/2, currentY + 10);
+        doc.text("Signature over Printed Name", pageWidth/2, currentY + 15);
+        doc.text("Date: _______________", pageWidth/2, currentY + 20);
+
+        // --- FOOTER ---
+        doc.setFontSize(8).setTextColor(150, 150, 150);
+        doc.text("CONFIDENTIAL - Barangay Health Center Internal Document", pageWidth/2, pageHeight - 10, { align: "center" });
+
+        // Save the PDF
+        const fileName = `Child_Health_Report_${name.replace(/ /g, '_')}_${year}.pdf`;
+        doc.save(fileName);
+        
+        setIsGenerating(false);
+        
+        // Log activity
+        await logActivity('Child Health Report Generated', 
+            `Generated comprehensive child health report: ${name} ${year} with ${data.children.length} children`);
+        
+        addNotification(`Child health report "${fileName}" generated successfully.`, 'success');
+    };
+
+    // Generate inventory report PDF (similar to BHW but for BNS)
+    const generateInventoryReport = async (reportItem) => {
+        const { name, year, data } = reportItem;
+        
+        // Check if data exists
+        if (!data.inventory || data.inventory.length === 0) {
+            setShowNoDataPop(true);
+            setTimeout(() => setShowNoDataPop(false), 2000);
+            addNotification('No inventory data available for this period.', 'warning');
+            return;
+        }
+
+        setIsGenerating(true);
+        const leftLogo = await loadImage(leftLogoIcon);
+        const rightLogo = await loadImage(rightLogoIcon);
+        
+        const doc = new jsPDF('portrait');
+        const pageWidth = doc.internal.pageSize.width;
+        const pageHeight = doc.internal.pageSize.height;
+        
+        // --- HEADER SECTION ---
+        doc.setDrawColor(200);
+        // Left Logo Placeholder
+        if (leftLogo) {
+            doc.addImage(leftLogo, 'PNG', 15, 10, 25, 25);
+        } else {
+            doc.rect(15, 10, 25, 25);
+        }
+        
+        // 3. Add Right Logo
+        if (rightLogo) {
+            doc.addImage(rightLogo, 'PNG', pageWidth - 40, 10, 25, 25);
+        } else {
+            doc.rect(pageWidth - 40, 10, 25, 25);
+        }
+
+        // Main Title
+        doc.setFontSize(12).setFont(undefined, 'bold').setTextColor(0, 0, 0);
+        doc.text("BARANGAY SAN MIGUEL HEALTH CENTER", pageWidth / 2, 20, { align: "center" });
+        doc.setFontSize(10);
+        doc.text("BNS INVENTORY STATUS REPORT", pageWidth / 2, 28, { align: "center" });
+        
+        // Report Details
+        doc.setFontSize(10);
+        doc.text(`Report: ${name} ${year}`, 15, 40);
+        doc.text(`Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`, pageWidth - 15, 40, { align: "right" });
+        
+        // Generated By (from user profile)
+        if (currentUserProfile) {
+            doc.text(`Generated By: ${currentUserProfile.first_name} ${currentUserProfile.last_name} (BNS)`, 15, 45);
+        }
+
+        doc.line(15, 50, pageWidth - 15, 50);
+
+        let currentY = 60;
+
+        // --- 1. INVENTORY SUMMARY SECTION ---
+        doc.setFontSize(12).setFont(undefined, 'bold').setTextColor(41, 128, 185);
+        doc.text("1. INVENTORY SUMMARY", 15, currentY);
+        doc.setFontSize(10).setFont(undefined, 'normal').setTextColor(0, 0, 0);
+        
+        const summary = data.summary;
+        const summaryCol1 = 15;
+        const summaryCol2 = 80;
+        const summaryCol3 = 130;
+        
+        doc.text(`Total Items: ${summary.totalItems}`, summaryCol1, currentY + 10);
+        doc.text(`Total Quantity: ${summary.totalQuantity} units`, summaryCol1, currentY + 16);
+        
+        doc.text(`Normal Stock: ${summary.normalCount}`, summaryCol2, currentY + 10);
+        doc.text(`Low Stock: ${summary.lowCount}`, summaryCol2, currentY + 16);
+        doc.text(`Critical Stock: ${summary.criticalCount}`, summaryCol2, currentY + 22);
+        
+        doc.text(`Expired Items: ${summary.expiredCount}`, summaryCol3, currentY + 10);
+        doc.text(`Near Expiry (30 days): ${summary.nearExpiryCount}`, summaryCol3, currentY + 16);
+
+        currentY += 35;
+
+        // --- 2. DISTRIBUTION TABLES ---
+        doc.setFontSize(12).setFont(undefined, 'bold').setTextColor(41, 128, 185);
+        doc.text("2. DISTRIBUTION ANALYSIS", 15, currentY);
+        
+        // Category Distribution
+        const catRows = Object.entries(summary.byCategory).map(([cat, count]) => [cat, count.toString()]);
         autoTable(doc, {
             startY: currentY + 5,
-            head: [['ID', 'Name', 'Sex', 'Weight', 'Status', 'Reg. Date']],
-            body: childRows,
+            head: [['Category', 'Number of Items']],
+            body: catRows,
+            theme: 'striped',
+            headStyles: { fillColor: [41, 128, 185] },
+            margin: { left: 15 }
+        });
+
+        // Source Distribution
+        const sourceRows = Object.entries(summary.bySource).map(([source, count]) => [source, count.toString()]);
+        autoTable(doc, {
+            startY: doc.lastAutoTable.finalY + 10,
+            head: [['Supply Source', 'Number of Items']],
+            body: sourceRows,
             theme: 'striped',
             headStyles: { fillColor: [39, 174, 96] },
-            styles: { fontSize: 8 },
+            margin: { left: 15 }
         });
 
-        // --- SECTION 3: CHECKUP ACTIVITY ---
         currentY = doc.lastAutoTable.finalY + 15;
-        if (currentY > 250) { doc.addPage(); currentY = 20; }
+
+        // --- 3. DETAILED INVENTORY LIST ---
+        doc.setFontSize(12).setFont(undefined, 'bold').setTextColor(41, 128, 185);
+        doc.text("3. DETAILED INVENTORY LIST", 15, currentY);
         
-        doc.setFontSize(12).setTextColor(39, 174, 96).text("3. Child Check-up Activity", 15, currentY);
-        
-        const checkupRows = activeCheckups.map(c => [
-            c.last_checkup ? new Date(c.last_checkup).toLocaleDateString() : 'N/A',
-            `${c.last_name}, ${c.first_name}`,
-            c.child_id,
-            c.weight_kg ? `${c.weight_kg}kg` : '-',
-            c.height_cm ? `${c.height_cm}cm` : '-',
-            c.nutrition_status
+        const detailedRows = data.inventory.map(item => [
+            item.item_name || '-',
+            item.category || '-',
+            item.sku || '-',
+            item.batch_no || '-',
+            `${item.quantity || 0} ${item.unit || ''}`,
+            item.status || '-',
+            item.expiry_date ? new Date(item.expiry_date).toLocaleDateString() : '-',
+            item.supplier || '-',
+            item.owner_role || '-'
         ]);
 
         autoTable(doc, {
             startY: currentY + 5,
-            head: [['Date', 'Child Name', 'ID', 'Wt', 'Ht', 'Status']],
-            body: checkupRows,
-            theme: 'striped',
-            headStyles: { fillColor: [41, 128, 185] }, 
-            styles: { fontSize: 8 },
-        });
-
-        // --- SECTION 4: INVENTORY ---
-        currentY = doc.lastAutoTable.finalY + 15;
-        if (currentY > 250) { doc.addPage(); currentY = 20; }
-
-        doc.setFontSize(12).setTextColor(39, 174, 96).text("4. Inventory Activity", 15, currentY);
-
-        const inventoryRows = inventory.map(i => [
-            i.item_name,
-            i.category,
-            `${i.quantity} ${i.unit || 'units'}`,
-            i.status,
-            new Date(i.updated_at || i.created_at).toLocaleDateString()
-        ]);
-
-        autoTable(doc, {
-            startY: currentY + 5,
-            head: [['Item Name', 'Category', 'Stock Level', 'Status', 'Date Updated']],
-            body: inventoryRows,
+            head: [['Item Name', 'Category', 'SKU', 'Batch No', 'Quantity', 'Status', 'Expiry Date', 'Supplier', 'Owner Role']],
+            body: detailedRows,
             theme: 'grid',
-            headStyles: { fillColor: [230, 126, 34] }, 
+            headStyles: { fillColor: [230, 126, 34] },
             styles: { fontSize: 8 },
+            margin: { left: 15, right: 15 }
         });
 
-        doc.save(`${fileName}.pdf`);
+        currentY = doc.lastAutoTable.finalY + 10;
+
+        // --- 4. EXPIRY & BATCH MONITORING ---
+        if (data.inventory.some(item => item.expiry_date)) {
+            if (currentY > pageHeight - 40) {
+                doc.addPage();
+                currentY = 20;
+            }
+            
+            doc.setFontSize(12).setFont(undefined, 'bold').setTextColor(41, 128, 185);
+            doc.text("4. EXPIRY & BATCH MONITORING", 15, currentY);
+            
+            const expiryRows = data.inventory
+                .filter(item => item.expiry_date)
+                .map(item => {
+                    // Fix: Properly handle the expiry status calculation
+                    let daysRemaining = 'N/A';
+                    let status = 'No Expiry Date';
+                    
+                    if (item.expiry_date) {
+                        const expiryDate = new Date(item.expiry_date);
+                        const today = new Date();
+                        const diffTime = expiryDate - today;
+                        daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                        
+                        if (daysRemaining < 0) {
+                            status = 'EXPIRED';
+                        } else if (daysRemaining <= 30) {
+                            // CHANGE THIS:
+                            // status = 'Urgent (≤30 days)'; 
+                            // TO THIS:
+                            status = 'Urgent (<= 30 days)'; 
+                        } else if (daysRemaining <= 60) {
+                            // CHANGE THIS:
+                            // status = 'Warning (≤60 days)';
+                            // TO THIS:
+                            status = 'Warning (<= 60 days)';
+                        } else if (daysRemaining <= 90) {
+                            // CHANGE THIS:
+                            // status = 'Monitor (≤90 days)';
+                            // TO THIS:
+                            status = 'Monitor (<= 90 days)';
+                        } else {
+                            status = 'Safe (> 90 days)';
+                        }
+                    }
+                    
+                    return [
+                        item.item_name,
+                        item.batch_no || '-',
+                        item.expiry_date ? new Date(item.expiry_date).toLocaleDateString() : '-',
+                        daysRemaining === 'N/A' ? 'N/A' : `${daysRemaining} days`,
+                        status,
+                        item.quantity || 0
+                    ];
+                })
+                .sort((a, b) => {
+                    // Sort by days remaining (expired first, then urgent, etc.)
+                    const daysA = a[3] === 'N/A' ? Infinity : parseInt(a[3]);
+                    const daysB = b[3] === 'N/A' ? Infinity : parseInt(b[3]);
+                    return daysA - daysB;
+                });
+
+            if (expiryRows.length > 0) {
+                autoTable(doc, {
+                    startY: currentY + 5,
+                    head: [['Item Name', 'Batch No', 'Expiry Date', 'Days Remaining', 'Status', 'Qty']],
+                    body: expiryRows,
+                    theme: 'striped',
+                    headStyles: { fillColor: [192, 57, 43] },
+                    styles: { fontSize: 8 },
+                    margin: { left: 15 },
+                    columnStyles: {
+                        0: { cellWidth: 40 }, // Item Name
+                        1: { cellWidth: 25 }, // Batch No
+                        2: { cellWidth: 25 }, // Expiry Date
+                        3: { cellWidth: 25 }, // Days Remaining
+                        4: { cellWidth: 35 }, // Status
+                        5: { cellWidth: 15 }  // Qty
+                    }
+                });
+                currentY = doc.lastAutoTable.finalY + 10;
+            }
+        }
+
+        // --- 5. REMARKS & NOTES ---
+        if (currentY > pageHeight - 60) {
+            doc.addPage();
+            currentY = 20;
+        }
+        
+        doc.setFontSize(12).setFont(undefined, 'bold').setTextColor(41, 128, 185);
+        doc.text("5. REMARKS & RECOMMENDATIONS", 15, currentY);
+        doc.setFontSize(10).setFont(undefined, 'normal').setTextColor(0, 0, 0);
+        
+        const remarks = [
+            summary.criticalCount > 0 ? `• ${summary.criticalCount} items require immediate reorder (Critical stock)` : '',
+            summary.lowCount > 0 ? `• ${summary.lowCount} items need replenishment (Low stock)` : '',
+            summary.expiredCount > 0 ? `• ${summary.expiredCount} expired items require disposal` : '',
+            summary.nearExpiryCount > 0 ? `• ${summary.nearExpiryCount} items nearing expiry (within 30 days)` : '',
+            '• Regular inventory audit recommended',
+            '• Update stock levels after distribution'
+        ].filter(r => r !== '');
+
+        if (remarks.length > 0) {
+            remarks.forEach((remark, index) => {
+                doc.text(remark, 20, currentY + 10 + (index * 5));
+            });
+        } else {
+            doc.text("No urgent actions required. Inventory status is satisfactory.", 20, currentY + 10);
+        }
+
+        currentY += remarks.length * 5 + 20;
+
+        // --- 6. SIGNATURES ---
+        doc.setFontSize(10).setFont(undefined, 'bold').setTextColor(0, 0, 0);
+        doc.text("PREPARED BY:", 15, currentY);
+        doc.line(15, currentY + 5, 70, currentY + 5);
+        doc.setFontSize(8).setFont(undefined, 'normal');
+        if (currentUserProfile) {
+            doc.text(`${currentUserProfile.first_name} ${currentUserProfile.last_name}`, 15, currentY + 10);
+            doc.text(`Barangay Nutrition Scholar`, 15, currentY + 15);
+        }
+        doc.text(`Date: ${new Date().toLocaleDateString()}`, 15, currentY + 20);
+
+        doc.setFontSize(10).setFont(undefined, 'bold');
+        doc.text("REVIEWED BY:", pageWidth/2, currentY);
+        doc.line(pageWidth/2, currentY + 5, pageWidth/2 + 55, currentY + 5);
+        doc.setFontSize(8).setFont(undefined, 'normal');
+        doc.text("Midwife / Health Officer", pageWidth/2, currentY + 10);
+        doc.text("Signature over Printed Name", pageWidth/2, currentY + 15);
+        doc.text("Date: _______________", pageWidth/2, currentY + 20);
+
+        // --- FOOTER ---
+        doc.setFontSize(8).setTextColor(150, 150, 150);
+        doc.text("CONFIDENTIAL - Barangay Health Center Internal Document", pageWidth/2, pageHeight - 10, { align: "center" });
+
+        // Save the PDF
+        const fileName = `BNS_Inventory_Report_${name.replace(/ /g, '_')}_${year}.pdf`;
+        doc.save(fileName);
+        
         setIsGenerating(false);
-        logActivity('Report Generated', `Created BNS PDF report for ${periodLabel}`);
-        addNotification('PDF Report generated successfully.', 'success');
+        
+        // Log activity
+        await logActivity('BNS Inventory Report Generated', 
+            `Generated BNS inventory report: ${name} ${year} with ${data.inventory.length} items`);
+        
+        addNotification(`BNS inventory report "${fileName}" generated successfully.`, 'success');
     };
 
-    // Handler for Quarterly Button
-    const handleQuarterDownload = (quarter) => {
-        const months = getQuarterMonths(quarter.id);
-        generateReport(
-            `BNS_Quarterly_Report_${quarter.name}_${quarter.year}`,
-            `${quarter.name} ${quarter.year}`,
-            months,
-            quarter.year // Pass year
-        );
+    // Main generate report function
+    const generateReport = async (reportItem) => {
+        if (reportItem.type === 'inventory') {
+            await generateInventoryReport(reportItem);
+        } else {
+            await generateChildHealthReport(reportItem);
+        }
     };
 
-    // Handler for Monthly Button
-    const handleMonthlyDownload = (monthIndex, year) => {
-        const monthName = new Date(year, monthIndex).toLocaleString('default', { month: 'long' });
-        generateReport(
-            `BNS_Monthly_Report_${monthName}_${year}`,
-            `${monthName} ${year}`,
-            [monthIndex],
-            year
-        );
-    };
+    // Generate report list based on filters
+    const reportList = useMemo(() => {
+        const list = [];
+        const monthNames = ["January", "February", "March", "April", "May", "June", 
+                           "July", "August", "September", "October", "November", "December"];
+        
+        // Determine start and end dates for each report period
+        if (frequency === 'quarterly') {
+            for (let q = 1; q <= 4; q++) {
+                const months = getQuarterMonths(q);
+                const startMonth = months[0];
+                const endMonth = months[2];
+                const startDate = new Date(currentYear, startMonth, 1);
+                const endDate = new Date(currentYear, endMonth + 1, 0); // Last day of end month
+                
+                list.push({
+                    id: `Q${q}_${reportType}`,
+                    name: `${q}${q === 1 ? 'st' : q === 2 ? 'nd' : q === 3 ? 'rd' : 'th'} Quarter`,
+                    year: currentYear,
+                    type: reportType,
+                    months: months,
+                    startDate: startDate,
+                    endDate: endDate
+                });
+            }
+        } else {
+            monthNames.forEach((mName, idx) => {
+                const startDate = new Date(currentYear, idx, 1);
+                const endDate = new Date(currentYear, idx + 1, 0); // Last day of month
+                
+                list.push({
+                    id: `M${idx + 1}_${reportType}`,
+                    name: mName,
+                    year: currentYear,
+                    type: reportType,
+                    months: [idx],
+                    startDate: startDate,
+                    endDate: endDate
+                });
+            });
+        }
 
-    // --- REFACTORED: Dependent on 'currentYear' state ---
-    const quarterlyReports = useMemo(() => {
-        return [1, 2, 3, 4].map(q => {
-            const months = getQuarterMonths(q);
+        // Attach filtered data to each report
+        return list.map(item => {
+            let dataPackage = {};
             
-            // FILTER BY CURRENT YEAR
-            const newCount = allData.children.filter(c => {
-                const d = new Date(c.created_at);
-                return months.includes(d.getMonth()) && d.getFullYear() === currentYear;
-            }).length;
-            
-            const checkupCount = allData.children.filter(c => {
-                if (!c.last_checkup) return false;
-                const d = new Date(c.last_checkup);
-                return months.includes(d.getMonth()) && d.getFullYear() === currentYear;
-            }).length;
-            
+            if (item.type === 'children') {
+                // Filter child data for child health reports
+                const allChildren = allData.child_records;
+                const summary = calculateChildHealthSummary(allChildren, item.startDate, item.endDate);
+                dataPackage = { 
+                    children: allChildren,
+                    summary: summary,
+                    startDate: item.startDate,
+                    endDate: item.endDate
+                };
+            } else {
+                // Filter inventory data with additional filters
+                let filteredInv = allData.inventory.filter(i => {
+                    const d = new Date(i.updated_at || i.created_at);
+                    const monthMatch = item.months.includes(d.getMonth());
+                    const yearMatch = d.getFullYear() === currentYear;
+                    
+                    // Apply additional filters
+                    const categoryMatch = filterCategory === 'All' || i.category === filterCategory;
+                    const statusMatch = filterStatus === 'All' || 
+                                       (i.status && i.status.toLowerCase() === filterStatus.toLowerCase());
+                    const ownerMatch = filterOwnerRole === 'All' || i.owner_role === filterOwnerRole;
+                    
+                    return monthMatch && yearMatch && categoryMatch && statusMatch && ownerMatch;
+                });
+
+                // Calculate summary for this filtered data
+                const summary = calculateInventorySummary(filteredInv);
+                dataPackage = { 
+                    inventory: filteredInv,
+                    summary: summary
+                };
+            }
+
+            // Calculate "size" for display
+            let size = '0 Items';
+            if (item.type === 'children') {
+                size = `${dataPackage.children?.length || 0} Children`;
+            } else {
+                size = `${dataPackage.inventory?.length || 0} Items`;
+            }
+
             return { 
-                id: q, 
-                name: `${q}${q === 1 ? 'st' : q === 2 ? 'nd' : q === 3 ? 'rd' : 'th'} Quarter`, 
-                year: currentYear, 
-                type: "Analytics PDF", 
-                size: `${newCount} New / ${checkupCount} Checkups`
+                ...item, 
+                data: dataPackage, 
+                size: size
             };
         });
-    }, [allData, currentYear]);
+    }, [allData, currentYear, frequency, reportType, filterCategory, filterStatus, filterOwnerRole]);
 
     const filteredReports = useMemo(() => {
-        if (!searchTerm) return quarterlyReports;
-        return quarterlyReports.filter(r => r.name.toLowerCase().includes(searchTerm.toLowerCase()));
-    }, [searchTerm, quarterlyReports]);
+        if (!searchTerm) return reportList;
+        return reportList.filter(r => 
+            r.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            r.type.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+    }, [searchTerm, reportList]);
+
+    // Get unique categories, statuses, and owner roles for inventory filters
+    const uniqueCategories = useMemo(() => {
+        const categories = [...new Set(allData.inventory.map(item => item.category).filter(Boolean))];
+        return ['All', ...categories.sort()];
+    }, [allData.inventory]);
+
+    const uniqueStatuses = useMemo(() => {
+        const statuses = [...new Set(allData.inventory.map(item => item.status).filter(Boolean))];
+        return ['All', ...statuses.sort()];
+    }, [allData.inventory]);
+
+    // Get child health summary for sidebar
+    const childHealthSummary = useMemo(() => {
+        return calculateChildHealthSummary(
+            allData.child_records,
+            new Date(currentYear, 0, 1),
+            new Date(currentYear, 11, 31)
+        );
+    }, [allData.child_records, currentYear]);
 
     return (
         <>
             <AnimatePresence>
-                {selectedQuarter && (
-                    <ViewQuarterModal 
-                        quarter={selectedQuarter} 
-                        onClose={() => setSelectedQuarter(null)} 
-                        allData={allData}
-                        onDownloadMonth={handleMonthlyDownload}
+                {selectedReport && (
+                    <ViewReportModal 
+                        reportItem={selectedReport} 
+                        onClose={() => setSelectedReport(null)} 
+                        onDownload={generateReport}
                     />
                 )}
                 {isGenerating && <GeneratingModal />}
                 {showNoDataPop && (
-                    <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }} className="fixed bottom-6 right-6 bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg font-semibold z-50">
-                        ❌ No data available for this period
+                    <motion.div 
+                        initial={{ opacity: 0, scale: 0.8 }} 
+                        animate={{ opacity: 1, scale: 1 }} 
+                        exit={{ opacity: 0, scale: 0.8 }} 
+                        className="fixed bottom-6 right-6 bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg font-semibold z-50"
+                    >
+                        ❌ No data available for this period/filters
                     </motion.div>
                 )}
             </AnimatePresence>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 bg-white p-6 rounded-lg shadow-sm border">
-                    <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
-                        <div className="flex items-center space-x-4">
-                            <h2 className="text-2xl font-bold text-gray-800">Reports</h2>
+                    
+                    {/* --- CONTROLS HEADER --- */}
+                    <div className="flex flex-col space-y-4 mb-6">
+                        <div className="flex justify-between items-center">
+                            <h2 className="text-2xl font-bold text-gray-800">
+                                BNS Reports Dashboard
+                            </h2>
                             
-                            {/* --- YEAR SELECTOR --- */}
+                            {/* Year Selector */}
                             <div className="flex items-center bg-gray-100 rounded-lg p-1 space-x-2">
                                 <button 
                                     onClick={() => setCurrentYear(y => y - 1)} 
-                                    className="p-1 hover:bg-white rounded-md text-gray-600 hover:text-blue-600 transition-colors"
-                                    title="Previous Year"
+                                    className="p-1 hover:bg-white rounded-md text-gray-600 transition-colors"
                                 >
                                     <ChevronLeftIcon />
                                 </button>
-                                <span className="px-2 font-bold text-gray-700 select-none min-w-[3rem] text-center">{currentYear}</span>
+                                <span className="px-2 font-bold text-gray-700 select-none min-w-[3rem] text-center">
+                                    {currentYear}
+                                </span>
                                 <button 
                                     onClick={() => setCurrentYear(y => y + 1)} 
-                                    className="p-1 hover:bg-white rounded-md text-gray-600 hover:text-blue-600 transition-colors"
-                                    title="Next Year"
+                                    className="p-1 hover:bg-white rounded-md text-gray-600 transition-colors"
                                 >
                                     <ChevronRightIcon />
                                 </button>
                             </div>
                         </div>
 
-                        <div className="relative w-full md:w-auto">
-                            <span className="absolute inset-y-0 left-0 flex items-center pl-3"><SearchIcon /></span>
-                            <input type="text" placeholder="Search Quarter..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 form-input rounded-md border-gray-300 shadow-sm text-sm" />
+                        {/* Report Type & Frequency Toggles */}
+                        <div className="flex flex-col md:flex-row gap-4 justify-between">
+                            <div className="flex bg-gray-100 p-1 rounded-lg">
+                                <button 
+                                    onClick={() => setReportType('children')} 
+                                    className={`px-4 py-2 text-sm font-semibold rounded-md transition-all ${reportType === 'children' ? 'bg-white text-cyan-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                >
+                                    Child Health Reports
+                                </button>
+                                <button 
+                                    onClick={() => setReportType('inventory')} 
+                                    className={`px-4 py-2 text-sm font-semibold rounded-md transition-all ${reportType === 'inventory' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                >
+                                    Inventory Reports
+                                </button>
+                            </div>
+
+                            <div className="flex bg-gray-100 p-1 rounded-lg">
+                                <button 
+                                    onClick={() => setFrequency('quarterly')} 
+                                    className={`px-4 py-2 text-sm font-semibold rounded-md transition-all ${frequency === 'quarterly' ? 'bg-white text-green-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                >
+                                    Quarterly
+                                </button>
+                                <button 
+                                    onClick={() => setFrequency('monthly')} 
+                                    className={`px-4 py-2 text-sm font-semibold rounded-md transition-all ${frequency === 'monthly' ? 'bg-white text-green-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                >
+                                    Monthly
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Additional Filters for Inventory Reports */}
+                        {reportType === 'inventory' && (
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-blue-50 rounded-lg border">
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-700 mb-1">Filter by Category</label>
+                                    <select 
+                                        value={filterCategory}
+                                        onChange={(e) => setFilterCategory(e.target.value)}
+                                        className="w-full text-sm border rounded-md px-3 py-2 bg-white"
+                                    >
+                                        {uniqueCategories.map(cat => (
+                                            <option key={cat} value={cat}>{cat}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-700 mb-1">Filter by Status</label>
+                                    <select 
+                                        value={filterStatus}
+                                        onChange={(e) => setFilterStatus(e.target.value)}
+                                        className="w-full text-sm border rounded-md px-3 py-2 bg-white"
+                                    >
+                                        {uniqueStatuses.map(status => (
+                                            <option key={status} value={status}>{status}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                                        Filter by Owner
+                                        <span className="text-blue-600 ml-1">(BNS Only)</span>
+                                    </label>
+                                    <select 
+                                        value={filterOwnerRole}
+                                        onChange={(e) => setFilterOwnerRole(e.target.value)}
+                                        className="w-full text-sm border rounded-md px-3 py-2 bg-gray-100 cursor-not-allowed"
+                                        disabled={true}
+                                    >
+                                        <option value="BNS">BNS</option>
+                                    </select>
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        Locked to BNS role
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Search Bar */}
+                        <div className="relative w-full">
+                            <span className="absolute inset-y-0 left-0 flex items-center pl-3">
+                                <SearchIcon />
+                            </span>
+                            <input 
+                                type="text" 
+                                placeholder="Search reports..." 
+                                value={searchTerm} 
+                                onChange={(e) => setSearchTerm(e.target.value)} 
+                                className="w-full pl-10 pr-4 py-2 form-input rounded-md border-gray-300 shadow-sm text-sm" 
+                            />
                         </div>
                     </div>
+
+                    {/* Reports Table */}
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead className="bg-gray-50">
                                 <tr className="text-left text-gray-600">
-                                    {['Report ID', 'Report Name', 'Year', 'Format', 'Data Volume', 'Actions'].map(h => <th key={h} className="p-3 font-semibold">{h}</th>)}
+                                    {['Report Name', 'Period', 'Type', 'Data Volume', 'Actions'].map(h => (
+                                        <th key={h} className="p-3 font-semibold">{h}</th>
+                                    ))}
                                 </tr>
                             </thead>
                             <tbody className="divide-y">
-                                {loading ? <tr><td colSpan="6" className="text-center p-4">Loading...</td></tr> : filteredReports.map(report => (
-                                    <tr key={report.id} className="text-gray-700 hover:bg-gray-50 transition-colors">
-                                        <td className="p-3">RPT-Q{report.id}</td>
-                                        <td className="p-3 font-semibold text-gray-800">{report.name}</td>
-                                        <td className="p-3 font-bold text-blue-600">{report.year}</td>
-                                        <td className="p-3"><span className="bg-red-100 text-red-700 px-2 py-0.5 rounded text-xs font-bold">PDF</span></td>
-                                        <td className="p-3">{report.size}</td>
-                                        <td className="p-3 flex items-center space-x-2">
-                                            <button onClick={() => handleQuarterDownload(report)} className="text-blue-600 hover:text-blue-800 bg-blue-50 p-2 rounded-full hover:bg-blue-100 transition-colors" title="Download Quarterly Report"><DownloadIcon /></button>
-                                            <button onClick={() => setSelectedQuarter(report)} className="text-gray-500 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors" title="View & Monthly Downloads"><ViewIcon /></button>
+                                {loading ? (
+                                    <tr>
+                                        <td colSpan="5" className="text-center p-8">
+                                            <div className="flex flex-col items-center">
+                                                <svg className="animate-spin h-8 w-8 text-blue-600 mb-2" fill="none" viewBox="0 0 24 24">
+                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                </svg>
+                                                <span>Loading report data...</span>
+                                            </div>
                                         </td>
                                     </tr>
-                                ))}
+                                ) : filteredReports.length === 0 ? (
+                                    <tr>
+                                        <td colSpan="5" className="text-center p-8 text-gray-500">
+                                            No reports available for the selected filters.
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    filteredReports.map(report => (
+                                        <tr key={report.id} className="text-gray-700 hover:bg-gray-50 transition-colors">
+                                            <td className="p-3 font-semibold text-gray-800">{report.name}</td>
+                                            <td className="p-3">{report.year}</td>
+                                            <td className="p-3 capitalize">
+                                                <span className={`px-2 py-1 rounded-full text-xs font-semibold 
+                                                    ${report.type === 'inventory' ? 'bg-blue-100 text-blue-800' : 
+                                                      'bg-cyan-100 text-cyan-800'}`}>
+                                                    {report.type === 'inventory' ? 'Inventory' : 'Child Health'}
+                                                </span>
+                                            </td>
+                                            <td className="p-3">
+                                                <span className="font-semibold">{report.size}</span>
+                                                {report.type === 'children' && (
+                                                    <span className="text-xs text-gray-500 ml-2">
+                                                        ({report.data.summary.underweight} underweight)
+                                                    </span>
+                                                )}
+                                                {report.type === 'inventory' && report.data.summary && (
+                                                    <span className="text-xs text-gray-500 ml-2">
+                                                        ({report.data.summary.criticalCount} critical)
+                                                    </span>
+                                                )}
+                                            </td>
+                                            <td className="p-3 flex items-center space-x-2">
+                                                <button 
+                                                    onClick={() => generateReport(report)}
+                                                    className={`p-2 rounded-full transition-colors ${
+                                                        report.type === 'children' ? 'bg-cyan-50 text-cyan-600 hover:bg-cyan-100 hover:text-cyan-800' :
+                                                        'bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-800'
+                                                    }`}
+                                                    title="Download PDF Report"
+                                                >
+                                                    <DownloadIcon />
+                                                </button>
+                                                <button 
+                                                    onClick={() => setSelectedReport(report)}
+                                                    className="text-gray-500 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors"
+                                                    title="View Summary"
+                                                >
+                                                    <ViewIcon />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
                             </tbody>
                         </table>
                     </div>
                 </div>
-                <div className="lg:col-span-1">
-                    <Calendar />
+
+                {/* Sidebar with Statistics */}
+                <div className="lg:col-span-1 space-y-6">
+                    <div className="bg-white p-4 rounded-lg shadow-sm border">
+                        <h3 className="font-bold text-gray-700 mb-3">Report Generation Summary</h3>
+                        <div className="space-y-3 text-sm">
+                            <div className="flex justify-between">
+                                <span className="text-gray-600">Current Year:</span>
+                                <span className="font-semibold">{currentYear}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-gray-600">Report Type:</span>
+                                <span className="font-semibold capitalize">
+                                    {reportType === 'children' ? 'Child Health' : 'Inventory'}
+                                </span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-gray-600">Frequency:</span>
+                                <span className="font-semibold">{frequency}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-gray-600">Reports Available:</span>
+                                <span className="font-semibold">{reportList.length}</span>
+                            </div>
+                            {reportType === 'inventory' && (
+                                <div className="border-t pt-3 mt-3 space-y-2">
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-600">Category Filter:</span>
+                                        <span className="font-semibold">{filterCategory}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-600">Status Filter:</span>
+                                        <span className="font-semibold">{filterStatus}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-600">Owner Filter:</span>
+                                        <span className="font-semibold">
+                                            {filterOwnerRole}
+                                            <span className="text-blue-600 ml-1">(Locked)</span>
+                                        </span>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                    
+                    {/* Child Health Snapshot */}
+                    {reportType === 'children' && (
+                        <div className="bg-white p-4 rounded-lg shadow-sm border border-cyan-200">
+                            <h3 className="font-bold text-gray-700 mb-3">Child Health Snapshot</h3>
+                            <div className="space-y-2 text-sm">
+                                <div className="flex justify-between">
+                                    <span className="text-gray-600">Total Children:</span>
+                                    <span className="font-semibold">{childHealthSummary.totalChildren}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-gray-600">Age 0-11 months:</span>
+                                    <span className="font-semibold text-purple-600">
+                                        {childHealthSummary.age0to11}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-gray-600">Age 1-4 years:</span>
+                                    <span className="font-semibold text-indigo-600">
+                                        {childHealthSummary.age1to4}
+                                    </span>
+                                </div>
+                                <div className="pt-2 border-t">
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-600">Underweight:</span>
+                                        <span className="font-semibold text-yellow-600">
+                                            {childHealthSummary.underweight}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-600">Normal Nutrition:</span>
+                                        <span className="font-semibold text-green-600">
+                                            {childHealthSummary.normal}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Overall System Statistics */}
+                    <div className="bg-white p-4 rounded-lg shadow-sm border">
+                        <h3 className="font-bold text-gray-700 mb-3">BNS System Overview</h3>
+                        <div className="space-y-2 text-sm">
+                            <div className="flex justify-between">
+                                <span className="text-gray-600">Total Children:</span>
+                                <span className="font-semibold">{allData.child_records.length}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-gray-600">BNS Inventory Items:</span>
+                                <span className="font-semibold">{allData.inventory.filter(i => i.owner_role === 'BNS').length}</span>
+                            </div>
+                            <div className="pt-2 border-t text-xs text-gray-500">
+                                <p>Last updated: {new Date().toLocaleDateString()}</p>
+                                <p>User: {currentUserProfile?.first_name} {currentUserProfile?.last_name}</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </>

@@ -69,6 +69,26 @@ const DeleteConfirmationModal = ({ itemName, onConfirm, onCancel }) => (
 );
 
 const ViewItemModal = ({ item, onClose }) => {
+    // Add null check at the beginning
+    if (!item) {
+        return (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
+                <motion.div
+                    className="bg-white rounded-lg shadow-2xl w-full max-w-lg p-6"
+                    initial={{ opacity: 0, y: -30 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 30 }}
+                >
+                    <h2 className="text-xl font-bold text-gray-800 mb-4">Error Loading Item</h2>
+                    <p className="text-sm text-gray-600 mb-4">Item data could not be loaded. Please try again.</p>
+                    <div className="flex justify-end mt-6">
+                        <button onClick={onClose} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-semibold text-sm">Close</button>
+                    </div>
+                </motion.div>
+            </div>
+        );
+    }
+    
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
             <motion.div

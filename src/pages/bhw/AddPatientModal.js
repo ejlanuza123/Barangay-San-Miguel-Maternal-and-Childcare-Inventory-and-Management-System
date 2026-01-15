@@ -199,15 +199,16 @@ const Step1 = ({ formData, handleChange, handleDobChange, newPatientId }) => (
                 onChange={handleChange}
                 className="w-full p-2 border rounded-md text-sm bg-gray-50"
               >
-                <option>Select Blood Type</option>
-                <option>A+</option>
-                <option>A-</option>
-                <option>B+</option>
-                <option>B-</option>
-                <option>AB+</option>
-                <option>AB-</option>
-                <option>O+</option>
-                <option>O-</option>
+                <option value="">Select Blood Type</option>
+                <option value="A+">A+</option>
+                <option value="A-">A-</option>
+                <option value="B+">B+</option>
+                <option value="B-">B-</option>
+                <option value="AB+">AB+</option>
+                <option value="AB-">AB-</option>
+                <option value="O+">O+</option>
+                <option value="O-">O-</option>
+                <option value="Unknown">Unknown</option>
               </select>
             </div>
             <div>
@@ -412,200 +413,235 @@ const Step1 = ({ formData, handleChange, handleDobChange, newPatientId }) => (
   </div>
 );
 
-const Step2 = ({ formData, handleChange, isReadOnly }) => (
-  <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
-    
-    {/* --- BANNER FOR BHW --- */}
-    <div className="md:col-span-5">
-      <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4 rounded shadow-sm flex items-start">
-        <svg className="w-6 h-6 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
-        </svg>
+const Step2 = ({ formData, handleChange }) => {
+  const [pregnancyRows, setPregnancyRows] = useState([{ gravida: 1 }]);
+
+  const addRow = () => {
+    setPregnancyRows([...pregnancyRows, { gravida: pregnancyRows.length + 1 }]);
+  };
+
+  const removeRow = (index) => {
+    if (pregnancyRows.length > 1) {
+      const newRows = pregnancyRows.filter((_, i) => i !== index);
+      setPregnancyRows(newRows);
+    }
+  };
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
+      <div className="md:col-span-3">
+        <div className="flex justify-between items-center mb-2">
+          <h3 className="font-semibold text-gray-700">Pregnancy History</h3>
+          <button
+            type="button"
+            onClick={addRow}
+            className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
+          >
+            + Add Row
+          </button>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border">
+            <thead className="bg-gray-50">
+              <tr>
+                {["Gravida", "Outcome", "Sex", "NSD/CS", "Delivered At", ""].map(
+                  (h) => (
+                    <th key={h} className="p-2 border font-medium text-xs">
+                      {h}
+                    </th>
+                  )
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {pregnancyRows.map((row, index) => (
+                <tr key={index}>
+                  <td className="p-1 border">
+                    <input
+                      type="number"
+                      name={`pregnancy_${index}_gravida`}
+                      value={formData[`pregnancy_${index}_gravida`] || row.gravida}
+                      onChange={handleChange}
+                      className="w-full p-1 border rounded text-xs"
+                      min="1"
+                      placeholder="Gravida #"
+                    />
+                  </td>
+                  <td className="p-1 border">
+                    <select
+                      name={`pregnancy_${index}_outcome`}
+                      value={formData[`pregnancy_${index}_outcome`] || ""}
+                      onChange={handleChange}
+                      className="w-full p-1 border rounded text-xs"
+                    >
+                      <option value="">Select Outcome</option>
+                      <option value="Live Birth">Live Birth</option>
+                      <option value="Stillbirth">Stillbirth</option>
+                      <option value="Abortion">Abortion</option>
+                      <option value="Miscarriage">Miscarriage</option>
+                      <option value="Ectopic">Ectopic</option>
+                      <option value="Molar">Molar</option>
+                    </select>
+                  </td>
+                  <td className="p-1 border">
+                    <select
+                      name={`pregnancy_${index}_sex`}
+                      value={formData[`pregnancy_${index}_sex`] || ""}
+                      onChange={handleChange}
+                      className="w-full p-1 border rounded text-xs"
+                    >
+                      <option value="">Select Sex</option>
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                      <option value="Unknown">Unknown</option>
+                      <option value="Multiple">Multiple</option>
+                    </select>
+                  </td>
+                  <td className="p-1 border">
+                    <select
+                      name={`pregnancy_${index}_delivery_type`}
+                      value={formData[`pregnancy_${index}_delivery_type`] || ""}
+                      onChange={handleChange}
+                      className="w-full p-1 border rounded text-xs"
+                    >
+                      <option value="">Select Type</option>
+                      <option value="NSD">NSD (Normal Spontaneous Delivery)</option>
+                      <option value="CS">CS (Cesarean Section)</option>
+                      <option value="Assisted">Assisted Delivery</option>
+                      <option value="VBAC">VBAC</option>
+                    </select>
+                  </td>
+                  <td className="p-1 border">
+                    <input
+                      type="text"
+                      name={`pregnancy_${index}_delivered_at`}
+                      value={formData[`pregnancy_${index}_delivered_at`] || ""}
+                      onChange={handleChange}
+                      className="w-full p-1 border rounded text-xs"
+                      placeholder="e.g. Hospital, Home, Clinic"
+                    />
+                  </td>
+                  <td className="p-1 border text-center">
+                    {pregnancyRows.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeRow(index)}
+                        className="text-red-500 hover:text-red-700 text-xs"
+                        title="Remove row"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div className="md:col-span-2 space-y-4">
         <div>
-          <p className="font-bold">Restricted Access</p>
-          <p className="text-sm">
-            Only Midwives can enter or edit Pregnancy & OB History. 
-            This step is hidden for BHW users. Please proceed to the next step.
-          </p>
+          <h3 className="font-semibold text-gray-700 mb-2">
+            Past Menstrual Period
+          </h3>
+          <div className="space-y-2">
+            <div>
+              <label className="text-xs text-gray-500">
+                Last Menstrual Period (LMP)
+              </label>
+              <input
+                type="date"
+                name="lmp"
+                value={formData.lmp || ""}
+                onChange={handleChange}
+                className="w-full p-2 border rounded-md text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500">Risk Code</label>
+              <input
+                type="text"
+                name="risk_code"
+                value={formData.risk_code || ""}
+                onChange={handleChange}
+                className="w-full p-2 border rounded-md text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500">
+                Expected Date of Confinement (EDC)
+              </label>
+              <input
+                type="date"
+                name="edc"
+                value={formData.edc || ""}
+                onChange={handleChange}
+                className="w-full p-2 border rounded-md text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500">Age of First Period</label>
+              <input
+                type="number"
+                name="age_first_period"
+                value={formData.age_first_period || ""}
+                onChange={handleChange}
+                className="w-full p-2 border rounded-md text-sm"
+                min="8"
+                max="20"
+              />
+            </div>
+          </div>
+        </div>
+        <div>
+          <h3 className="font-semibold text-gray-700 mb-2">OB History</h3>
+          <div className="space-y-2">
+            <div>
+              <label className="text-xs text-gray-500">Age of Menarche</label>
+              <input
+                type="number"
+                name="age_of_menarche"
+                value={formData.age_of_menarche || ""}
+                onChange={handleChange}
+                className="w-full p-2 border rounded-md text-sm"
+                min="8"
+                max="20"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500">Amount of Bleeding</label>
+              <select
+                name="bleeding_amount"
+                value={formData.bleeding_amount || ""}
+                onChange={handleChange}
+                className="w-full p-2 border rounded-md text-sm bg-gray-50"
+              >
+                <option value="">Select amount</option>
+                <option value="Scanty">Scanty</option>
+                <option value="Moderate">Moderate</option>
+                <option value="Heavy">Heavy</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500">
+                Duration of Menstruation (days)
+              </label>
+              <input
+                type="number"
+                name="menstruation_duration"
+                value={formData.menstruation_duration || ""}
+                onChange={handleChange}
+                className="w-full p-2 border rounded-md text-sm"
+                min="1"
+                max="10"
+              />
+            </div>
+          </div>
         </div>
       </div>
     </div>
-
-    {/* Hide all form content for BHW users */}
-    {!isReadOnly ? (
-      <>
-        <div className="md:col-span-3">
-          <h3 className="font-semibold text-gray-700 mb-2">Pregnancy History</h3>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm border">
-              <thead className="bg-gray-50">
-                <tr>
-                  {["Gravida", "Outcome", "Sex", "NSD/CS", "Delivered At"].map(
-                    (h) => (
-                      <th key={h} className="p-2 border font-medium text-xs">
-                        {h}
-                      </th>
-                    )
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {Array.from({ length: 10 }, (_, i) => i + 1).map((g) => (
-                  <tr key={g}>
-                    <td className="p-1 border text-center font-semibold text-gray-600">
-                      G{g}
-                    </td>
-                    <td className="p-1 border">
-                      <input
-                        type="text"
-                        name={`g${g}_outcome`}
-                        value={formData[`g${g}_outcome`] || ""}
-                        onChange={handleChange}
-                        className="w-full p-1 border-none text-xs focus:ring-0"
-                      />
-                    </td>
-                    <td className="p-1 border">
-                      <input
-                        type="text"
-                        name={`g${g}_sex`}
-                        value={formData[`g${g}_sex`] || ""}
-                        onChange={handleChange}
-                        className="w-full p-1 border-none text-xs focus:ring-0"
-                      />
-                    </td>
-                    <td className="p-1 border">
-                      <input
-                        type="text"
-                        name={`g${g}_delivery_type`}
-                        value={formData[`g${g}_delivery_type`] || ""}
-                        onChange={handleChange}
-                        className="w-full p-1 border-none text-xs focus:ring-0"
-                      />
-                    </td>
-                    <td className="p-1 border">
-                      <input
-                        type="text"
-                        name={`g${g}_delivered_at`}
-                        value={formData[`g${g}_delivered_at`] || ""}
-                        onChange={handleChange}
-                        className="w-full p-1 border-none text-xs focus:ring-0"
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-        <div className="md:col-span-2 space-y-4">
-          <div>
-            <h3 className="font-semibold text-gray-700 mb-2">
-              Past Menstrual Period
-            </h3>
-            <div className="space-y-2">
-              <div>
-                <label className="text-xs text-gray-500">
-                  Last Menstrual Period (LMP)
-                </label>
-                <input
-                  type="date"
-                  name="lmp"
-                  value={formData.lmp || ""}
-                  onChange={handleChange}
-                  className="w-full p-2 border rounded-md text-sm"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500">Risk Code</label>
-                <input
-                  type="text"
-                  name="risk_code"
-                  value={formData.risk_code || ""}
-                  onChange={handleChange}
-                  className="w-full p-2 border rounded-md text-sm"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500">
-                  Expected Date of Confinement (EDC)
-                </label>
-                <input
-                  type="date"
-                  name="edc"
-                  value={formData.edc || ""}
-                  onChange={handleChange}
-                  className="w-full p-2 border rounded-md text-sm"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500">Age of First Period</label>
-                <input
-                  type="number"
-                  name="age_first_period"
-                  value={formData.age_first_period || ""}
-                  onChange={handleChange}
-                  className="w-full p-2 border rounded-md text-sm"
-                />
-              </div>
-            </div>
-          </div>
-          <div>
-            <h3 className="font-semibold text-gray-700 mb-2">OB History</h3>
-            <div className="space-y-2">
-              <div>
-                <label className="text-xs text-gray-500">Age of Menarche</label>
-                <input
-                  type="number"
-                  name="age_of_menarche"
-                  value={formData.age_of_menarche || ""}
-                  onChange={handleChange}
-                  className="w-full p-2 border rounded-md text-sm"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500">Amount of Bleeding</label>
-                <select
-                  name="bleeding_amount"
-                  value={formData.bleeding_amount || ""}
-                  onChange={handleChange}
-                  className="w-full p-2 border rounded-md text-sm bg-gray-50"
-                >
-                  <option>Select amount</option>
-                  <option>Scanty</option>
-                  <option>Moderate</option>
-                  <option>Heavy</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-xs text-gray-500">
-                  Duration of Menstruation (days)
-                </label>
-                <input
-                  type="number"
-                  name="menstruation_duration"
-                  value={formData.menstruation_duration || ""}
-                  onChange={handleChange}
-                  className="w-full p-2 border rounded-md text-sm"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      </>
-    ) : (
-      /* Show empty state for BHW users */
-      <div className="md:col-span-5 text-center py-12">
-        <div className="bg-gray-100 rounded-lg p-8 inline-block">
-          <svg className="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
-          </svg>
-          <h3 className="text-lg font-semibold text-gray-600">Content Restricted</h3>
-          <p className="text-gray-500 mt-2">Pregnancy & OB History can only be viewed/edited by Midwives.</p>
-        </div>
-      </div>
-    )}
-  </div>
-);
+  );
+};
 
 const Step3 = ({ formData, handleChange, inventoryItems, onAddToQueue }) => (
   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -737,69 +773,259 @@ const Step3 = ({ formData, handleChange, inventoryItems, onAddToQueue }) => (
 );
 
 const Step4 = ({ formData, handleChange, inventoryItems, onAddToQueue }) => {
+  const [treatmentRows, setTreatmentRows] = useState([{}]);
+  const [outcomeRows, setOutcomeRows] = useState([{}]);
+
+  const addTreatmentRow = () => {
+    setTreatmentRows([...treatmentRows, {}]);
+  };
+
+  const addOutcomeRow = () => {
+    setOutcomeRows([...outcomeRows, {}]);
+  };
+
   const treatmentHeaders = [
-    "Date",
-    "Arrival",
-    "Departure",
-    "Ht.",
-    "Wt.",
-    "BP",
-    "MUAC",
-    "BMI",
-    "AOG",
-    "FH",
-    "FHB",
-    "LOC",
-    "Pres",
-    "Fe+FA",
-    "Admitted",
-    "Examined",
+    { key: 'date', label: 'Date', type: 'date' },
+    { key: 'arrival', label: 'Arrival', type: 'time' },
+    { key: 'departure', label: 'Departure', type: 'time' },
+    { key: 'height', label: 'Ht. (cm)', type: 'number' },
+    { key: 'weight', label: 'Wt. (kg)', type: 'number' },
+    { key: 'bp', label: 'BP', type: 'text', placeholder: '120/80' },
+    { key: 'muac', label: 'MUAC (cm)', type: 'number' },
+    { key: 'bmi', label: 'BMI', type: 'number', readOnly: true },
+    { key: 'aog', label: 'AOG (wks)', type: 'number' },
+    { key: 'fh', label: 'FH (cm)', type: 'number' },
+    { key: 'fhb', label: 'FHB', type: 'select', options: ['+', '-', 'Not audible'] },
+    { key: 'loc', label: 'LOC', type: 'select', options: ['Vertex', 'Breech', 'Transverse', 'Oblique'] },
+    { key: 'presentation', label: 'Pres', type: 'select', options: ['Cephalic', 'Breech', 'Shoulder', 'Compound'] },
+    { key: 'fe_fa', label: 'Fe+FA', type: 'select', options: ['Given', 'Not Given', 'Refused'] },
+    { key: 'admitted', label: 'Admitted', type: 'select', options: ['Yes', 'No', 'Referred'] },
+    { key: 'examined', label: 'Examined', type: 'select', options: ['Complete', 'Partial', 'Not done'] }
   ];
+
   const outcomeHeaders = [
-    "Date Terminated",
-    "Type of Delivery",
-    "Outcome",
-    "Sex of Child",
-    "Birth Weight (g)",
-    "Age in Weeks",
-    "Place of Birth",
-    "Attended By",
+    { key: 'date_terminated', label: 'Date Terminated', type: 'date' },
+    { key: 'delivery_type', label: 'Type of Delivery', type: 'select', options: ['NSD', 'CS', 'Assisted', 'VBAC', 'Forceps', 'Vacuum'] },
+    { key: 'outcome', label: 'Outcome', type: 'select', options: ['Live Birth', 'Stillbirth', 'Neonatal Death', 'Miscarriage', 'Abortion'] },
+    { key: 'sex', label: 'Sex of Child', type: 'select', options: ['Male', 'Female', 'Multiple', 'Unknown'] },
+    { key: 'birth_weight', label: 'Birth Weight (g)', type: 'number' },
+    { key: 'age_weeks', label: 'Age in Weeks', type: 'number' },
+    { key: 'place_of_birth', label: 'Place of Birth', type: 'select', options: ['Hospital', 'Home', 'Birthing Center', 'Clinic', 'On the way'] },
+    { key: 'attended_by', label: 'Attended By', type: 'select', options: ['Doctor', 'Midwife', 'Nurse', 'Traditional Birth Attendant', 'Self'] }
   ];
+
+  // Calculate BMI if height and weight are provided
+  const calculateBMI = (height, weight) => {
+    if (height && weight && height > 0) {
+      const heightInMeters = height / 100;
+      return (weight / (heightInMeters * heightInMeters)).toFixed(1);
+    }
+    return '';
+  };
+
+  const handleTreatmentChange = (rowIndex, fieldKey, value) => {
+    const fieldName = `treatment_${rowIndex}_${fieldKey}`;
+    
+    // Update form data
+    handleChange({ 
+      target: { 
+        name: fieldName, 
+        value: value 
+      } 
+    });
+
+    // Auto-calculate BMI if height or weight changes
+    if (fieldKey === 'height' || fieldKey === 'weight') {
+      const height = fieldKey === 'height' ? value : formData[`treatment_${rowIndex}_height`];
+      const weight = fieldKey === 'weight' ? value : formData[`treatment_${rowIndex}_weight`];
+      
+      const bmi = calculateBMI(parseFloat(height), parseFloat(weight));
+      if (bmi) {
+        handleChange({
+          target: {
+            name: `treatment_${rowIndex}_bmi`,
+            value: bmi
+          }
+        });
+      }
+    }
+  };
 
   return (
     <div className="space-y-6 text-sm">
+      {/* PARENTAL INDIVIDUAL TREATMENT RECORD */}
       <div>
-        <h3 className="font-semibold text-gray-700 mb-2 text-center">
-          PARENTAL INDIVIDUAL TREATMENT RECORD
-        </h3>
+        <div className="flex justify-between items-center mb-2">
+          <h3 className="font-semibold text-gray-700">
+            PARENTAL INDIVIDUAL TREATMENT RECORD
+          </h3>
+          <button
+            type="button"
+            onClick={addTreatmentRow}
+            className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 flex items-center gap-1"
+          >
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            Add Visit
+          </button>
+        </div>
         <div className="overflow-x-auto border rounded-md">
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
                 {treatmentHeaders.map((h) => (
                   <th
-                    key={h}
-                    className="p-2 border-r font-medium text-xs text-gray-600"
+                    key={h.key}
+                    className="p-2 border-r font-medium text-xs text-gray-600 whitespace-nowrap"
                   >
-                    {h}
+                    {h.label}
                   </th>
                 ))}
+                <th className="p-2 font-medium text-xs text-gray-600">Action</th>
               </tr>
             </thead>
             <tbody>
-              {Array.from({ length: 5 }).map((_, rowIndex) => (
-                <tr key={rowIndex}>
+              {treatmentRows.map((row, rowIndex) => (
+                <tr key={rowIndex} className="hover:bg-gray-50">
                   {treatmentHeaders.map((h) => (
                     <td
-                      key={`${h}-${rowIndex}`}
+                      key={`${h.key}-${rowIndex}`}
                       className="p-1 border-r border-t"
                     >
-                      <input
-                        type="text"
-                        className="w-full p-1 border-none text-xs focus:ring-1 focus:ring-blue-300"
-                      />
+                      {h.type === 'select' ? (
+                        <select
+                          name={`treatment_${rowIndex}_${h.key}`}
+                          value={formData[`treatment_${rowIndex}_${h.key}`] || ''}
+                          onChange={(e) => handleTreatmentChange(rowIndex, h.key, e.target.value)}
+                          className="w-full p-1 border rounded text-xs bg-white"
+                        >
+                          <option value="">Select</option>
+                          {h.options.map((option, idx) => (
+                            <option key={idx} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          type={h.type}
+                          name={`treatment_${rowIndex}_${h.key}`}
+                          value={formData[`treatment_${rowIndex}_${h.key}`] || ''}
+                          onChange={(e) => handleTreatmentChange(rowIndex, h.key, e.target.value)}
+                          className={`w-full p-1 border rounded text-xs ${h.readOnly ? 'bg-gray-100' : 'bg-white'}`}
+                          placeholder={h.placeholder || h.label}
+                          readOnly={h.readOnly}
+                          min={h.type === 'number' ? '0' : undefined}
+                          step={h.type === 'number' ? '0.1' : undefined}
+                        />
+                      )}
                     </td>
                   ))}
+                  <td className="p-1 border-t border-r text-center align-middle">
+                    {treatmentRows.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setTreatmentRows(treatmentRows.filter((_, i) => i !== rowIndex))}
+                        className="text-red-500 hover:text-red-700 text-xs p-1 hover:bg-red-50 rounded"
+                        title="Remove visit"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="text-xs text-gray-500 mt-1">
+          BMI auto-calculated when Height (cm) and Weight (kg) are entered.
+        </div>
+      </div>
+
+      {/* PREGNANCY OUTCOMES */}
+      <div>
+        <div className="flex justify-between items-center mb-2">
+          <h3 className="font-semibold text-gray-700">Pregnancy Outcomes</h3>
+          <button
+            type="button"
+            onClick={addOutcomeRow}
+            className="px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 flex items-center gap-1"
+          >
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            Add Outcome
+          </button>
+        </div>
+        <div className="overflow-x-auto border rounded-md">
+          <table className="w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                {outcomeHeaders.map((h) => (
+                  <th
+                    key={h.key}
+                    className="p-2 border-r font-medium text-xs text-gray-600 whitespace-nowrap"
+                  >
+                    {h.label}
+                  </th>
+                ))}
+                <th className="p-2 font-medium text-xs text-gray-600">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {outcomeRows.map((row, rowIndex) => (
+                <tr key={rowIndex} className="hover:bg-gray-50">
+                  {outcomeHeaders.map((h) => (
+                    <td
+                      key={`${h.key}-${rowIndex}`}
+                      className="p-1 border-r border-t"
+                    >
+                      {h.type === 'select' ? (
+                        <select
+                          name={`outcome_${rowIndex}_${h.key}`}
+                          value={formData[`outcome_${rowIndex}_${h.key}`] || ''}
+                          onChange={handleChange}
+                          className="w-full p-1 border rounded text-xs bg-white"
+                        >
+                          <option value="">Select</option>
+                          {h.options.map((option, idx) => (
+                            <option key={idx} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          type={h.type}
+                          name={`outcome_${rowIndex}_${h.key}`}
+                          value={formData[`outcome_${rowIndex}_${h.key}`] || ''}
+                          onChange={handleChange}
+                          className="w-full p-1 border rounded text-xs bg-white"
+                          placeholder={h.label}
+                          min={h.type === 'number' ? '0' : undefined}
+                          step={h.type === 'number' ? '1' : undefined}
+                        />
+                      )}
+                    </td>
+                  ))}
+                  <td className="p-1 border-t border-r text-center align-middle">
+                    {outcomeRows.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setOutcomeRows(outcomeRows.filter((_, i) => i !== rowIndex))}
+                        className="text-red-500 hover:text-red-700 text-xs p-1 hover:bg-red-50 rounded"
+                        title="Remove outcome"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -807,15 +1033,17 @@ const Step4 = ({ formData, handleChange, inventoryItems, onAddToQueue }) => {
         </div>
       </div>
 
+      {/* CONSULTATION AND REFERRAL FORM */}
       <div>
-        <h3 className="font-semibold text-gray-700 mb-2">
-          Consultation and Referral Form
-        </h3>
+        <h3 className="font-semibold text-gray-700 mb-2">Consultation and Referral Form</h3>
         <div className="p-4 border rounded-md space-y-3">
           <div>
             <label className="text-sm font-medium text-gray-600">Date*</label>
             <input
               type="date"
+              name="consultation_date"
+              value={formData.consultation_date || ""}
+              onChange={handleChange}
               className="w-full mt-1 p-2 border rounded-md text-sm"
             />
           </div>
@@ -824,17 +1052,38 @@ const Step4 = ({ formData, handleChange, inventoryItems, onAddToQueue }) => {
               Complaints*
             </label>
             <textarea
+              name="consultation_complaints"
+              value={formData.consultation_complaints || ""}
+              onChange={handleChange}
               rows="3"
               className="w-full mt-1 p-2 border rounded-md text-sm"
+              placeholder="Describe the patient's complaints..."
             ></textarea>
           </div>
           <div>
             <label className="text-sm font-medium text-gray-600">
               Referral Done For*
             </label>
+            <select
+              name="referral_type"
+              value={formData.referral_type || ""}
+              onChange={handleChange}
+              className="w-full mt-1 p-2 border rounded-md text-sm"
+            >
+              <option value="">Select referral type</option>
+              <option value="Obstetric Ultrasound">Obstetric Ultrasound</option>
+              <option value="High-risk Pregnancy">High-risk Pregnancy</option>
+              <option value="Medical Consultation">Medical Consultation</option>
+              <option value="Laboratory Tests">Laboratory Tests</option>
+              <option value="Hospital Admission">Hospital Admission</option>
+              <option value="Other">Other</option>
+            </select>
             <input
               type="text"
-              placeholder="Enter referral details"
+              name="referral_details"
+              value={formData.referral_details || ""}
+              onChange={handleChange}
+              placeholder="Additional referral details (if other)"
               className="w-full mt-1 p-2 border rounded-md text-sm"
             />
           </div>
@@ -843,52 +1092,29 @@ const Step4 = ({ formData, handleChange, inventoryItems, onAddToQueue }) => {
               Doctor's Order*
             </label>
             <textarea
+              name="doctors_order"
+              value={formData.doctors_order || ""}
+              onChange={handleChange}
               rows="3"
               className="w-full mt-1 p-2 border rounded-md text-sm"
+              placeholder="Enter doctor's orders..."
             ></textarea>
           </div>
           <div>
             <label className="text-sm font-medium text-gray-600">Remarks</label>
             <textarea
-              rows="3"
+              name="consultation_remarks"
+              value={formData.consultation_remarks || ""}
+              onChange={handleChange}
+              rows="2"
               className="w-full mt-1 p-2 border rounded-md text-sm"
+              placeholder="Additional remarks..."
             ></textarea>
           </div>
         </div>
       </div>
 
-      <div>
-        <h3 className="font-semibold text-gray-700 mb-2">Pregnancy Outcomes</h3>
-        <div className="overflow-x-auto border rounded-md">
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                {outcomeHeaders.map((h) => (
-                  <th
-                    key={h}
-                    className="p-2 border-r font-medium text-xs text-gray-600"
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                {outcomeHeaders.map((h, i) => (
-                  <td key={i} className="p-1 border-r border-t">
-                    <input
-                      type="text"
-                      className="w-full p-1 border-none text-xs focus:ring-1 focus:ring-blue-300"
-                    />
-                  </td>
-                ))}
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
+      {/* MICRONUTRIENT SUPPLEMENTATION */}
       <div>
         <h3 className="font-semibold text-gray-700 mb-2">Micronutrient Supplementation</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -937,6 +1163,9 @@ export default function AddPatientModal({
   const [inventoryItems, setInventoryItems] = useState([]);
   const [deductionQueue, setDeductionQueue] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
+  const [pregnancyHistory, setPregnancyHistory] = useState([]);
+  const [treatmentRecords, setTreatmentRecords] = useState([]);
+  const [pregnancyOutcomes, setPregnancyOutcomes] = useState([]);
 
   // Fetch inventory items
   useEffect(() => {

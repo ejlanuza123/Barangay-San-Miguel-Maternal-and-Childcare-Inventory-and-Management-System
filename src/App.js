@@ -40,6 +40,7 @@ import MidwifeDashboard from "./pages/midwife/MidwifeDashboard";
 import ItemIssuancePage from "./pages/midwife/ItemIssuancePage";
 import MidwifeMaternityManagement from "./pages/midwife/MaternityManagement"; // NEW IMPORT
 import MidwifeChildHealthRecords from "./pages/midwife/ChildHealthRecords"; // NEW IMPORT
+import UnifiedReportsPage from "./pages/midwife/UnifiedReportsPage"; // Import the new page
 
 import { AuthProvider } from "./context/AuthContext";
 import { NotificationProvider } from "./context/NotificationContext";
@@ -73,6 +74,7 @@ function App() {
                 <Route path="admin/child-records" element={<AdminChildHealthRecords />} />
                 <Route path="admin/inventory" element={<AdminInventoryPage />} />
                 <Route path="admin/recycle-bin" element={<RecycleBinPage />} /> 
+                <Route path="admin/reports" element={<UnifiedReportsPage />} />
               </Route>
 
               {/* 2. MIDWIFE ROUTES (NEW) */}
@@ -84,6 +86,7 @@ function App() {
                 <Route path="midwife/inventory" element={<AdminInventoryPage />} />
                 <Route path="midwife/item-issuance" element={<ItemIssuancePage />} />
                 <Route path="midwife/recycle-bin" element={<RecycleBinPage />} /> 
+                <Route path="midwife/reports" element={<UnifiedReportsPage />} />
               </Route>
 
               {/* 2. BHW ROUTES */}

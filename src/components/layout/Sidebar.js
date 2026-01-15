@@ -225,6 +225,7 @@ export default function Sidebar({ role, openSettings }) {
             ]
           },
           { name: "Inventory", path: "/admin/inventory", icon: <InventoryIcon /> },
+          { name: "Reports", path: "/admin/reports", icon: <ReportsIcon /> },
         ];
       case "Midwife":
         return [
@@ -240,6 +241,7 @@ export default function Sidebar({ role, openSettings }) {
           },
           { name: "Inventory", path: "/midwife/inventory", icon: <InventoryIcon /> },
           { name: "Item Issuance", path: "/midwife/item-issuance", icon: <IssuanceIcon /> },
+          { name: "Reports", path: "/midwife/reports", icon: <ReportsIcon /> },
         ];
       case "BHW":
         return [

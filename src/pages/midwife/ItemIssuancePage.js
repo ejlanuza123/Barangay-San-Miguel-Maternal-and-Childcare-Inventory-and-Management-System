@@ -44,7 +44,9 @@ const LoadingSpinner = () => (
 
 const IssuanceFormModal = ({ selectedItems, onClose, onComplete }) => {
     const { profile } = useAuth();
-    const [entityName, setEntityName] = useState('');
+    const [entityName, setEntityName] = useState(
+        profile ? `${profile.first_name} ${profile.last_name}`.toUpperCase() : ''
+    );
     const [fundCluster, setFundCluster] = useState('');
     const [division, setDivision] = useState('City Health Office');
     const [rcc, setRcc] = useState('');
@@ -256,8 +258,11 @@ const IssuanceFormModal = ({ selectedItems, onClose, onComplete }) => {
                                 type="text" 
                                 value={entityName} 
                                 onChange={(e) => setEntityName(e.target.value)}
-                                className="w-full border border-gray-300 rounded-lg p-3 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                                className="w-full border border-gray-300 rounded-lg p-3 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-gray-50 cursor-not-allowed"
+                                readOnly
+                                title="Auto-filled with your name"
                             />
+                            <p className="text-xs text-gray-500 mt-1">Auto-filled with your profile name</p>
                         </div>
                         <div className="space-y-1">
                             <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider">Fund Cluster</label>
