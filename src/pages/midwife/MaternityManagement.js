@@ -729,8 +729,8 @@ const DeleteConfirmationModal = ({ patientName, onConfirm, onCancel }) => (
   </div>
 );
 
-// MODIFIED: ViewPatientModal now displays all medical history details
-// MODIFIED: ViewPatientModal now displays all medical history details
+
+// MODIFIED: ViewPatientModal now displays all medical history details including treatment records
 const ViewPatientModal = ({ patient, onClose }) => {
   // Safely get the detailed records, or an empty object if it's null
   const [isQrModalVisible, setIsQrModalVisible] = useState(false);
@@ -747,10 +747,8 @@ const ViewPatientModal = ({ patient, onClose }) => {
       try {
         // Search for children by mother's name - using EXACT or SIMILAR matching
         const motherFullName = `${patient.first_name} ${patient.last_name}`;
-        console.log("Searching for children of mother:", motherFullName);
         
         // Try to find exact match first, then try partial matches
-        // We'll use database-level search for efficiency
         const { data: exactMatch, error: exactError } = await supabase
           .from('child_records')
           .select('*')
@@ -758,20 +756,11 @@ const ViewPatientModal = ({ patient, onClose }) => {
           .or(`mother_name.ilike.%${motherFullName}%`)
           .order('dob', { ascending: false });
         
-        if (exactError) {
-          console.error("Error fetching children:", exactError);
-          throw exactError;
-        }
+        if (exactError) throw exactError;
         
-        console.log("Exact match children:", exactMatch);
-        
-        // If no exact matches found, try searching by first name only
-        // but be more careful about false positives
         let filteredChildren = exactMatch || [];
         
         if (filteredChildren.length === 0) {
-          console.log("No exact matches found, trying first name search...");
-          
           // Get all children to filter on client side
           const { data: allChildren, error: allError } = await supabase
             .from('child_records')
@@ -790,7 +779,6 @@ const ViewPatientModal = ({ patient, onClose }) => {
             const searchPatterns = [
               motherFullName.toLowerCase().trim(),
               `${patient.first_name} ${patient.last_name}`.toLowerCase().trim(),
-              // If mother has middle name in medical history, try that too
               details.middle_name ? `${patient.first_name} ${details.middle_name} ${patient.last_name}`.toLowerCase().trim() : ''
             ].filter(pattern => pattern);
             
@@ -799,7 +787,6 @@ const ViewPatientModal = ({ patient, onClose }) => {
               if (lowerMotherName === pattern) {
                 return true; // Exact match
               }
-              // Check if mother name starts with the pattern (more precise than includes)
               if (pattern && lowerMotherName.startsWith(pattern)) {
                 return true;
               }
@@ -816,8 +803,6 @@ const ViewPatientModal = ({ patient, onClose }) => {
             
             return false;
           });
-          
-          console.log("Filtered children after broader search:", filteredChildren);
         }
         
         setChildren(filteredChildren);
@@ -833,8 +818,88 @@ const ViewPatientModal = ({ patient, onClose }) => {
     fetchChildren();
   }, [patient, details.middle_name]);
 
+  // Helper function to extract treatment records from formData
+  const extractTreatmentRecords = () => {
+    const records = [];
+    const treatmentKeys = Object.keys(details).filter(key => key.startsWith('treatment_'));
+    
+    // Group by row index
+    const rowMap = {};
+    treatmentKeys.forEach(key => {
+      const match = key.match(/treatment_(\d+)_(.+)/);
+      if (match) {
+        const [, rowIndex, field] = match;
+        if (!rowMap[rowIndex]) rowMap[rowIndex] = {};
+        rowMap[rowIndex][field] = details[key];
+      }
+    });
+    
+    // Convert to array
+    Object.keys(rowMap).forEach(rowIndex => {
+      records.push(rowMap[rowIndex]);
+    });
+    
+    return records;
+  };
+
+  // Helper function to extract pregnancy outcomes from formData
+  const extractPregnancyOutcomes = () => {
+    const outcomes = [];
+    const outcomeKeys = Object.keys(details).filter(key => key.startsWith('outcome_'));
+    
+    // Group by row index
+    const rowMap = {};
+    outcomeKeys.forEach(key => {
+      const match = key.match(/outcome_(\d+)_(.+)/);
+      if (match) {
+        const [, rowIndex, field] = match;
+        if (!rowMap[rowIndex]) rowMap[rowIndex] = {};
+        rowMap[rowIndex][field] = details[key];
+      }
+    });
+    
+    // Convert to array
+    Object.keys(rowMap).forEach(rowIndex => {
+      outcomes.push(rowMap[rowIndex]);
+    });
+    
+    return outcomes;
+  };
+
+  // Helper function to extract pregnancy history from formData (dynamic table from AddPatientModal)
+  const extractPregnancyHistory = () => {
+    const history = [];
+    const pregKeys = Object.keys(details).filter(key => key.startsWith('pregnancy_'));
+    
+    // Group by row index
+    const rowMap = {};
+    pregKeys.forEach(key => {
+      const match = key.match(/pregnancy_(\d+)_(.+)/);
+      if (match) {
+        const [, rowIndex, field] = match;
+        if (!rowMap[rowIndex]) rowMap[rowIndex] = {};
+        rowMap[rowIndex][field] = details[key];
+      }
+    });
+    
+    // Convert to array and sort by gravida
+    Object.keys(rowMap).forEach(rowIndex => {
+      history.push(rowMap[rowIndex]);
+    });
+    
+    // Sort by gravida if available
+    return history.sort((a, b) => {
+      const gravidaA = parseInt(a.gravida) || 0;
+      const gravidaB = parseInt(b.gravida) || 0;
+      return gravidaA - gravidaB;
+    });
+  };
+
   const handleDownloadPdf = () => {
     const doc = new jsPDF();
+    const treatmentRecords = extractTreatmentRecords();
+    const pregnancyOutcomes = extractPregnancyOutcomes();
+    const pregnancyHistory = extractPregnancyHistory();
 
     // --- PDF Header ---
     doc.setFontSize(10);
@@ -849,7 +914,7 @@ const ViewPatientModal = ({ patient, onClose }) => {
     );
     doc.setFontSize(12);
     doc.setFont(undefined, "bold");
-    doc.text("PRENATAL INDIVIDUAL TREATMENT RECORD", 105, 30, {
+    doc.text("PARENTAL INDIVIDUAL TREATMENT RECORD", 105, 30, {
       align: "center",
     });
 
@@ -902,25 +967,24 @@ const ViewPatientModal = ({ patient, onClose }) => {
       styles: { fontSize: 8, halign: "center", cellPadding: 1 },
     });
 
-    // --- Pregnancy History Table ---
+    // --- Pregnancy History Table (Dynamic from AddPatientModal) ---
     doc
       .setFontSize(10)
       .setFont(undefined, "bold")
       .text("Pregnancy History", 14, doc.lastAutoTable.finalY + 10);
-    const pregnancyHistoryBody = Array.from({ length: 10 }, (_, i) => {
-      const g = i + 1;
-      return [
-        `G${g}`,
-        details[`g${g}_outcome`] || "",
-        details[`g${g}_sex`] || "",
-        details[`g${g}_delivery_type`] || "",
-        details[`g${g}_delivered_at`] || "",
-      ];
-    });
+    
+    const pregnancyHistoryBody = pregnancyHistory.map(record => [
+      record.gravida || "",
+      record.outcome || "",
+      record.sex || "",
+      record.delivery_type || "",
+      record.delivered_at || "",
+    ]);
+    
     autoTable(doc, {
       startY: doc.lastAutoTable.finalY + 12,
       head: [["Gravida", "Outcome", "Sex", "NSD or CS", "Delivered at"]],
-      body: pregnancyHistoryBody,
+      body: pregnancyHistoryBody.length > 0 ? pregnancyHistoryBody : [["No pregnancy history recorded"]],
       theme: "grid",
       styles: { fontSize: 8, cellPadding: 1 },
       headStyles: { halign: "center" },
@@ -942,6 +1006,9 @@ const ViewPatientModal = ({ patient, onClose }) => {
           `Age of Menarche: ${details.age_of_menarche || "N/A"}`,
           `Duration of Menses: ${details.menstruation_duration || "N/A"} days`,
         ],
+        [`Risk Code: ${details.risk_code || "N/A"}`],
+        [`Age of First Period: ${details.age_first_period || "N/A"}`],
+        [`Bleeding Amount: ${details.bleeding_amount || "N/A"}`],
       ],
       styles: { fontSize: 9, cellPadding: 1 },
     });
@@ -969,6 +1036,21 @@ const ViewPatientModal = ({ patient, onClose }) => {
       body: vaccineBody,
       theme: "grid",
       styles: { fontSize: 9, cellPadding: 2 },
+    });
+
+    // --- Micronutrient Supplementation ---
+    doc
+      .setFontSize(10)
+      .setFont(undefined, "bold")
+      .text("Micronutrient Supplementation", 14, doc.lastAutoTable.finalY + 10);
+    autoTable(doc, {
+      startY: doc.lastAutoTable.finalY + 12,
+      body: [
+        [`Iron Supplementation: ${details.iron_supp_date || "Not given"} (${details.iron_supp_amount || "N/A"})`],
+        [`Vitamin A: ${details.vitamin_a_date || "Not given"} (${details.vitamin_a_amount || "N/A"})`],
+      ],
+      theme: "plain",
+      styles: { fontSize: 9, cellPadding: 1 },
     });
 
     // --- Medical History ---
@@ -1043,6 +1125,124 @@ const ViewPatientModal = ({ patient, onClose }) => {
       doc.lastAutoTable.finalY + 45,
       { maxWidth: 180 }
     );
+
+    // --- Treatment Records ---
+    if (treatmentRecords.length > 0) {
+      doc.addPage();
+      doc.setFontSize(12).setFont(undefined, "bold");
+      doc.text("PARENTAL INDIVIDUAL TREATMENT RECORD", 105, 15, { align: "center" });
+      doc.setFontSize(10);
+      
+      const treatmentHeaders = [
+        "Date", "Arrival", "Departure", "Ht. (cm)", "Wt. (kg)", "BP", 
+        "MUAC", "BMI", "AOG", "FH", "FHB", "LOC", "Pres", "Fe+FA", "Admitted", "Examined"
+      ];
+      
+      const treatmentData = treatmentRecords.map(record => [
+        record.date || "",
+        record.arrival || "",
+        record.departure || "",
+        record.height || "",
+        record.weight || "",
+        record.bp || "",
+        record.muac || "",
+        record.bmi || "",
+        record.aog || "",
+        record.fh || "",
+        record.fhb || "",
+        record.loc || "",
+        record.presentation || "",
+        record.fe_fa || "",
+        record.admitted || "",
+        record.examined || ""
+      ]);
+      
+      autoTable(doc, {
+        startY: 30,
+        head: [treatmentHeaders],
+        body: treatmentData,
+        theme: "grid",
+        styles: { fontSize: 6, cellPadding: 1 },
+        headStyles: { fillColor: [41, 128, 185], textColor: [255, 255, 255] },
+        margin: { left: 5, right: 5 }
+      });
+    }
+
+    // --- Pregnancy Outcomes ---
+    if (pregnancyOutcomes.length > 0) {
+      const startY = treatmentRecords.length > 0 ? doc.lastAutoTable.finalY + 10 : 20;
+      if (treatmentRecords.length === 0) doc.addPage();
+      
+      doc.setFontSize(10).setFont(undefined, "bold");
+      doc.text("Pregnancy Outcomes", 14, startY);
+      
+      const outcomeHeaders = [
+        "Date Terminated", "Type of Delivery", "Outcome", "Sex of Child", 
+        "Birth Weight (g)", "Age in Weeks", "Place of Birth", "Attended By"
+      ];
+      
+      const outcomeData = pregnancyOutcomes.map(record => [
+        record.date_terminated || "",
+        record.delivery_type || "",
+        record.outcome || "",
+        record.sex || "",
+        record.birth_weight || "",
+        record.age_weeks || "",
+        record.place_of_birth || "",
+        record.attended_by || ""
+      ]);
+      
+      autoTable(doc, {
+        startY: startY + 5,
+        head: [outcomeHeaders],
+        body: outcomeData,
+        theme: "grid",
+        styles: { fontSize: 7, cellPadding: 1 },
+        headStyles: { fillColor: [39, 174, 96], textColor: [255, 255, 255] }
+      });
+    }
+
+    // --- Consultation and Referral ---
+    if (details.consultation_date || details.referral_type) {
+      const startY = pregnancyOutcomes.length > 0 ? doc.lastAutoTable.finalY + 10 : 
+                     treatmentRecords.length > 0 ? doc.lastAutoTable.finalY + 10 : 20;
+      if (pregnancyOutcomes.length === 0 && treatmentRecords.length === 0) doc.addPage();
+      
+      doc.setFontSize(10).setFont(undefined, "bold");
+      doc.text("Consultation and Referral", 14, startY);
+      doc.setFontSize(9).setFont(undefined, "normal");
+      
+      let yPos = startY + 10;
+      if (details.consultation_date) {
+        doc.text(`Date: ${details.consultation_date}`, 14, yPos);
+        yPos += 5;
+      }
+      if (details.consultation_complaints) {
+        doc.text("Complaints:", 14, yPos);
+        yPos += 5;
+        doc.text(details.consultation_complaints, 14, yPos, { maxWidth: 180 });
+        yPos += 15;
+      }
+      if (details.referral_type) {
+        doc.text(`Referral Type: ${details.referral_type}`, 14, yPos);
+        yPos += 5;
+      }
+      if (details.referral_details) {
+        doc.text(`Referral Details: ${details.referral_details}`, 14, yPos);
+        yPos += 5;
+      }
+      if (details.doctors_order) {
+        doc.text("Doctor's Order:", 14, yPos);
+        yPos += 5;
+        doc.text(details.doctors_order, 14, yPos, { maxWidth: 180 });
+        yPos += 15;
+      }
+      if (details.consultation_remarks) {
+        doc.text("Remarks:", 14, yPos);
+        yPos += 5;
+        doc.text(details.consultation_remarks, 14, yPos, { maxWidth: 180 });
+      }
+    }
 
     // --- Add Children Records Page ---
     if (children.length > 0) {
@@ -1149,7 +1349,7 @@ const ViewPatientModal = ({ patient, onClose }) => {
       ) : children.length === 0 ? (
         <div className="text-center py-4 bg-gray-50 rounded-md border border-dashed border-gray-200">
           <svg className="w-12 h-12 mx-auto text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5 3.75a2.5 2.5 0 01-2.5 2.5H3.75a2.5 2.5 0 01-2.5-2.5V6.75a2.5 2.5 0 012.5-2.5h16.5a2.5 2.5 0 012.5 2.5v12.5z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5 3.75a2.5 2.5 0 01-2.5 2.5H3.75a2.2 2.2 0 01-2.2-2.2V6.75a2.2 2.2 0 012.2-2.2h16.5a2.2 2.2 0 012.2 2.2v12.5z" />
           </svg>
           <p className="text-sm text-gray-500 mt-2">No children records found for this mother.</p>
           <p className="text-xs text-gray-400 mt-1">
@@ -1177,7 +1377,6 @@ const ViewPatientModal = ({ patient, onClose }) => {
                     {child.child_id}
                   </td>
                   <td className="p-2 border font-medium">
-                    {/* Display child name - check both child_name and first_name/last_name fields */}
                     {child.child_name || `${child.first_name || ''} ${child.last_name || ''}`.trim() || 'N/A'}
                   </td>
                   <td className="p-2 border text-gray-500">
@@ -1209,6 +1408,166 @@ const ViewPatientModal = ({ patient, onClose }) => {
     </div>
   );
 
+  // Treatment Records Section
+  const TreatmentRecordsSection = () => {
+    const treatmentRecords = extractTreatmentRecords();
+    
+    if (treatmentRecords.length === 0) {
+      return (
+        <div className="mt-4 p-4 bg-gray-50 rounded-md border border-dashed border-gray-200">
+          <p className="text-sm text-gray-500 text-center">No treatment records found</p>
+        </div>
+      );
+    }
+    
+    return (
+      <div className="mt-4 overflow-x-auto border rounded-lg">
+        <table className="w-full text-xs">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="p-2 border text-left font-semibold text-gray-600">Date</th>
+              <th className="p-2 border text-left font-semibold text-gray-600">Time</th>
+              <th className="p-2 border text-left font-semibold text-gray-600">Vitals</th>
+              <th className="p-2 border text-left font-semibold text-gray-600">Examination</th>
+              <th className="p-2 border text-left font-semibold text-gray-600">Status</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {treatmentRecords.map((record, index) => (
+              <tr key={index} className="hover:bg-gray-50 transition-colors">
+                <td className="p-2 border">{record.date || 'N/A'}</td>
+                <td className="p-2 border">
+                  {record.arrival || 'N/A'} - {record.departure || 'N/A'}
+                </td>
+                <td className="p-2 border">
+                  <div className="space-y-1">
+                    <div>Ht: {record.height || 'N/A'} cm</div>
+                    <div>Wt: {record.weight || 'N/A'} kg</div>
+                    <div>BP: {record.bp || 'N/A'}</div>
+                    <div>BMI: {record.bmi || 'N/A'}</div>
+                  </div>
+                </td>
+                <td className="p-2 border">
+                  <div className="space-y-1">
+                    <div>AOG: {record.aog || 'N/A'} wks</div>
+                    <div>FH: {record.fh || 'N/A'} cm</div>
+                    <div>FHB: {record.fhb || 'N/A'}</div>
+                    <div>LOC: {record.loc || 'N/A'}</div>
+                  </div>
+                </td>
+                <td className="p-2 border">
+                  <div className="space-y-1">
+                    <div>Fe+FA: {record.fe_fa || 'N/A'}</div>
+                    <div>Admitted: {record.admitted || 'N/A'}</div>
+                    <div>Examined: {record.examined || 'N/A'}</div>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  // Pregnancy Outcomes Section
+  const PregnancyOutcomesSection = () => {
+    const pregnancyOutcomes = extractPregnancyOutcomes();
+    
+    if (pregnancyOutcomes.length === 0) {
+      return (
+        <div className="mt-4 p-4 bg-gray-50 rounded-md border border-dashed border-gray-200">
+          <p className="text-sm text-gray-500 text-center">No pregnancy outcomes recorded</p>
+        </div>
+      );
+    }
+    
+    return (
+      <div className="mt-4 overflow-x-auto border rounded-lg">
+        <table className="w-full text-xs">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="p-2 border text-left font-semibold text-gray-600">Date</th>
+              <th className="p-2 border text-left font-semibold text-gray-600">Delivery Type</th>
+              <th className="p-2 border text-left font-semibold text-gray-600">Outcome</th>
+              <th className="p-2 border text-left font-semibold text-gray-600">Child Sex</th>
+              <th className="p-2 border text-left font-semibold text-gray-600">Birth Weight</th>
+              <th className="p-2 border text-left font-semibold text-gray-600">Place of Birth</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {pregnancyOutcomes.map((outcome, index) => (
+              <tr key={index} className="hover:bg-gray-50 transition-colors">
+                <td className="p-2 border">{outcome.date_terminated || 'N/A'}</td>
+                <td className="p-2 border">
+                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs ${
+                    outcome.delivery_type === 'NSD' ? 'bg-green-100 text-green-800' :
+                    outcome.delivery_type === 'CS' ? 'bg-red-100 text-red-800' :
+                    'bg-gray-100 text-gray-800'
+                  }`}>
+                    {outcome.delivery_type || 'N/A'}
+                  </span>
+                </td>
+                <td className="p-2 border">{outcome.outcome || 'N/A'}</td>
+                <td className="p-2 border">{outcome.sex || 'N/A'}</td>
+                <td className="p-2 border">{outcome.birth_weight || 'N/A'} g</td>
+                <td className="p-2 border">{outcome.place_of_birth || 'N/A'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  // Updated Pregnancy History Section (using dynamic table data)
+  const PregnancyHistorySection = () => {
+    const pregnancyHistory = extractPregnancyHistory();
+    
+    if (pregnancyHistory.length === 0) {
+      return (
+        <div className="mt-4 p-4 bg-gray-50 rounded-md border border-dashed border-gray-200">
+          <p className="text-sm text-gray-500 text-center">No pregnancy history recorded</p>
+        </div>
+      );
+    }
+    
+    return (
+      <div className="mt-4 overflow-x-auto border rounded-lg">
+        <table className="w-full text-xs">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="p-2 border text-left font-semibold text-gray-600">Gravida</th>
+              <th className="p-2 border text-left font-semibold text-gray-600">Outcome</th>
+              <th className="p-2 border text-left font-semibold text-gray-600">Sex</th>
+              <th className="p-2 border text-left font-semibold text-gray-600">NSD/CS</th>
+              <th className="p-2 border text-left font-semibold text-gray-600">Delivered At</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {pregnancyHistory.map((record, index) => (
+              <tr key={index} className="hover:bg-gray-50 transition-colors">
+                <td className="p-2 border font-semibold">{record.gravida || `G${index + 1}`}</td>
+                <td className="p-2 border">
+                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs ${
+                    record.outcome === 'Live Birth' ? 'bg-green-100 text-green-800' :
+                    record.outcome === 'Stillbirth' ? 'bg-red-100 text-red-800' :
+                    'bg-gray-100 text-gray-800'
+                  }`}>
+                    {record.outcome || '-'}
+                  </span>
+                </td>
+                <td className="p-2 border">{record.sex || '-'}</td>
+                <td className="p-2 border">{record.delivery_type || '-'}</td>
+                <td className="p-2 border">{record.delivered_at || '-'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
   return (
     <>
       {isQrModalVisible && (
@@ -1221,7 +1580,7 @@ const ViewPatientModal = ({ patient, onClose }) => {
       )}
       <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
         <motion.div
-          className="bg-white rounded-lg shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col"
+          className="bg-white rounded-lg shadow-2xl w-full max-w-7xl max-h-[90vh] overflow-hidden flex flex-col"
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.95 }}
@@ -1294,46 +1653,9 @@ const ViewPatientModal = ({ patient, onClose }) => {
               <Field label="Living" value={details.living_children} />
             </div>
 
-            {/* ADDED: Pregnancy History Table */}
-            <SectionHeader title="Pregnancy History Details" />
-            <div className="overflow-x-auto mb-6">
-              <table className="w-full text-center text-xs border">
-                <thead className="bg-gray-100 font-semibold">
-                  <tr>
-                    {[
-                      "Gravida",
-                      "Outcome",
-                      "Sex",
-                      "NSD/CS",
-                      "Delivered At",
-                    ].map((h) => (
-                      <th key={h} className="p-2 border">
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {Array.from({ length: 10 }, (_, i) => i + 1).map((g) => (
-                    <tr key={g}>
-                      <td className="p-2 border font-semibold">G{g}</td>
-                      <td className="p-2 border">
-                        {details[`g${g}_outcome`] || "-"}
-                      </td>
-                      <td className="p-2 border">
-                        {details[`g${g}_sex`] || "-"}
-                      </td>
-                      <td className="p-2 border">
-                        {details[`g${g}_delivery_type`] || "-"}
-                      </td>
-                      <td className="p-2 border">
-                        {details[`g${g}_delivered_at`] || "-"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            {/* Pregnancy History (Updated to use dynamic table) */}
+            <SectionHeader title="Pregnancy History" />
+            <PregnancyHistorySection />
 
             <SectionHeader title="Menstrual & Pregnancy Details" />
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-6">
@@ -1362,6 +1684,18 @@ const ViewPatientModal = ({ patient, onClose }) => {
                   value={details[`vaccine_${vaccine.toLowerCase()}`]}
                 />
               ))}
+            </div>
+
+            <SectionHeader title="Micronutrient Supplementation" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mb-6">
+              <Field 
+                label="Iron Supplementation" 
+                value={`${details.iron_supp_date || 'Not given'} (${details.iron_supp_amount || 'N/A'})`} 
+              />
+              <Field 
+                label="Vitamin A" 
+                value={`${details.vitamin_a_date || 'Not given'} (${details.vitamin_a_amount || 'N/A'})`} 
+              />
             </div>
 
             <SectionHeader title="Medical History" />
@@ -1416,7 +1750,6 @@ const ViewPatientModal = ({ patient, onClose }) => {
               </div>
             </div>
 
-            {/* ADDED: Allergy and Family Planning History */}
             <SectionHeader title="Additional Information" />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm mb-6">
               <div>
@@ -1438,7 +1771,60 @@ const ViewPatientModal = ({ patient, onClose }) => {
               </div>
             </div>
 
-            {/* NEW: Add Children Section */}
+            {/* Treatment Records Section */}
+            <SectionHeader title="Parental Individual Treatment Record" />
+            <TreatmentRecordsSection />
+
+            {/* Pregnancy Outcomes Section */}
+            <SectionHeader title="Pregnancy Outcomes" />
+            <PregnancyOutcomesSection />
+
+            {/* Consultation and Referral Section */}
+            {(details.consultation_date || details.referral_type || details.doctors_order) && (
+              <>
+                <SectionHeader title="Consultation and Referral" />
+                <div className="mt-4 p-4 bg-gray-50 rounded-md border">
+                  {details.consultation_date && (
+                    <div className="mb-2">
+                      <span className="text-xs text-gray-500">Date:</span>
+                      <p className="font-semibold">{details.consultation_date}</p>
+                    </div>
+                  )}
+                  {details.consultation_complaints && (
+                    <div className="mb-2">
+                      <span className="text-xs text-gray-500">Complaints:</span>
+                      <p className="whitespace-pre-wrap">{details.consultation_complaints}</p>
+                    </div>
+                  )}
+                  {details.referral_type && (
+                    <div className="mb-2">
+                      <span className="text-xs text-gray-500">Referral Type:</span>
+                      <p className="font-semibold">{details.referral_type}</p>
+                    </div>
+                  )}
+                  {details.referral_details && (
+                    <div className="mb-2">
+                      <span className="text-xs text-gray-500">Referral Details:</span>
+                      <p>{details.referral_details}</p>
+                    </div>
+                  )}
+                  {details.doctors_order && (
+                    <div className="mb-2">
+                      <span className="text-xs text-gray-500">Doctor's Order:</span>
+                      <p className="whitespace-pre-wrap">{details.doctors_order}</p>
+                    </div>
+                  )}
+                  {details.consultation_remarks && (
+                    <div>
+                      <span className="text-xs text-gray-500">Remarks:</span>
+                      <p className="whitespace-pre-wrap">{details.consultation_remarks}</p>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* Children Section */}
             <ChildrenSection />
           </div>
 
