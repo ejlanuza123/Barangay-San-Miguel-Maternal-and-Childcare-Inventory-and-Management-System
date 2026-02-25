@@ -113,7 +113,7 @@ export default function AppointmentPage() {
         setLoading(true);
         // Fetch ALL active patients (not deleted)
         const { data, error } = await supabase
-            .from('patients')
+            .from('mother_records')
             .select('*')
             .eq('is_deleted', false) // Ensure we only get active records
             .order('last_name', { ascending: true });

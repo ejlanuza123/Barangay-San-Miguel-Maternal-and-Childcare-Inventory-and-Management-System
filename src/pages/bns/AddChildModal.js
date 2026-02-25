@@ -160,7 +160,7 @@ const Step2 = ({ formData, handleChange }) => {
       setLoadingMothers(true);
       try {
         const { data, error } = await supabase
-          .from('patients')
+          .from('mother_records')
           .select('id, first_name, last_name, middle_name, contact_no, age, purok')
           .or(`first_name.ilike.%${motherSearchTerm}%,last_name.ilike.%${motherSearchTerm}%,middle_name.ilike.%${motherSearchTerm}%`)
           .eq('is_deleted', false)

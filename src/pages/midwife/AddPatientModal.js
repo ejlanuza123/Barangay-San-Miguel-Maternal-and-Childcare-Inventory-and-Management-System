@@ -981,7 +981,7 @@ export default function AddPatientModal({
       });
       const generateNewId = async () => {
         const { count, error } = await supabase
-          .from("patients")
+          .from("mother_records")
           .select("*", { count: "exact", head: true });
         if (error) {
           setPatientId("Error");
@@ -1108,9 +1108,9 @@ export default function AddPatientModal({
     try {
       let result;
       if (mode === "edit") {
-        result = await supabase.from("patients").update(patientData).eq("id", initialData.id);
+        result = await supabase.from("mother_records").update(patientData).eq("id", initialData.id);
       } else {
-        result = await supabase.from("patients").insert([patientData]);
+        result = await supabase.from("mother_records").insert([patientData]);
       }
       
       if (result.error) throw result.error;

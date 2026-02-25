@@ -1256,7 +1256,7 @@ const MaternityManagementTab = () => {
 
     // Build query with filters
     let query = supabase
-      .from("patients")
+      .from("mother_records")
       .select("*", { count: "exact" })
       .eq('is_deleted', false);
 
@@ -1346,7 +1346,7 @@ const MaternityManagementTab = () => {
     try {
       // Fetch all NON-DELETED patients
       const { data: allPatients, error } = await supabase
-        .from("patients")
+        .from("mother_records")
         .select("*")
         .eq('is_deleted', false)
         .order("patient_id", { ascending: true });
@@ -1390,7 +1390,7 @@ const MaternityManagementTab = () => {
     try {
       // Fetch all NON-DELETED patients
       const { data: allPatients, error } = await supabase
-        .from("patients")
+        .from("mother_records")
         .select("*")
         .eq('is_deleted', false)
         .order("patient_id", { ascending: true });

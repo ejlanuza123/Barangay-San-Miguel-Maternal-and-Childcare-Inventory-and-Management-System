@@ -375,7 +375,7 @@ const PrescriptionModal = ({ patient, onClose, onSave }) => {
       const currentHistory = patient.medical_history || {};
       const prescriptions = currentHistory.prescriptions || [];
       const { error: patError } = await supabase
-        .from('patients')
+        .from('mother_records')
         .update({ medical_history: { ...currentHistory, prescriptions: [...newRecords, ...prescriptions] } })
         .eq('id', patient.id);
         
@@ -1931,7 +1931,7 @@ export default function MaternityManagement() {
     try {
       // Fetch ALL patient records
       const { data: allPatients, error } = await supabase
-        .from('patients')
+        .from('mother_records')
         .select('*')
         .eq('is_deleted', false)
         .order('patient_id', { ascending: true });
@@ -2004,7 +2004,7 @@ export default function MaternityManagement() {
     try {
       // Fetch ALL patient records
       const { data: allPatients, error } = await supabase
-        .from('patients')
+        .from('mother_records')
         .select('*')
         .eq('is_deleted', false)
         .order('patient_id', { ascending: true });
@@ -2084,7 +2084,7 @@ export default function MaternityManagement() {
 
     // Build the query
     let query = supabase
-      .from("patients")
+      .from("mother_records")
       .select("*", { count: "exact" })
       .eq('is_deleted', false);
 
@@ -2168,7 +2168,7 @@ export default function MaternityManagement() {
       {
         worker_id: user.id,
         request_type: "Delete",
-        target_table: "patients",
+        target_table: "mother_records",
         target_record_id: patientToDelete.id,
         request_data: {
           patient_id: patientToDelete.patient_id,

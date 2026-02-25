@@ -536,7 +536,7 @@ export default function MidwifeDashboard() {
           .order('created_at', { ascending: false })
           .limit(6),
         supabase
-          .from('patients')
+          .from('mother_records')
           .select('*', { count: 'exact', head: true })
           .gte('created_at', formatForSupabase(firstDayOfMonth))
           .lt('created_at', formatForSupabase(firstDayOfNextMonth)),
@@ -546,7 +546,7 @@ export default function MidwifeDashboard() {
           .gte('created_at', formatForSupabase(firstDayOfMonth))
           .lt('created_at', formatForSupabase(firstDayOfNextMonth)),
         supabase
-          .from('patients')
+          .from('mother_records')
           .select('*', { count: 'exact', head: true })
           .eq('is_deleted', false),
         supabase
@@ -554,7 +554,7 @@ export default function MidwifeDashboard() {
           .select('*', { count: 'exact', head: true })
           .eq('is_deleted', false),
         supabase
-          .from('patients')
+          .from('mother_records')
           .select('created_at')
           .eq('is_deleted', false),
         supabase

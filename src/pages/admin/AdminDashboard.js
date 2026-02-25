@@ -609,7 +609,7 @@ const GenerateReportsModal = ({ onClose }) => {
         try {
             if (type === 'BHW') {
                 const [patientsRes, inventoryRes] = await Promise.all([
-                    supabase.from('patients').select('*').eq('is_deleted', false),
+                    supabase.from('mother_records').select('*').eq('is_deleted', false),
                     supabase.from('inventory').select('*').eq('is_deleted', false)
                 ]);
                 setAllData({
@@ -1127,7 +1127,7 @@ export default function AdminDashboard() {
                     .eq('status', 'Pending')
                     .order('created_at', { ascending: false })
                     .limit(5),
-                supabase.from('patients').select('*', { count: 'exact', head: true })
+                supabase.from('mother_records').select('*', { count: 'exact', head: true })
                     .eq('is_deleted', false)
                     .gte('created_at', firstDayOfMonth)
                     .lt('created_at', firstDayOfNextMonth),

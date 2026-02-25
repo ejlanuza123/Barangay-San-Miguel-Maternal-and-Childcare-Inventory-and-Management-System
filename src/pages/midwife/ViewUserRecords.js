@@ -9,8 +9,8 @@ export default function ViewUserRecords() {
             setLoading(true);
             const { data: { user } } = await supabase.auth.getUser();
             if (user) {
-                const { data, error } = await supabase.from('patients').select('*').eq('guardian_id', user.id);
-                if (error) console.error("Error fetching patient records:", error);
+                const { data, error } = await supabase.from('mother_records').select('*').eq('guardian_id', user.id);
+                if (error) console.error("Error fetching mother records:", error);
                 else setRecords(data);
             }
             setLoading(false);

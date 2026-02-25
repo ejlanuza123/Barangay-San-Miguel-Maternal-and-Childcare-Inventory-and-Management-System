@@ -28,7 +28,7 @@ export default function AddAppointmentModal({ onClose, onSave }) {
     useEffect(() => {
         const fetchAllPatients = async () => {
             const { data, error } = await supabase
-                .from('patients')
+                .from('mother_records') // <-- CHANGE TO 'mother_records'
                 .select('id, patient_id, first_name, last_name');
             if (error) console.error("Error fetching all patients:", error);
             else setAllPatients(data || []);
@@ -91,7 +91,7 @@ export default function AddAppointmentModal({ onClose, onSave }) {
         try {
             // Fetch the patient's record using the patient_id from the form
             const { data: patientData, error: patientError } = await supabase
-                .from('patients')
+                .from('mother_records') // <-- CHANGE TO 'mother_records'
                 .select('contact_no')
                 .eq('patient_id', formData.patient_id) // Find patient by their ID
                 .single();
@@ -114,7 +114,7 @@ export default function AddAppointmentModal({ onClose, onSave }) {
 
         // --- 3. SAVE APPOINTMENT (Your existing code) ---
         const { data: { user } } = await supabase.auth.getUser();
-        const { error: insertError } = await supabase.from('appointments').insert([{
+        const { error: insertError } = await supabase.from('follow_up_visit').insert([{
             patient_display_id: formData.patient_id,
             patient_name: formData.patient_name,
             reason: formData.reason,

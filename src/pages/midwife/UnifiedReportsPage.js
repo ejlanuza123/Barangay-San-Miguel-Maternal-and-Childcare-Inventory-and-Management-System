@@ -424,7 +424,7 @@ export default function UnifiedReportsPage() {
         setLoading(true);
         try {
             const [pat, child, inv, prof, appt, userProfileRes] = await Promise.all([
-                supabase.from('patients').select('*').eq('is_deleted', false),
+                supabase.from('mother_records').select('*').eq('is_deleted', false),
                 supabase.from('child_records').select('*').eq('is_deleted', false),
                 supabase.from('inventory').select('*').eq('is_deleted', false),
                 supabase.from('profiles').select('*'),
