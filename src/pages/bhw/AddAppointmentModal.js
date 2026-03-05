@@ -116,7 +116,7 @@ export default function AddAppointmentModal({ onClose, onSave }) {
         const { data: { user } } = await supabase.auth.getUser();
         const { error: insertError } = await supabase.from('follow_up_visit').insert([{
             patient_display_id: formData.patient_id,
-            patient_name: formData.patient_name,
+            // patient_name is no longer stored in the table; we'll resolve names from mother_records when listing
             reason: formData.reason,
             date: formData.date,
             time: formData.time,

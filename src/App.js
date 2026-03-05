@@ -12,7 +12,7 @@ import ResetPassword from "./components/auth/ResetPassword";
 import AppLayout from "./components/layout/AppLayout";
 import PrivateRoute from "./components/auth/PrivateRoute";
 import RoleGuard from "./components/auth/RoleGuard"; 
-import RecycleBinPage from "./pages/common/RecycleBinPage";
+
 
 // Pages
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -25,13 +25,13 @@ import AdminChildHealthRecords from "./pages/midwife/ChildHealthRecords";
 
 import BhwDashboard from "./pages/bhw/BhwDashboard";
 import MaternityManagement from "./pages/bhw/MaternityManagement";
-import AppointmentPage from "./pages/bhw/AppointmentPage";
+import AppointmentPage from "./pages/bhw/FollowUpVisit";
 import InventoryPage from "./pages/bhw/InventoryPage";
 import ReportsPage from "./pages/bhw/ReportsPage";
 
 import BnsDashboard from "./pages/bns/BnsDashboard";
 import ChildHealthRecords from "./pages/bns/ChildHealthRecords";
-import BnsAppointmentPage from "./pages/bns/AppointmentPage";
+import BnsAppointmentPage from "./pages/bns/FollowUpVisit";
 import BnsInventoryPage from "./pages/bns/InventoryPage";
 import BnsReportsPage from "./pages/bns/ReportsPage";
 
@@ -73,7 +73,6 @@ function App() {
                 <Route path="admin/maternity-records" element={<AdminMaternityManagement />} />
                 <Route path="admin/child-records" element={<AdminChildHealthRecords />} />
                 <Route path="admin/inventory" element={<AdminInventoryPage />} />
-                <Route path="admin/recycle-bin" element={<RecycleBinPage />} /> 
                 <Route path="admin/reports" element={<UnifiedReportsPage />} />
               </Route>
 
@@ -85,7 +84,6 @@ function App() {
                 <Route path="midwife/child-records" element={<MidwifeChildHealthRecords />} />
                 <Route path="midwife/inventory" element={<AdminInventoryPage />} />
                 <Route path="midwife/item-issuance" element={<ItemIssuancePage />} />
-                <Route path="midwife/recycle-bin" element={<RecycleBinPage />} /> 
                 <Route path="midwife/reports" element={<UnifiedReportsPage />} />
               </Route>
 

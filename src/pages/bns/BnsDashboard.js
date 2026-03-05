@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
 import { supabase } from '../../services/supabase';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import { useNotification } from '../../context/NotificationContext';
+import AddChildModal from './AddChildModal';
 
 // Helper function to calculate age from DOB
 const calculateAgeInYears = (dob) => {
@@ -227,15 +227,18 @@ const Calendar = () => {
   );
 };
 
-const QuickAccess = () => (
+const QuickAccess = ({ onAddChild }) => (
     <div className="bg-white p-4 rounded-lg shadow border flex flex-col space-y-3 h-full justify-center">
         <h3 className="font-bold text-gray-700 text-base text-center mb-2">Quick Access</h3>
-        <Link to="/bns/child-records" className="w-full text-center bg-blue-600 text-white font-semibold py-2 px-3 rounded-md shadow-sm hover:bg-blue-700 text-sm">
+        <button 
+            onClick={onAddChild}
+            className="w-full text-center bg-blue-600 text-white font-semibold py-2 px-3 rounded-md shadow-sm hover:bg-blue-700 text-sm transition-colors"
+        >
             + New Child Record
-        </Link>
-        <Link to="/bns/reports" className="w-full text-center bg-orange-400 text-white font-semibold py-2 px-3 rounded-md shadow-sm hover:bg-orange-500 text-sm">
+        </button>
+        <a href="/bns/reports" className="w-full text-center bg-orange-400 text-white font-semibold py-2 px-3 rounded-md shadow-sm hover:bg-orange-500 text-sm transition-colors">
             Generate Reports
-        </Link>
+        </a>
     </div>
 );
 
@@ -273,15 +276,16 @@ const UpcomingVisits = ({ visits }) => {
     const nextDate = getNextThursday();
 
     return (
-        <div className="bg-white p-4 rounded-lg shadow border min-h-[380px]"> {/* Changed from h-full to min-h-[280px] */}
+        <div className="bg-white p-4 rounded-lg shadow border min-h-[380px]">
             <h3 className="font-bold text-gray-700 text-base mb-3">Upcoming Follow-up Visits</h3>
             <p className="text-xs text-gray-500 mb-2">Next Visit Day: <span className="font-bold text-green-600">{nextDate}</span> (Thursday)</p>
-            <div className="space-y-2 overflow-y-auto" style={{ maxHeight: '300px' }}> {/* Reduced max-height */}
+            <div className="space-y-2 overflow-y-auto" style={{ maxHeight: '300px' }}>
                 {visits.length > 0 ? visits.map(child => (
-                    <div key={child.id} className="flex justify-between items-center p-3 bg-green-50 rounded border hover:bg-green-100 transition-colors">
+                    <div key={child.id} className="flex justify-between items-start p-3 bg-green-50 rounded border hover:bg-green-100 transition-colors">
                         <div>
                             <p className="font-semibold text-sm text-gray-800">{child.last_name}, {child.first_name}</p>
                             <p className="text-xs text-gray-500">ID: {child.child_id}</p>
+                            {child.mother_name && <p className="text-xs text-gray-500">Mother: {child.mother_name}</p>}
                             <p className="text-xs text-gray-500">Nutrition: {normalizeNutritionStatus(child.nutrition_status)}</p>
                         </div>
                         <div className="text-right">
@@ -335,6 +339,7 @@ export default function BnsDashboard() {
   const [upcomingVisits, setUpcomingVisits] = useState([]);
   const [recentActivities, setRecentActivities] = useState([]);
   const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
+  const [showAddChildModal, setShowAddChildModal] = useState(false);
   
   const [analytics, setAnalytics] = useState({
     totalChildren: 0,
@@ -358,7 +363,7 @@ export default function BnsDashboard() {
       // 1. Fetch Children & Activity
       const [childrenRes, activityRes] = await Promise.all([
         supabase.from('child_records')
-            .select('id, child_id, first_name, last_name, dob, nutrition_status, created_at, last_checkup, is_deleted')
+            .select('id, child_id, first_name, last_name, mother_name, father_name, dob, nutrition_status, created_at, last_checkup, is_deleted')
             .eq('is_deleted', false)
             .order('last_name', { ascending: true }),
         
@@ -451,6 +456,15 @@ export default function BnsDashboard() {
             onClose={() => setIsActivityModalOpen(false)} 
           />
         )}
+        {showAddChildModal && (
+          <AddChildModal
+            onClose={() => setShowAddChildModal(false)}
+            onSave={() => {
+              setShowAddChildModal(false);
+              fetchDashboardData();
+            }}
+          />
+        )}
       </AnimatePresence>
 
       <div className="space-y-6">
@@ -463,7 +477,7 @@ export default function BnsDashboard() {
             <NutritionChart nutritionData={nutritionData} />
           </div>
           <div className="lg:col-span-1">
-             <QuickAccess />
+             <QuickAccess onAddChild={() => setShowAddChildModal(true)} />
           </div>
         </div>
 

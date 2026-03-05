@@ -3,10 +3,170 @@ import { supabase } from '../../services/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
 import { logActivity } from '../../services/activityLogger';
 import { useNotification } from '../../context/NotificationContext';
+import { useAuth } from '../../context/AuthContext';
 import { QRCodeSVG } from 'qrcode.react';
 
 const ProfileIcon = () => ( <svg className="w-full h-full text-gray-300" fill="currentColor" viewBox="0 0 24 24"><path d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z" /></svg> );
 const BackIcon = () => ( <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg> );
+
+// --- Inventory Input Component ---
+const InventoryInput = ({ label, fieldName, value, onChange, inventoryCategory, inventoryItems, onAddToQueue, amountFieldName, amountValue }) => {
+  const [selectedItemId, setSelectedItemId] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showDropdown, setShowDropdown] = useState(false);
+  
+  const filteredItems = inventoryItems.filter(
+    item => item.category === inventoryCategory && item.quantity > 0
+  );
+
+  console.log('InventoryInput filtered items:', {
+    inventoryCategory,
+    totalItems: inventoryItems.length,
+    filteredItems: filteredItems.length,
+    category: inventoryCategory
+  });
+
+  const searchedItems = searchTerm 
+    ? filteredItems.filter(item =>
+        item.item_name.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    : filteredItems;
+
+  const handleDateSet = (dateVal) => {
+    onChange({ target: { name: fieldName, value: dateVal } });
+  };
+
+  const handleSetToday = () => {
+    const today = new Date().toISOString().split('T')[0];
+    handleDateSet(today);
+  };
+
+  const handleItemSelect = (item) => {
+    setSelectedItemId(item.id);
+    setSearchTerm(item.item_name);
+    setShowDropdown(false);
+    
+    const qtyToDeduct = parseInt(amountValue) || 1;
+    console.log('Adding to deduction queue:', {
+        itemId: item.id,
+        itemName: item.item_name,
+        deductQty: qtyToDeduct,
+        category: inventoryCategory,
+        dateGiven: value,
+        fieldName: fieldName
+    });
+
+    onAddToQueue({
+        itemId: item.id,
+        itemName: item.item_name,
+        deductQty: qtyToDeduct, 
+        category: inventoryCategory,
+        dateGiven: value, 
+        fieldName: fieldName
+    });
+  };
+
+  const handleSearchChange = (e) => {
+    setSearchTerm(e.target.value);
+    setSelectedItemId("");
+    setShowDropdown(true);
+  };
+
+  const handleSearchFocus = () => {
+    setShowDropdown(true);
+  };
+
+  const handleSearchBlur = () => {
+    // Delay hiding dropdown to allow for item selection
+    setTimeout(() => setShowDropdown(false), 200);
+  };
+
+  return (
+    <div className="border p-2 rounded-md bg-gray-50 mb-2">
+        <label className="block text-xs font-bold text-gray-700 mb-1">{label}</label>
+        
+        <div className="flex gap-2 mb-2">
+            <input 
+                type="date" 
+                name={fieldName}
+                value={value || ''} 
+                onChange={(e) => handleDateSet(e.target.value)}
+                className="w-full p-1 border rounded text-xs" 
+            />
+            <button 
+                type="button" 
+                onClick={handleSetToday}
+                className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs hover:bg-blue-200 whitespace-nowrap"
+            >
+                Today
+            </button>
+        </div>
+
+        {amountFieldName && (
+            <div className="mb-2">
+                <label className="block text-[10px] text-gray-500 mb-0.5">Amount Given</label>
+                <input 
+                    type="text" 
+                    name={amountFieldName}
+                    value={amountValue || ''} 
+                    onChange={onChange}
+                    placeholder="e.g. 1 cap"
+                    className="w-full p-1 border rounded text-xs" 
+                />
+            </div>
+        )}
+
+        {value && (
+            <div className="relative">
+                <label className="block text-[10px] text-gray-500 mb-0.5">Search Medicine</label>
+                <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={handleSearchChange}
+                    onFocus={handleSearchFocus}
+                    onBlur={handleSearchBlur}
+                    placeholder="Type to search medicine..."
+                    className="w-full p-1 border rounded text-xs bg-white"
+                />
+                {showDropdown && searchedItems.length > 0 && (
+                    <div className="absolute z-10 w-full bg-white border border-gray-300 rounded-b-md shadow-lg max-h-40 overflow-y-auto">
+                        {searchedItems.map(item => (
+                            <div
+                                key={item.id}
+                                className="p-2 hover:bg-gray-100 cursor-pointer text-xs border-b border-gray-100 last:border-b-0"
+                                onClick={() => handleItemSelect(item)}
+                            >
+                                <div className="font-medium">{item.item_name}</div>
+                                <div className="text-gray-500">Qty: {item.quantity}</div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+                {showDropdown && searchedItems.length === 0 && searchTerm && (
+                    <div className="absolute z-10 w-full bg-white border border-gray-300 rounded-b-md shadow-lg p-2 text-xs text-gray-500">
+                        No medicines found matching "{searchTerm}"
+                    </div>
+                )}
+                {showDropdown && searchedItems.length === 0 && !searchTerm && filteredItems.length > 0 && (
+                    <div className="absolute z-10 w-full bg-white border border-gray-300 rounded-b-md shadow-lg p-2 text-xs text-gray-500">
+                        Start typing to search medicines...
+                    </div>
+                )}
+                {filteredItems.length === 0 && (
+                    <p className="text-[10px] text-orange-600 mt-1">
+                        No {inventoryCategory.toLowerCase()} items available in inventory. Please add items to the Inventory first.
+                    </p>
+                )}
+                {filteredItems.length > 0 && (
+                    <p className="text-[10px] text-gray-500 mt-1">
+                        Selecting an item will auto-deduct from inventory upon save.
+                    </p>
+                )}
+            </div>
+        )}
+    </div>
+  );
+};
 
 // --- Form Step Components ---
 
@@ -47,10 +207,14 @@ const Step1 = ({ formData, handleChange, newChildId }) => (
             {/* Child's Information */}
             <div>
                 <h3 className="font-semibold text-gray-700 mb-2">Child's Information</h3>
-                <div className="grid grid-cols-2 gap-2 mb-2">
+                <div className="grid grid-cols-3 gap-2 mb-2">
                     <div>
-                        <label className="text-xs text-gray-500">Name of Child</label>
-                        <input type="text" name="child_name" value={formData.child_name || ""} onChange={handleChange} className="w-full p-2 border rounded-md text-sm" required />
+                        <label className="text-xs text-gray-500">First Name</label>
+                        <input type="text" name="first_name" value={formData.first_name || ""} onChange={handleChange} className="w-full p-2 border rounded-md text-sm" required />
+                    </div>
+                    <div>
+                        <label className="text-xs text-gray-500">Last Name</label>
+                        <input type="text" name="last_name" value={formData.last_name || ""} onChange={handleChange} className="w-full p-2 border rounded-md text-sm" required />
                     </div>
                     <div>
                         <label className="text-xs text-gray-500">Sex</label>
@@ -149,6 +313,19 @@ const Step2 = ({ formData, handleChange }) => {
     "Purok Magara Zone 2"
   ];
 
+  // Helper function to calculate age from date of birth
+  const calculateAge = (dob) => {
+    if (!dob) return null;
+    const birthDate = new Date(dob);
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age;
+  };
+
   // Fetch mothers from patients table
   useEffect(() => {
     const fetchMothers = async () => {
@@ -161,7 +338,7 @@ const Step2 = ({ formData, handleChange }) => {
       try {
         const { data, error } = await supabase
           .from('mother_records')
-          .select('id, first_name, last_name, middle_name, contact_no, age, purok')
+          .select('id, first_name, last_name, middle_name, contact_no, age, dob, purok')
           .or(`first_name.ilike.%${motherSearchTerm}%,last_name.ilike.%${motherSearchTerm}%,middle_name.ilike.%${motherSearchTerm}%`)
           .eq('is_deleted', false)
           .limit(10);
@@ -205,8 +382,13 @@ const Step2 = ({ formData, handleChange }) => {
     // Set mother name
     updatedFormData.mother_name = `${mother.first_name} ${mother.last_name}`;
     
-    // Set mother age if available
-    if (mother.age) {
+    // Calculate and set mother age from DOB if available, otherwise use stored age
+    if (mother.dob) {
+      const calculatedAge = calculateAge(mother.dob);
+      if (calculatedAge !== null) {
+        updatedFormData.mother_age = calculatedAge;
+      }
+    } else if (mother.age) {
       updatedFormData.mother_age = mother.age;
     }
     
@@ -481,7 +663,29 @@ const Step2 = ({ formData, handleChange }) => {
 
 // STEP 3: Medical & Immunization Information
 // STEP 3: Medical & Immunization Information
-const Step3 = ({ formData, handleChange }) => {
+const Step3 = ({ formData, handleChange, inventoryItems, onAddToQueue }) => {
+    // Helper function to calculate BMI
+    const calculateBMI = (weight, height) => {
+        if (!weight || !height || weight <= 0 || height <= 0) return null;
+        const heightInMeters = parseFloat(height) / 100;
+        const bmi = parseFloat(weight) / (heightInMeters * heightInMeters);
+        return bmi.toFixed(1);
+    };
+
+    // Auto-calculate BMI when weight or height changes
+    useEffect(() => {
+        if (formData.weight_kg && formData.height_cm) {
+            const calculatedBMI = calculateBMI(formData.weight_kg, formData.height_cm);
+            if (calculatedBMI && formData.bmi !== calculatedBMI) {
+                handleChange({
+                    target: {
+                        name: 'bmi',
+                        value: calculatedBMI
+                    }
+                });
+            }
+        }
+    }, [formData.weight_kg, formData.height_cm]);
     const immunizations = [
         { id: 'bcg', label: 'BCG', required: true },
         { id: 'hepa_b', label: 'Hepa B w/In 24 hrs', required: true },
@@ -542,6 +746,7 @@ const Step3 = ({ formData, handleChange }) => {
                             <tr>
                                 <th className="p-1 border text-center" colSpan="2">Time</th>
                                 <th className="p-1 border w-20">Immunization</th>
+                                <th className="p-1 border w-20">Date Given</th>
                                 <th className="p-1 border w-16">Age</th>
                                 <th className="p-1 border w-16">Weight</th>
                                 <th className="p-1 border w-16">Height</th>
@@ -554,6 +759,7 @@ const Step3 = ({ formData, handleChange }) => {
                             <tr>
                                 <th className="p-1 border text-[10px] text-center">Admission</th>
                                 <th className="p-1 border text-[10px] text-center">Departure</th>
+                                <th className="p-1 border"></th>
                                 <th className="p-1 border"></th>
                                 <th className="p-1 border"></th>
                                 <th className="p-1 border"></th>
@@ -592,6 +798,17 @@ const Step3 = ({ formData, handleChange }) => {
                                     
                                     {/* Immunization Type */}
                                     <td className="p-1 border font-semibold">{immunization.label}</td>
+                                    
+                                    {/* Date Given */}
+                                    <td className="p-1 border">
+                                        <input 
+                                            type="date" 
+                                            name={`immunization_${immunization.id}_date`} 
+                                            value={formData[`immunization_${immunization.id}_date`] || ''} 
+                                            onChange={handleChange} 
+                                            className="w-full p-1 text-[10px]" 
+                                        />
+                                    </td>
                                     
                                     {/* Age */}
                                     <td className="p-1 border">
@@ -698,15 +915,63 @@ const Step3 = ({ formData, handleChange }) => {
                 </div>
             </div>
 
-            {/* Additional Medical Information */}
-            <div className="grid grid-cols-2 gap-3 mt-4">
-                <div>
-                    <label className="text-xs text-gray-500">Vitamin A Supplementation</label>
-                    <div className="flex gap-2">
-                        <input type="date" name="vitamin_a_date" value={formData.vitamin_a_date || ''} onChange={handleChange} className="w-1/2 p-2 border rounded-md text-sm" />
-                        <input type="text" name="vitamin_a_amount" value={formData.vitamin_a_amount || ''} onChange={handleChange} className="w-1/2 p-2 border rounded-md text-sm" placeholder="Amount" />
+            {/* Current Measurements */}
+            <div>
+                <h3 className="font-semibold text-gray-700 mb-2">Current Measurements</h3>
+                <div className="grid grid-cols-3 gap-3 p-3 border rounded-md bg-gray-50">
+                    <div>
+                        <label className="text-xs text-gray-500">Weight (kg)</label>
+                        <input 
+                            type="number" 
+                            step="0.1" 
+                            name="weight_kg" 
+                            value={formData.weight_kg || ''} 
+                            onChange={handleChange} 
+                            className="w-full p-2 border rounded-md text-sm" 
+                            placeholder="e.g., 5.5"
+                        />
+                    </div>
+                    <div>
+                        <label className="text-xs text-gray-500">Height (cm)</label>
+                        <input 
+                            type="number" 
+                            step="0.1" 
+                            name="height_cm" 
+                            value={formData.height_cm || ''} 
+                            onChange={handleChange} 
+                            className="w-full p-2 border rounded-md text-sm" 
+                            placeholder="e.g., 50.5"
+                        />
+                    </div>
+                    <div>
+                        <label className="text-xs text-gray-500">BMI (Auto-calculated)</label>
+                        <input 
+                            type="number" 
+                            step="0.1" 
+                            name="bmi" 
+                            value={formData.bmi || ''} 
+                            onChange={handleChange} 
+                            className="w-full p-2 border rounded-md text-sm bg-gray-100" 
+                            placeholder="Auto-calculated"
+                            disabled
+                        />
                     </div>
                 </div>
+            </div>
+
+            {/* Additional Medical Information */}
+            <div className="mt-4">
+                <InventoryInput 
+                    label="Vitamin A Supplementation (200,000 IU)"
+                    fieldName="vitamin_a_date"
+                    value={formData.vitamin_a_date}
+                    onChange={handleChange}
+                    inventoryCategory="Medicines"
+                    inventoryItems={inventoryItems}
+                    onAddToQueue={onAddToQueue}
+                    amountFieldName="vitamin_a_amount"
+                    amountValue={formData.vitamin_a_amount}
+                />
             </div>
         </div>
     );
@@ -729,6 +994,11 @@ export default function AddChildModal({ onClose, onSave, mode = 'add', initialDa
     const [formData, setFormData] = useState({});
     const [childId, setChildId] = useState('Loading...');
     const { addNotification } = useNotification();
+    const { profile } = useAuth();
+    
+    // Inventory related state
+    const [inventoryItems, setInventoryItems] = useState([]);
+    const [deductionQueue, setDeductionQueue] = useState([]);
 
     useEffect(() => {
         const generateNewId = async () => {
@@ -744,6 +1014,8 @@ export default function AddChildModal({ onClose, onSave, mode = 'add', initialDa
         if (mode === 'edit' && initialData) {
             setFormData({
                 // Step 1 Data
+                first_name: initialData.first_name || '',
+                last_name: initialData.last_name || '',
                 child_name: initialData.child_name || '',
                 dob: initialData.dob || '',
                 sex: initialData.sex || '',
@@ -774,6 +1046,9 @@ export default function AddChildModal({ onClose, onSave, mode = 'add', initialDa
                 smoking_history: initialData.smoking_history || '',
                 
                 // Step 3 Data
+                weight_kg: initialData.weight_kg || '',
+                height_cm: initialData.height_cm || '',
+                bmi: initialData.bmi || '',
                 vitamin_a_date: initialData.vitamin_a_date || '',
                 vitamin_a_amount: initialData.vitamin_a_amount || '',
                 
@@ -781,11 +1056,76 @@ export default function AddChildModal({ onClose, onSave, mode = 'add', initialDa
                 ...initialData.health_details
             });
             setChildId(initialData.child_id);
+
+            // Fetch related immunization, breastfeeding, and measurements data
+            const fetchRelatedData = async () => {
+                try {
+                    // Fetch mother immunizations
+                    const { data: motherImms } = await supabase
+                        .from('child_mother_immunizations')
+                        .select('*')
+                        .eq('child_record_id', initialData.id);
+                    
+                    if (motherImms) {
+                        const updatedFormData = { ...formData };
+                        motherImms.forEach(imm => {
+                            updatedFormData[`mother_immunization_${imm.immunization_type}`] = imm.date_given || '';
+                        });
+                        setFormData(prev => ({ ...prev, ...updatedFormData }));
+                    }
+
+                    // Fetch breastfeeding records
+                    const { data: bfRecords } = await supabase
+                        .from('child_breastfeeding')
+                        .select('*')
+                        .eq('child_record_id', initialData.id);
+                    
+                    if (bfRecords) {
+                        const updatedFormData = { ...formData };
+                        bfRecords.forEach(bf => {
+                            if (bf.is_exclusive) {
+                                updatedFormData[`breastfeeding_month_${bf.month_number}`] = true;
+                            }
+                        });
+                        setFormData(prev => ({ ...prev, ...updatedFormData }));
+                    }
+
+                    // Fetch child immunizations
+                    const { data: childImms } = await supabase
+                        .from('child_immunizations')
+                        .select('*')
+                        .eq('child_record_id', initialData.id);
+                    
+                    if (childImms) {
+                        const updatedFormData = { ...formData };
+                        childImms.forEach(imm => {
+                            updatedFormData[`immunization_${imm.immunization_type}_admission`] = imm.admission_time || '';
+                            updatedFormData[`immunization_${imm.immunization_type}_departure`] = imm.departure_time || '';
+                            updatedFormData[`immunization_${imm.immunization_type}_date`] = imm.date_given || '';
+                            updatedFormData[`immunization_${imm.immunization_type}_age`] = imm.age || '';
+                            updatedFormData[`immunization_${imm.immunization_type}_weight`] = imm.weight_kg || '';
+                            updatedFormData[`immunization_${imm.immunization_type}_height`] = imm.height_cm || '';
+                            updatedFormData[`immunization_${imm.immunization_type}_nutritional`] = imm.nutritional_status || '';
+                            updatedFormData[`immunization_${imm.immunization_type}_admitted_by`] = imm.admitted_by || '';
+                            updatedFormData[`immunization_${imm.immunization_type}_immunized_by`] = imm.immunized_by || '';
+                            updatedFormData[`immunization_${imm.immunization_type}_next_visit`] = imm.next_visit || '';
+                            updatedFormData[`immunization_${imm.immunization_type}_remarks`] = imm.remarks || '';
+                        });
+                        setFormData(prev => ({ ...prev, ...updatedFormData }));
+                    }
+                } catch (error) {
+                    console.error('Error fetching related data:', error);
+                }
+            };
+
+            fetchRelatedData();
         } else {
             generateNewId();
             // Initialize with empty form data for new records
             setFormData({
                 // Step 1
+                first_name: '',
+                last_name: '',
                 child_name: '',
                 dob: '',
                 sex: '',
@@ -816,11 +1156,35 @@ export default function AddChildModal({ onClose, onSave, mode = 'add', initialDa
                 smoking_history: '',
                 
                 // Step 3
+                weight_kg: '',
+                height_cm: '',
+                bmi: '',
                 vitamin_a_date: '',
                 vitamin_a_amount: '',
             });
         }
     }, [mode, initialData]);
+
+    // Fetch inventory items
+    useEffect(() => {
+        const fetchInventory = async () => {
+            const { data, error } = await supabase
+                .from('inventory')
+                .select('*')
+                .eq('is_deleted', false)
+                .or('owner_role.eq.BNS,owner_role.is.null,owner_role.eq.BHW')
+                .order('item_name');
+            
+            if (!error && data) {
+                console.log('Fetched inventory items for BNS:', data);
+                setInventoryItems(data);
+            } else {
+                console.error('Error fetching inventory:', error);
+            }
+        };
+
+        fetchInventory();
+    }, []);
 
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
@@ -830,73 +1194,258 @@ export default function AddChildModal({ onClose, onSave, mode = 'add', initialDa
         }));
     };
 
+    const handleAddToQueue = (deductionItem) => {
+        setDeductionQueue(prev => {
+            // Remove any existing item with the same fieldName to avoid duplicates
+            const filtered = prev.filter(item => item.fieldName !== deductionItem.fieldName);
+            return [...filtered, deductionItem];
+        });
+    };
+
     const handleSave = async () => {
         setLoading(true);
         const { data: { user } } = await supabase.auth.getUser();
         
-        const childName = formData.child_name || '';
         const nutritionStatus = getNutritionStatus(formData.bmi);
         const lastCheckupDate = new Date().toISOString().split('T')[0];
         
-        const recordData = {
-            child_id: childId, 
-            child_name: childName,
-            dob: formData.dob,
-            sex: formData.sex, 
-            birth_weight: formData.birth_weight,
-            place_of_birth: formData.place_of_birth,
-            place_of_delivery: formData.place_of_delivery,
-            birth_order: formData.birth_order,
-            delivery_type: formData.delivery_type,
-            delivery_time: formData.delivery_time,
-            mother_name: formData.mother_name, 
-            father_name: formData.father_name,
-            mother_age: formData.mother_age,
-            contact_no: formData.contact_no,
-            guardian_name: formData.guardian_name,
-            guardian_relationship: formData.guardian_relationship,
-            address: formData.address,
-            nearest_landmark: formData.nearest_landmark,
-            bhs_name: formData.bhs_name,
-            family_number: formData.family_number,
-            nhts_no: formData.nhts_no,
-            philhealth_no: formData.philhealth_no,
-            nbs_referral_date: formData.nbs_referral_date,
-            nbs_result: formData.nbs_result,
-            birth_attendant: formData.birth_attendant,
-            aog_at_birth: formData.aog_at_birth,
-            smoking_history: formData.smoking_history,
-            vitamin_a_date: formData.vitamin_a_date,
-            vitamin_a_amount: formData.vitamin_a_amount,
-            nutrition_status: nutritionStatus,
-            last_checkup: lastCheckupDate, 
-            health_details: formData // Stores ALL form fields
+        // Helper function to convert empty strings to null for date fields
+        const sanitizeValue = (value) => {
+            return value === '' || value === undefined ? null : value;
         };
+        
+        try {
+            // 1. Insert main child record
+            const recordData = {
+                child_id: childId, 
+                first_name: formData.first_name,
+                last_name: formData.last_name,
+                child_name: formData.child_name,
+                dob: sanitizeValue(formData.dob),
+                sex: formData.sex, 
+                birth_weight: sanitizeValue(formData.birth_weight),
+                place_of_birth: formData.place_of_birth,
+                place_of_delivery: formData.place_of_delivery,
+                birth_order: sanitizeValue(formData.birth_order),
+                delivery_type: formData.delivery_type,
+                delivery_time: sanitizeValue(formData.delivery_time),
+                mother_name: formData.mother_name, 
+                father_name: formData.father_name,
+                mother_age: sanitizeValue(formData.mother_age),
+                contact_no: formData.contact_no,
+                guardian_name: formData.guardian_name,
+                guardian_relationship: formData.guardian_relationship,
+                address: formData.address,
+                nearest_landmark: formData.nearest_landmark,
+                bhs_name: formData.bhs_name,
+                family_number: formData.family_number,
+                nhts_no: formData.nhts_no,
+                philhealth_no: formData.philhealth_no,
+                nbs_referral_date: sanitizeValue(formData.nbs_referral_date),
+                nbs_result: formData.nbs_result,
+                birth_attendant: formData.birth_attendant,
+                aog_at_birth: formData.aog_at_birth,
+                smoking_history: formData.smoking_history,
+                nutrition_status: nutritionStatus,
+                last_checkup: lastCheckupDate,
+                weight_kg: sanitizeValue(formData.weight_kg),
+                height_cm: sanitizeValue(formData.height_cm),
+                bmi: sanitizeValue(formData.bmi),
+                vitamin_a_date: sanitizeValue(formData.vitamin_a_date),
+                vitamin_a_amount: formData.vitamin_a_amount
+            };
 
-        let result;
-        if (mode === 'edit') {
-            result = await supabase
-                .from('child_records')
-                .update(recordData)
-                .eq('id', initialData.id);
-        } else {
-            result = await supabase.from('child_records').insert([recordData]);
-        }
+            let childRecordId;
+            
+            if (mode === 'edit') {
+                const { error: updateError } = await supabase
+                    .from('child_records')
+                    .update(recordData)
+                    .eq('id', initialData.id);
+                
+                if (updateError) throw updateError;
+                childRecordId = initialData.id;
+            } else {
+                const { data, error: insertError } = await supabase
+                    .from('child_records')
+                    .insert([recordData])
+                    .select('id')
+                    .single();
+                
+                if (insertError) throw insertError;
+                childRecordId = data.id;
+            }
 
-        if (result.error) {
-            addNotification(`Error: ${result.error.message}`, 'error');
-        } else {
+            // 2. Insert mother's immunizations
+            const motherImmunizations = [];
+            ['Td1', 'Td2', 'Td3', 'Td4', 'Td5', 'FIM'].forEach(imm => {
+                const date = formData[`mother_immunization_${imm}`];
+                if (date) {
+                    motherImmunizations.push({
+                        child_record_id: childRecordId,
+                        immunization_type: imm,
+                        date_given: date
+                    });
+                }
+            });
+            
+            if (motherImmunizations.length > 0) {
+                const { error: immError } = await supabase
+                    .from('child_mother_immunizations')
+                    .insert(motherImmunizations);
+                
+                if (immError) console.error("Error inserting mother immunizations:", immError);
+            }
+
+            // 3. Insert breastfeeding records
+            const breastfeeding = [];
+            for (let i = 1; i <= 6; i++) {
+                if (formData[`breastfeeding_month_${i}`]) {
+                    breastfeeding.push({
+                        child_record_id: childRecordId,
+                        month_number: i,
+                        is_exclusive: true
+                    });
+                }
+            }
+            
+            if (breastfeeding.length > 0) {
+                const { error: bfError } = await supabase
+                    .from('child_breastfeeding')
+                    .insert(breastfeeding);
+                
+                if (bfError) console.error("Error inserting breastfeeding records:", bfError);
+            }
+
+            // 4. Insert child immunizations
+            const immunizations = [];
+            const immTypes = ['bcg', 'hepa_b', 'pentavalent_1', 'pentavalent_2', 'pentavalent_3', 
+                            'opv_1', 'opv_2', 'opv_3', 'ipv_1', 'ipv_2', 
+                            'pcv_1', 'pcv_2', 'pcv_3', 'mcv_1', 'mcv_2', 'fic'];
+            
+            immTypes.forEach(immType => {
+                const date = formData[`immunization_${immType}_date`];
+                if (date) {
+                    immunizations.push({
+                        child_record_id: childRecordId,
+                        immunization_type: immType,
+                        date_given: date,
+                        age: formData[`immunization_${immType}_age`],
+                        weight_kg: formData[`immunization_${immType}_weight`],
+                        height_cm: formData[`immunization_${immType}_height`],
+                        nutritional_status: formData[`immunization_${immType}_nutritional`],
+                        admitted_by: formData[`immunization_${immType}_admitted_by`],
+                        immunized_by: formData[`immunization_${immType}_immunized_by`],
+                        next_visit: formData[`immunization_${immType}_next_visit`],
+                        remarks: formData[`immunization_${immType}_remarks`],
+                        admission_time: formData[`immunization_${immType}_admission`],
+                        departure_time: formData[`immunization_${immType}_departure`]
+                    });
+                }
+            });
+            
+            if (immunizations.length > 0) {
+                const { error: immError } = await supabase
+                    .from('child_immunizations')
+                    .insert(immunizations);
+                
+                if (immError) console.error("Error inserting child immunizations:", immError);
+            }
+
+            // 5. Insert current measurements
+            if (formData.weight_kg || formData.height_cm || formData.bmi) {
+                const { error: measError } = await supabase
+                    .from('child_measurements')
+                    .insert([{
+                        child_record_id: childRecordId,
+                        measurement_date: lastCheckupDate,
+                        weight_kg: formData.weight_kg,
+                        height_cm: formData.height_cm,
+                        bmi: formData.bmi,
+                        nutrition_status: nutritionStatus,
+                        recorded_by: user?.id
+                    }]);
+                
+                if (measError) console.error("Error inserting measurements:", measError);
+            }
+
+            // 6. Insert child supplementation (Vitamin A)
+            if (formData.vitamin_a_date) {
+                const { error: supError } = await supabase
+                    .from('child_supplementation')
+                    .insert([{
+                        child_record_id: childRecordId,
+                        supplement_type: 'Vitamin A',
+                        date_given: formData.vitamin_a_date,
+                        amount: formData.vitamin_a_amount,
+                        administered_by: user?.id
+                    }]);
+                
+                if (supError) console.error("Error inserting supplementation:", supError);
+            }
+
+            // 7. Process inventory deductions
+            if (deductionQueue.length > 0) {
+                console.log('Processing deduction queue:', deductionQueue);
+                for (const deduction of deductionQueue) {
+                    // First fetch the current item to get its quantity
+                    const { data: currentItem, error: fetchError } = await supabase
+                        .from('inventory')
+                        .select('quantity')
+                        .eq('id', deduction.itemId)
+                        .single();
+                    
+                    if (fetchError) {
+                        console.error(`Error fetching current inventory for ${deduction.itemName}:`, fetchError);
+                        continue;
+                    }
+                    
+                    if (currentItem && currentItem.quantity >= deduction.deductQty) {
+                        const { error: deductError } = await supabase
+                            .from('inventory')
+                            .update({
+                                quantity: currentItem.quantity - deduction.deductQty,
+                                updated_at: new Date().toISOString()
+                            })
+                            .eq('id', deduction.itemId);
+                        
+                        if (deductError) {
+                            console.error(`Error deducting inventory for ${deduction.itemName}:`, deductError);
+                        } else {
+                            console.log(`Successfully deducted ${deduction.deductQty} of ${deduction.itemName}`);
+                            // Log the inventory deduction using activity logger
+                            await logActivity(
+                                'Stock Deducted',
+                                `Used ${deduction.deductQty} unit(s) of ${deduction.itemName} for Vitamin A supplementation - child ${formData.first_name} ${formData.last_name}`
+                            );
+                            
+                            addNotification(`Deducted ${deduction.deductQty} of ${deduction.itemName} from inventory`, 'success');
+                        }
+                    } else {
+                        console.error(`Insufficient quantity for ${deduction.itemName}. Available: ${currentItem?.quantity || 0}, Required: ${deduction.deductQty}`);
+                        addNotification(`Insufficient stock for ${deduction.itemName}. Available: ${currentItem?.quantity || 0}`, 'error');
+                    }
+                }
+            } else {
+                console.log('No items in deduction queue');
+            }
+
+            const fullName = `${formData.first_name} ${formData.last_name}`.trim();
             if (mode === 'edit') {
                 addNotification('Child record updated successfully.', 'success');
-                logActivity('Child Record Updated', `Updated record for ${childName}`);
+                logActivity('Child Record Updated', `Updated record for ${fullName}`);
             } else {
                 addNotification('New child added successfully.', 'success');
-                logActivity('New Child Added', `Registered ${childName}`);
+                logActivity('New Child Added', `Registered ${fullName}`);
             }
             onSave();
             onClose();
+            
+        } catch (err) {
+            addNotification(`Error: ${err.message}`, 'error');
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     const title = mode === 'edit' ? 'Edit Child Immunization Record' : 'New Child Immunization Record';
@@ -939,7 +1488,7 @@ export default function AddChildModal({ onClose, onSave, mode = 'add', initialDa
                     <div className="flex-grow overflow-y-auto">
                         {step === 1 && <Step1 formData={formData} handleChange={handleChange} newChildId={childId} />}
                         {step === 2 && <Step2 formData={formData} handleChange={handleChange} />}
-                        {step === 3 && <Step3 formData={formData} handleChange={handleChange} />}
+                        {step === 3 && <Step3 formData={formData} handleChange={handleChange} inventoryItems={inventoryItems} onAddToQueue={handleAddToQueue} />}
                     </div>
 
                     {/* Navigation Buttons */}

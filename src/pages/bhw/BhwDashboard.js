@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "../../services/supabase";
+import AddPatientModal from "./AddPatientModal";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAuth } from "../../context/AuthContext";
 import { useNotification } from "../../context/NotificationContext";
@@ -18,13 +19,17 @@ const AnalyticsOverview = ({ analytics }) => (
         <p className="text-xs text-green-600 font-semibold">Recent Visits</p>
         <p className="text-xl font-bold text-green-700">{analytics.recentVisits}</p>
       </div>
+      <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-100">
+        <p className="text-xs text-yellow-600 font-semibold">Mid Risk</p>
+        <p className="text-xl font-bold text-yellow-700">{analytics.midRiskPatients}</p>
+      </div>
+      <div className="bg-green-50 p-3 rounded-lg border border-green-100">
+        <p className="text-xs text-green-600 font-semibold">Normal</p>
+        <p className="text-xl font-bold text-green-700">{analytics.normalPatients}</p>
+      </div>
       <div className="bg-red-50 p-3 rounded-lg border border-red-100">
         <p className="text-xs text-red-600 font-semibold">High Risk</p>
         <p className="text-xl font-bold text-red-700">{analytics.highRiskPatients}</p>
-      </div>
-      <div className="bg-purple-50 p-3 rounded-lg border border-purple-100">
-        <p className="text-xs text-purple-600 font-semibold">Active Records</p>
-        <p className="text-xl font-bold text-purple-700">{analytics.totalPatients}</p>
       </div>
     </div>
   </div>
@@ -199,17 +204,17 @@ const Calendar = () => {
   );
 };
 
-const QuickAccess = () => (
+const QuickAccess = ({ onAddNew }) => (
   <div className="bg-white p-4 rounded-lg shadow border flex flex-col space-y-3 h-full justify-center">
     <h3 className="font-bold text-gray-700 text-base text-center mb-2">
       Quick Access
     </h3>
-    <Link
-      to="/bhw/maternity-management"
+    <button
+      onClick={onAddNew}
       className="w-full text-center bg-blue-600 text-white font-semibold py-2 px-3 rounded-md shadow-sm hover:bg-blue-700 text-sm"
     >
       + New Mother Record
-    </Link>
+    </button>
     <Link
       to="/bhw/reports"
       className="w-full text-center bg-orange-400 text-white font-semibold py-2 px-3 rounded-md shadow-sm hover:bg-orange-500 text-sm"
@@ -399,12 +404,14 @@ export default function BhwDashboard() {
   const [upcomingVisits, setUpcomingVisits] = useState([]);
   const [recentActivities, setRecentActivities] = useState([]);
   const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
-  const [riskData, setRiskData] = useState([]);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   
   const [analytics, setAnalytics] = useState({
     totalPatients: 0,
     recentVisits: 0,
     highRiskPatients: 0,
+    midRiskPatients: 0,
+    normalPatients: 0,
     riskLevels: { Normal: 0, Medium: 0, High: 0 },
     monthlyTrends: []
   });
@@ -464,11 +471,8 @@ export default function BhwDashboard() {
         return acc;
       }, { Normal: 0, Medium: 0, High: 0 });
 
-      setRiskData([
-        { name: 'Normal', value: riskLevels['Normal'] },
-        { name: 'Mid Risk', value: riskLevels['Medium'] },
-        { name: 'High Risk', value: riskLevels['High'] }
-      ]);
+      const midRiskPatients = riskLevels['Medium'];
+      const normalPatients = riskLevels['Normal'];
 
       // Monthly Trends (Registrations Last 6 months)
       const monthlyTrends = [];
@@ -485,6 +489,8 @@ export default function BhwDashboard() {
         totalPatients,
         recentVisits,
         highRiskPatients,
+        midRiskPatients,
+        normalPatients,
         riskLevels,
         monthlyTrends
       });
@@ -510,6 +516,13 @@ export default function BhwDashboard() {
             onClose={() => setIsActivityModalOpen(false)} 
           />
         )}
+        {isAddModalOpen && (
+          <AddPatientModal
+            mode="add"
+            onClose={() => setIsAddModalOpen(false)}
+            onSave={fetchDashboardData}
+          />
+        )}
       </AnimatePresence>
 
       <div className="space-y-6">
@@ -523,7 +536,7 @@ export default function BhwDashboard() {
             <RiskLevelChart riskLevels={analytics.riskLevels} />
           </div>
           <div className="lg:col-span-1">
-             <QuickAccess />
+             <QuickAccess onAddNew={() => setIsAddModalOpen(true)} />
           </div>
         </div>
 

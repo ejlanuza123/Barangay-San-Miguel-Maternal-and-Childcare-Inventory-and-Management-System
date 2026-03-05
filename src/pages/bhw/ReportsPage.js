@@ -79,14 +79,19 @@ const calculateMaternalSummary = (patients, startDate, endDate) => {
         return lastVisit >= startDate && lastVisit <= endDate;
     }).length;
     
-    // High-risk pregnancies
+    // High‑risk pregnancies (matches HIGH RISK enum)
     const highRiskPregnancies = patients.filter(p => 
-        p.risk_level && p.risk_level.toUpperCase() === 'HIGH'
+        p.risk_level && p.risk_level.toUpperCase().includes('HIGH')
     ).length;
     
-    // Low-risk pregnancies
-    const lowRiskPregnancies = patients.filter(p => 
-        p.risk_level && p.risk_level.toUpperCase() === 'LOW'
+    // Mid‑risk pregnancies (explicit category)
+    const midRiskPregnancies = patients.filter(p => 
+        p.risk_level && p.risk_level.toUpperCase().includes('MID')
+    ).length;
+
+    // Normal (low‑risk) pregnancies
+    const normalPregnancies = patients.filter(p => 
+        p.risk_level && p.risk_level.toUpperCase().includes('NORMAL')
     ).length;
     
     // Mothers with no recent visit (30 days)
@@ -108,7 +113,8 @@ const calculateMaternalSummary = (patients, startDate, endDate) => {
         newRegistrations,
         activeMothers,
         highRiskPregnancies,
-        lowRiskPregnancies,
+        midRiskPregnancies,
+        normalPregnancies,
         mothersNoRecentVisit,
         mothersInactive60Days
     };
@@ -167,7 +173,8 @@ const ViewReportModal = ({ reportItem, onClose, onDownload }) => {
             { label: 'New Registrations', value: summary.newRegistrations, color: 'text-blue-600', bg: 'bg-blue-50' },
             { label: 'Active Mothers', value: summary.activeMothers, color: 'text-green-600', bg: 'bg-green-50' },
             { label: 'High-Risk', value: summary.highRiskPregnancies, color: 'text-red-600', bg: 'bg-red-50' },
-            { label: 'Low-Risk', value: summary.lowRiskPregnancies, color: 'text-yellow-600', bg: 'bg-yellow-50' },
+            { label: 'Mid-Risk', value: summary.midRiskPregnancies, color: 'text-yellow-600', bg: 'bg-yellow-50' },
+            { label: 'Normal', value: summary.normalPregnancies, color: 'text-green-600', bg: 'bg-green-50' },
             { label: 'Needs Follow-up', value: summary.mothersNoRecentVisit, color: 'text-orange-600', bg: 'bg-orange-50' }
         ];
     }
@@ -456,9 +463,11 @@ export default function ReportsPage() {
         doc.text(`New Registrations: ${summary.newRegistrations}`, col1, currentY + 6);
         doc.text(`Active Mothers (with visits): ${summary.activeMothers}`, col1, currentY + 12);
         
+        // show all three risk categories
         doc.text(`High-Risk Pregnancies: ${summary.highRiskPregnancies}`, col2, currentY);
-        doc.text(`Low-Risk Pregnancies: ${summary.lowRiskPregnancies}`, col2, currentY + 6);
-        doc.text(`Mothers with no recent visit: ${summary.mothersNoRecentVisit}`, col2, currentY + 12);
+        doc.text(`Mid-Risk Pregnancies: ${summary.midRiskPregnancies}`, col2, currentY + 6);
+        doc.text(`Normal (Low) Pregnancies: ${summary.normalPregnancies}`, col2, currentY + 12);
+        doc.text(`Mothers with no recent visit: ${summary.mothersNoRecentVisit}`, col2, currentY + 18);
 
         currentY += 30; // Space after summary section
 
@@ -546,7 +555,7 @@ export default function ReportsPage() {
         doc.text("3. HIGH-RISK PREGNANCY MONITORING", 15, currentY);
         
         const highRiskPatients = data.patients
-            .filter(p => p.risk_level && p.risk_level.toUpperCase() === 'HIGH')
+            .filter(p => p.risk_level && p.risk_level.toUpperCase().includes('HIGH'))
             .sort((a, b) => {
                 if (!a.last_visit) return 1;
                 if (!b.last_visit) return -1;
@@ -560,7 +569,7 @@ export default function ReportsPage() {
                 `${patient.first_name} ${patient.last_name}`.substring(0, 25),
                 patient.age || '-',
                 patient.weeks ? `${patient.weeks} weeks` : '-',
-                patient.risk_level || 'HIGH',
+                patient.risk_level || 'HIGH RISK',
                 formatDate(patient.last_visit),
                 medicalNotes.substring(0, 40) + (medicalNotes.length > 40 ? '...' : '')
             ];
@@ -1342,7 +1351,7 @@ export default function ReportsPage() {
                                                 <span className="font-semibold">{report.size}</span>
                                                 {report.type === 'mother' && (
                                                     <span className="text-xs text-gray-500 ml-2">
-                                                        ({report.data.summary.highRiskPregnancies} high-risk)
+                                                        ({report.data.summary.highRiskPregnancies} high, {report.data.summary.midRiskPregnancies} mid)
                                                     </span>
                                                 )}
                                                 {report.type === 'inventory' && report.data.summary && (
@@ -1439,9 +1448,15 @@ export default function ReportsPage() {
                                     </span>
                                 </div>
                                 <div className="flex justify-between">
-                                    <span className="text-gray-600">Low-Risk:</span>
+                                    <span className="text-gray-600">Mid-Risk:</span>
+                                    <span className="font-semibold text-yellow-600">
+                                        {maternalSummary.midRiskPregnancies}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-gray-600">Normal:</span>
                                     <span className="font-semibold text-green-600">
-                                        {maternalSummary.lowRiskPregnancies}
+                                        {maternalSummary.normalPregnancies}
                                     </span>
                                 </div>
                                 <div className="flex justify-between">

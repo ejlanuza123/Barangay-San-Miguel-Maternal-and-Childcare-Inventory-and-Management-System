@@ -25,6 +25,15 @@ const loadImage = (src) => new Promise((resolve) => {
     img.onerror = () => resolve(null); 
 });
 
+const getRemainingShelfLife = (expiryDate) => {
+    if (!expiryDate) return 'N/A';
+    const today = new Date();
+    const expiry = new Date(expiryDate);
+    const diffTime = expiry - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+};
+
 const getQuarterMonths = (q) => [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9, 10, 11]][q - 1];
 
 const formatDate = (date) => !date ? 'N/A' : new Date(date).toLocaleDateString('en-PH', { 
@@ -88,14 +97,19 @@ const calculateMaternalSummary = (patients, startDate, endDate) => {
         return lastVisit >= startDate && lastVisit <= endDate;
     }).length;
     
-    // High-risk pregnancies
+    // High-risk pregnancies (matches HIGH RISK enum)
     const highRiskPregnancies = patients.filter(p => 
-        p.risk_level && p.risk_level.toUpperCase() === 'HIGH'
+        p.risk_level && p.risk_level.toUpperCase().includes('HIGH')
     ).length;
     
-    // Low-risk pregnancies
-    const lowRiskPregnancies = patients.filter(p => 
-        p.risk_level && p.risk_level.toUpperCase() === 'LOW'
+    // Mid-risk pregnancies (explicit category)
+    const midRiskPregnancies = patients.filter(p => 
+        p.risk_level && p.risk_level.toUpperCase().includes('MID')
+    ).length;
+
+    // Normal (low-risk) pregnancies
+    const normalPregnancies = patients.filter(p => 
+        p.risk_level && p.risk_level.toUpperCase().includes('NORMAL')
     ).length;
     
     // Mothers with no recent visit (30 days)
@@ -117,7 +131,8 @@ const calculateMaternalSummary = (patients, startDate, endDate) => {
         newRegistrations,
         activeMothers,
         highRiskPregnancies,
-        lowRiskPregnancies,
+        midRiskPregnancies,
+        normalPregnancies,
         mothersNoRecentVisit,
         mothersInactive60Days
     };
@@ -283,7 +298,8 @@ const ViewReportModal = ({ reportItem, onClose, onDownload }) => {
             { label: 'New Registrations', value: s.newRegistrations, color: 'text-blue-600', bg: 'bg-blue-50' },
             { label: 'Active Mothers', value: s.activeMothers, color: 'text-green-600', bg: 'bg-green-50' },
             { label: 'High-Risk', value: s.highRiskPregnancies, color: 'text-red-600', bg: 'bg-red-50' },
-            { label: 'Low-Risk', value: s.lowRiskPregnancies, color: 'text-yellow-600', bg: 'bg-yellow-50' },
+            { label: 'Mid-Risk', value: s.midRiskPregnancies, color: 'text-yellow-600', bg: 'bg-yellow-50' },
+            { label: 'Normal', value: s.normalPregnancies, color: 'text-green-600', bg: 'bg-green-50' },
             { label: 'Needs Follow-up', value: s.mothersNoRecentVisit, color: 'text-orange-600', bg: 'bg-orange-50' }
         ];
     } else {
@@ -598,15 +614,19 @@ export default function UnifiedReportsPage() {
         const col1 = 15;
         const col2 = 90;
         
-        doc.text(`Total Registered Mothers: ${summary.totalRegistered}`, col1, currentY + 8);
-        doc.text(`New Registrations: ${summary.newRegistrations}`, col1, currentY + 14);
-        doc.text(`Active Mothers (with visits): ${summary.activeMothers}`, col1, currentY + 20);
+        currentY += 8;
         
-        doc.text(`High-Risk Pregnancies: ${summary.highRiskPregnancies}`, col2, currentY + 8);
-        doc.text(`Low-Risk Pregnancies: ${summary.lowRiskPregnancies}`, col2, currentY + 14);
-        doc.text(`Mothers with no recent visit: ${summary.mothersNoRecentVisit}`, col2, currentY + 20);
+        doc.text(`Total Registered Mothers: ${summary.totalRegistered}`, col1, currentY);
+        doc.text(`New Registrations: ${summary.newRegistrations}`, col1, currentY + 6);
+        doc.text(`Active Mothers (with visits): ${summary.activeMothers}`, col1, currentY + 12);
+        
+        // Show all three risk categories
+        doc.text(`High-Risk Pregnancies: ${summary.highRiskPregnancies}`, col2, currentY);
+        doc.text(`Mid-Risk Pregnancies: ${summary.midRiskPregnancies}`, col2, currentY + 6);
+        doc.text(`Normal (Low) Pregnancies: ${summary.normalPregnancies}`, col2, currentY + 12);
+        doc.text(`Mothers with no recent visit: ${summary.mothersNoRecentVisit}`, col2, currentY + 18);
 
-        currentY += 35;
+        currentY += 30;
 
         // --- 2. NEW REGISTRATIONS ---
         if (currentY > pageHeight - 50) {
@@ -642,6 +662,11 @@ export default function UnifiedReportsPage() {
                 margin: { left: 15, right: 15 },
             });
             currentY = doc.lastAutoTable.finalY + 15;
+        } else {
+            currentY += 8;
+            doc.setFontSize(10).setTextColor(150, 150, 150);
+            doc.text("No new maternal registrations for this period.", 20, currentY);
+            currentY += 15;
         }
 
         // --- 3. HIGH-RISK PREGNANCY MONITORING ---
@@ -687,14 +712,109 @@ export default function UnifiedReportsPage() {
             currentY = doc.lastAutoTable.finalY + 15;
         }
 
-        // --- 4. SIGNATURES ---
-        if (currentY > pageHeight - 60) {
+        // --- 4. MISSED OR INACTIVE PATIENTS ---
+        if (currentY > pageHeight - 50) {
             doc.addPage();
             currentY = 20;
         }
         
+        doc.setFontSize(12).setFont(undefined, 'bold').setTextColor(230, 126, 34);
+        doc.text("4. MISSED OR INACTIVE PATIENTS (60+ days)", 15, currentY);
+        
+        const inactiveRows = summary.mothersInactive60Days.map(patient => [
+            `${patient.first_name} ${patient.last_name}`.substring(0, 25),
+            formatDate(patient.last_visit),
+            patient.contact_no || '-',
+            `${patient.purok || ''} ${patient.street || ''}`.substring(0, 30)
+        ]);
+
+        if (inactiveRows.length > 0) {
+            autoTable(doc, {
+                startY: currentY + 8,
+                head: [['Patient Name', 'Last Visit', 'Contact', 'Address']],
+                body: inactiveRows,
+                theme: 'grid',
+                headStyles: { fillColor: [230, 126, 34] },
+                styles: { fontSize: 8 },
+                margin: { left: 15, right: 15 },
+                columnStyles: {
+                    0: { cellWidth: 35 },
+                    1: { cellWidth: 30 },
+                    2: { cellWidth: 30 },
+                    3: { cellWidth: 50 }
+                }
+            });
+            currentY = doc.lastAutoTable.finalY + 15;
+        } else {
+            currentY += 8;
+            doc.setFontSize(10).setTextColor(150, 150, 150);
+            doc.text("No inactive patients (60+ days) for this period.", 20, currentY);
+            currentY += 15;
+        }
+
+        // --- 5. MATERNAL HEALTH NOTES ---
+        if (currentY > pageHeight - 50) {
+            doc.addPage();
+            currentY = 20;
+        }
+        
+        doc.setFontSize(12).setFont(undefined, 'bold').setTextColor(52, 152, 219);
+        doc.text("5. MATERNAL HEALTH NOTES SUMMARY", 15, currentY);
+        doc.setFontSize(10).setFont(undefined, 'normal').setTextColor(0, 0, 0);
+        
+        let allMedicalNotes = [];
+        item.data.patients.forEach(patient => {
+            if (patient.medical_history) {
+                const notes = extractMedicalNotes(patient.medical_history);
+                if (notes) {
+                    allMedicalNotes.push({
+                        patient: `${patient.first_name} ${patient.last_name}`,
+                        note: notes
+                    });
+                }
+            }
+        });
+
+        currentY += 8;
+        
+        if (allMedicalNotes.length > 0) {
+            const notesToShow = allMedicalNotes.slice(0, 8);
+            notesToShow.forEach((entry, index) => {
+                if (currentY > pageHeight - 20) {
+                    doc.addPage();
+                    currentY = 20;
+                }
+                doc.text(`• ${entry.patient}:`, 20, currentY);
+                const lines = doc.splitTextToSize(entry.note, pageWidth - 40);
+                lines.forEach((line, lineIndex) => {
+                    if (currentY > pageHeight - 20) {
+                        doc.addPage();
+                        currentY = 20;
+                    }
+                    doc.text(line, 25, currentY + 5 + (lineIndex * 5));
+                });
+                currentY += 10 + (lines.length * 5);
+            });
+            
+            if (allMedicalNotes.length > 8) {
+                doc.text(`... and ${allMedicalNotes.length - 8} more notes`, 20, currentY);
+                currentY += 10;
+            }
+        } else {
+            doc.text("No medical notes recorded for this period.", 20, currentY);
+            currentY += 15;
+        }
+
+        // --- 6. SIGNATURES ---
+        if (currentY > pageHeight - 60) {
+            doc.addPage();
+            currentY = 20;
+        } else {
+            currentY += 10;
+        }
+        
         doc.setFontSize(10).setFont(undefined, 'bold').setTextColor(0, 0, 0);
-        doc.text("PREPARED BY:", 15, currentY);
+        doc.text("PREPARED BY (MIDWIFE):", 15, currentY);
         doc.line(15, currentY + 5, 70, currentY + 5);
         doc.setFontSize(8).setFont(undefined, 'normal');
         if (currentUserProfile) {
@@ -702,6 +822,14 @@ export default function UnifiedReportsPage() {
             doc.text(`(${currentUserProfile.role})`, 15, currentY + 15);
         }
         doc.text(`Date: ${new Date().toLocaleDateString()}`, 15, currentY + 20);
+
+        doc.setFontSize(10).setFont(undefined, 'bold');
+        doc.text("NOTED BY (MIDWIFE):", pageWidth/2, currentY);
+        doc.line(pageWidth/2, currentY + 5, pageWidth/2 + 60, currentY + 5);
+        doc.setFontSize(8).setFont(undefined, 'normal');
+        doc.text("___________________________", pageWidth/2, currentY + 10);
+        doc.text("Signature over Printed Name", pageWidth/2, currentY + 15);
+        doc.text("Date: _______________", pageWidth/2, currentY + 20);
 
         doc.setFontSize(8).setTextColor(150, 150, 150);
         doc.text("CONFIDENTIAL - Barangay Health Center Internal Document", pageWidth/2, pageHeight - 10, { align: "center" });
@@ -846,14 +974,132 @@ export default function UnifiedReportsPage() {
             currentY = doc.lastAutoTable.finalY + 15;
         }
 
-        // --- 4. SIGNATURES ---
-        if (currentY > pageHeight - 60) {
+        // --- 4. BIRTH/NEWBORN DETAILS ---
+        if (currentY > pageHeight - 50) {
             doc.addPage();
             currentY = 20;
         }
         
+        doc.setFontSize(12).setFont(undefined, 'bold').setTextColor(52, 152, 219);
+        doc.text("4. BIRTH/NEWBORN DETAILS", 15, currentY);
+        
+        const birthRows = item.data.children
+            .filter(child => child.birth_weight || child.birth_date || child.delivery_type)
+            .slice(0, 15)
+            .map(child => [
+                child.child_name || `${child.first_name || ''} ${child.last_name || ''}`,
+                child.birth_date ? formatDate(child.birth_date) : '-',
+                child.birth_weight ? `${child.birth_weight} kg` : '-',
+                child.delivery_type || '-',
+                child.birth_complications || 'None'
+            ]);
+
+        if (birthRows.length > 0) {
+            autoTable(doc, {
+                startY: currentY + 8,
+                head: [['Child Name', 'Date of Birth', 'Birth Weight', 'Delivery Type', 'Complications']],
+                body: birthRows,
+                theme: 'striped',
+                headStyles: { fillColor: [52, 152, 219] },
+                styles: { fontSize: 8 },
+                margin: { left: 15, right: 15 },
+            });
+            currentY = doc.lastAutoTable.finalY + 15;
+        } else {
+            currentY += 8;
+            doc.setFontSize(10).setTextColor(150, 150, 150);
+            doc.text("No birth/newborn details available.", 20, currentY);
+            currentY += 15;
+        }
+
+        // --- 5. IMMUNIZATION & SUPPLEMENT SUMMARY ---
+        if (currentY > pageHeight - 50) {
+            doc.addPage();
+            currentY = 20;
+        }
+        
+        doc.setFontSize(12).setFont(undefined, 'bold').setTextColor(52, 152, 219);
+        doc.text("5. IMMUNIZATION & SUPPLEMENT SUMMARY", 15, currentY);
+        doc.setFontSize(10).setFont(undefined, 'normal').setTextColor(0, 0, 0);
+        
+        let supplementData = [];
+        item.data.children.forEach(child => {
+            if (child.health_details) {
+                try {
+                    const healthDetails = typeof child.health_details === 'string' 
+                        ? JSON.parse(child.health_details) 
+                        : child.health_details;
+                    
+                    if (healthDetails && typeof healthDetails === 'object') {
+                        const childName = child.child_name || `${child.first_name || ''} ${child.last_name || ''}`;
+                        
+                        if (healthDetails.immunizations) {
+                            supplementData.push({
+                                child: childName,
+                                type: 'Immunization',
+                                details: JSON.stringify(healthDetails.immunizations).substring(0, 50) + '...'
+                            });
+                        }
+                        
+                        if (healthDetails.supplements) {
+                            supplementData.push({
+                                child: childName,
+                                type: 'Supplements',
+                                details: JSON.stringify(healthDetails.supplements).substring(0, 50) + '...'
+                            });
+                        }
+                        
+                        if (child.vitamin_a_date) {
+                            supplementData.push({
+                                child: childName,
+                                type: 'Vitamin A',
+                                details: `${child.vitamin_a_amount || 'N/A'} on ${formatDate(child.vitamin_a_date)}`
+                            });
+                        }
+                    }
+                } catch (e) {
+                    const childName = child.child_name || `${child.first_name || ''} ${child.last_name || ''}`;
+                    supplementData.push({
+                        child: childName,
+                        type: 'Health Details',
+                        details: String(child.health_details).substring(0, 100) + '...'
+                    });
+                }
+            }
+        });
+
+        currentY += 8;
+        
+        if (supplementData.length > 0) {
+            const entriesToShow = supplementData.slice(0, 10);
+            entriesToShow.forEach((entry, index) => {
+                if (currentY > pageHeight - 20) {
+                    doc.addPage();
+                    currentY = 20;
+                }
+                doc.text(`• ${entry.child}: ${entry.type} - ${entry.details}`, 20, currentY);
+                currentY += 6;
+            });
+            
+            if (supplementData.length > 10) {
+                doc.text(`... and ${supplementData.length - 10} more entries`, 20, currentY);
+                currentY += 10;
+            }
+        } else {
+            doc.text("No immunization/supplement data recorded.", 20, currentY);
+            currentY += 15;
+        }
+
+        // --- 6. SIGNATURES ---
+        if (currentY > pageHeight - 60) {
+            doc.addPage();
+            currentY = 20;
+        } else {
+            currentY += 10;
+        }
+        
         doc.setFontSize(10).setFont(undefined, 'bold').setTextColor(0, 0, 0);
-        doc.text("PREPARED BY:", 15, currentY);
+        doc.text("PREPARED BY (MIDWIFE):", 15, currentY);
         doc.line(15, currentY + 5, 70, currentY + 5);
         doc.setFontSize(8).setFont(undefined, 'normal');
         if (currentUserProfile) {
@@ -861,6 +1107,14 @@ export default function UnifiedReportsPage() {
             doc.text(`(${currentUserProfile.role})`, 15, currentY + 15);
         }
         doc.text(`Date: ${new Date().toLocaleDateString()}`, 15, currentY + 20);
+
+        doc.setFontSize(10).setFont(undefined, 'bold');
+        doc.text("NOTED BY (MIDWIFE):", pageWidth/2, currentY);
+        doc.line(pageWidth/2, currentY + 5, pageWidth/2 + 60, currentY + 5);
+        doc.setFontSize(8).setFont(undefined, 'normal');
+        doc.text("___________________________", pageWidth/2, currentY + 10);
+        doc.text("Signature over Printed Name", pageWidth/2, currentY + 15);
+        doc.text("Date: _______________", pageWidth/2, currentY + 20);
 
         doc.setFontSize(8).setTextColor(150, 150, 150);
         doc.text("CONFIDENTIAL - Barangay Health Center Internal Document", pageWidth/2, pageHeight - 10, { align: "center" });
@@ -927,67 +1181,175 @@ export default function UnifiedReportsPage() {
         doc.text(`Normal Stock: ${summary.normalCount}`, summaryCol2, currentY + 8);
         doc.text(`Low Stock: ${summary.lowCount}`, summaryCol2, currentY + 14);
         doc.text(`Critical Stock: ${summary.criticalCount}`, summaryCol2, currentY + 20);
+        currentY += 10;
+
+        // --- 2. DISTRIBUTION TABLES ---
+        doc.setFontSize(12).setFont(undefined, 'bold').setTextColor(41, 128, 185);
+        doc.text("2. DISTRIBUTION ANALYSIS", 15, currentY);
         
-        doc.text(`Expired Items: ${summary.expiredCount}`, summaryCol3, currentY + 8);
-        doc.text(`Near Expiry (30 days): ${summary.nearExpiryCount}`, summaryCol3, currentY + 14);
+        // Category Distribution
+        const catRows = Object.entries(summary.byCategory).map(([cat, count]) => [cat, count.toString()]);
+        autoTable(doc, {
+            startY: currentY + 5,
+            head: [['Category', 'Number of Items']],
+            body: catRows,
+            theme: 'striped',
+            headStyles: { fillColor: [41, 128, 185] },
+            margin: { left: 15 }
+        });
 
-        currentY += 30;
+        // Source Distribution
+        const sourceRows = Object.entries(summary.bySource || {}).map(([source, count]) => [source, count.toString()]);
+        if (sourceRows.length > 0) {
+            autoTable(doc, {
+                startY: doc.lastAutoTable.finalY + 10,
+                head: [['Supply Source', 'Number of Items']],
+                body: sourceRows,
+                theme: 'striped',
+                headStyles: { fillColor: [39, 174, 96] },
+                margin: { left: 15 }
+            });
+        }
 
-        // --- 2. DETAILED INVENTORY LIST ---
+        currentY = doc.lastAutoTable.finalY + 15;
+
+        // --- 3. DETAILED INVENTORY LIST ---
         if (currentY > pageHeight - 50) {
             doc.addPage();
             currentY = 20;
         }
         
         doc.setFontSize(12).setFont(undefined, 'bold').setTextColor(41, 128, 185);
-        doc.text("2. DETAILED INVENTORY LIST", 15, currentY);
+        doc.text("3. DETAILED INVENTORY LIST", 15, currentY);
         
-        const detailedRows = item.data.inventory.map(item => [
-            item.item_name || '-',
-            item.category || '-',
-            `${item.quantity || 0} ${item.unit || ''}`,
-            item.status || '-',
-            item.owner_role || '-',
-            item.expiry_date ? new Date(item.expiry_date).toLocaleDateString() : '-',
-            item.supplier || '-'
+        const detailedRows = item.data.inventory.map(itm => [
+            itm.item_name || '-',
+            itm.category || '-',
+            itm.sku || '-',
+            itm.batch_no || '-',
+            `${itm.quantity || 0} ${itm.unit || ''}`,
+            itm.status || '-',
+            itm.expiry_date ? new Date(itm.expiry_date).toLocaleDateString() : '-',
+            itm.supplier || '-',
+            itm.owner_role || '-'
         ]);
 
         if (detailedRows.length > 0) {
             autoTable(doc, {
-                startY: currentY + 8,
-                head: [['Item Name', 'Category', 'Quantity', 'Status', 'Owner', 'Expiry Date', 'Supplier']],
+                startY: currentY + 5,
+                head: [['Item Name', 'Category', 'SKU', 'Batch No', 'Quantity', 'Status', 'Expiry Date', 'Supplier', 'Owner Role']],
                 body: detailedRows,
                 theme: 'grid',
-                headStyles: { fillColor: [41, 128, 185] },
+                headStyles: { fillColor: [230, 126, 34] },
                 styles: { fontSize: 8 },
-                margin: { left: 15, right: 15 },
+                margin: { left: 15, right: 15 }
             });
-            currentY = doc.lastAutoTable.finalY + 15;
+
+            currentY = doc.lastAutoTable.finalY + 10;
         }
 
-        // --- 3. DISTRIBUTION BY CATEGORY ---
-        if (Object.keys(summary.byCategory).length > 0) {
+        // --- 4. EXPIRY & BATCH MONITORING ---
+        if (item.data.inventory.some(itm => itm.expiry_date)) {
             if (currentY > pageHeight - 40) {
                 doc.addPage();
                 currentY = 20;
             }
             
-            doc.setFontSize(12).setFont(undefined, 'bold').setTextColor(39, 174, 96);
-            doc.text("3. DISTRIBUTION BY CATEGORY", 15, currentY);
+            doc.setFontSize(12).setFont(undefined, 'bold').setTextColor(41, 128, 185);
+            doc.text("4. EXPIRY & BATCH MONITORING", 15, currentY);
             
-            const catRows = Object.entries(summary.byCategory).map(([cat, count]) => [cat, count.toString()]);
-            autoTable(doc, {
-                startY: currentY + 5,
-                head: [['Category', 'Number of Items']],
-                body: catRows,
-                theme: 'striped',
-                headStyles: { fillColor: [39, 174, 96] },
-                margin: { left: 15 }
-            });
-            currentY = doc.lastAutoTable.finalY + 10;
+            const expiryRows = item.data.inventory
+                .filter(itm => itm.expiry_date)
+                .map(itm => {
+                    let daysRemaining = 'N/A';
+                    let status = 'No Expiry Date';
+                    
+                    if (itm.expiry_date) {
+                        const expiryDate = new Date(itm.expiry_date);
+                        const today = new Date();
+                        const diffTime = expiryDate - today;
+                        daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                        
+                        if (daysRemaining < 0) {
+                            status = 'EXPIRED';
+                        } else if (daysRemaining <= 30) {
+                            status = 'Urgent (<= 30 days)';
+                        } else if (daysRemaining <= 60) {
+                            status = 'Warning (<= 60 days)';
+                        } else if (daysRemaining <= 90) {
+                            status = 'Monitor (<= 90 days)';
+                        } else {
+                            status = 'Safe (> 90 days)';
+                        }
+                    }
+                    
+                    return [
+                        itm.item_name || '-',
+                        itm.batch_no || '-',
+                        itm.expiry_date ? new Date(itm.expiry_date).toLocaleDateString() : '-',
+                        daysRemaining === 'N/A' ? 'N/A' : `${daysRemaining} days`,
+                        status,
+                        itm.quantity || 0
+                    ];
+                })
+                .sort((a, b) => {
+                    const daysA = a[3] === 'N/A' ? Infinity : parseInt(a[3]);
+                    const daysB = b[3] === 'N/A' ? Infinity : parseInt(b[3]);
+                    return daysA - daysB;
+                });
+
+            if (expiryRows.length > 0) {
+                autoTable(doc, {
+                    startY: currentY + 5,
+                    head: [['Item Name', 'Batch No', 'Expiry Date', 'Days Remaining', 'Status', 'Qty']],
+                    body: expiryRows,
+                    theme: 'striped',
+                    headStyles: { fillColor: [192, 57, 43] },
+                    styles: { fontSize: 8 },
+                    margin: { left: 15 },
+                    columnStyles: {
+                        0: { cellWidth: 40 },
+                        1: { cellWidth: 25 },
+                        2: { cellWidth: 25 },
+                        3: { cellWidth: 25 },
+                        4: { cellWidth: 35 },
+                        5: { cellWidth: 15 }
+                    }
+                });
+                currentY = doc.lastAutoTable.finalY + 10;
+            }
         }
 
-        // --- 4. SIGNATURES ---
+        // --- 5. REMARKS & RECOMMENDATIONS ---
+        if (currentY > pageHeight - 60) {
+            doc.addPage();
+            currentY = 20;
+        }
+        
+        doc.setFontSize(12).setFont(undefined, 'bold').setTextColor(41, 128, 185);
+        doc.text("5. REMARKS & RECOMMENDATIONS", 15, currentY);
+        doc.setFontSize(10).setFont(undefined, 'normal').setTextColor(0, 0, 0);
+        
+        const remarks = [
+            summary.criticalCount > 0 ? `• ${summary.criticalCount} items require immediate reorder (Critical stock)` : '',
+            summary.lowCount > 0 ? `• ${summary.lowCount} items need replenishment (Low stock)` : '',
+            summary.expiredCount > 0 ? `• ${summary.expiredCount} expired items require disposal` : '',
+            summary.nearExpiryCount > 0 ? `• ${summary.nearExpiryCount} items nearing expiry (within 30 days)` : '',
+            '• Regular inventory audit recommended',
+            '• Update stock levels after distribution'
+        ].filter(r => r !== '');
+
+        if (remarks.length > 0) {
+            remarks.forEach((remark, index) => {
+                doc.text(remark, 20, currentY + 10 + (index * 5));
+            });
+        } else {
+            doc.text("No urgent actions required. Inventory status is satisfactory.", 20, currentY + 10);
+        }
+
+        currentY += remarks.length * 5 + 20;
+
+        // --- 6. SIGNATURES ---
         if (currentY > pageHeight - 60) {
             doc.addPage();
             currentY = 20;
@@ -1002,6 +1364,14 @@ export default function UnifiedReportsPage() {
             doc.text(`(${currentUserProfile.role})`, 15, currentY + 15);
         }
         doc.text(`Date: ${new Date().toLocaleDateString()}`, 15, currentY + 20);
+
+        doc.setFontSize(10).setFont(undefined, 'bold');
+        doc.text("REVIEWED BY:", pageWidth/2, currentY);
+        doc.line(pageWidth/2, currentY + 5, pageWidth/2 + 55, currentY + 5);
+        doc.setFontSize(8).setFont(undefined, 'normal');
+        doc.text("Midwife / Health Officer", pageWidth/2, currentY + 10);
+        doc.text("Signature over Printed Name", pageWidth/2, currentY + 15);
+        doc.text("Date: _______________", pageWidth/2, currentY + 20);
 
         doc.setFontSize(8).setTextColor(150, 150, 150);
         doc.text("CONFIDENTIAL - Barangay Health Center Internal Document", pageWidth/2, pageHeight - 10, { align: "center" });

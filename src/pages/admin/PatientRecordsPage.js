@@ -680,7 +680,6 @@ const ViewPatientModal = ({ patient, onClose }) => {
                 label="Menstruation Duration"
                 value={`${details.menstruation_duration || "N/A"} days`}
               />
-              <Field label="Risk Code" value={details.risk_code} />
             </div>
 
             <SectionHeader title="Vaccination Record (Tetanus Toxoid)" />

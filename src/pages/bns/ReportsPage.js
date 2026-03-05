@@ -495,6 +495,8 @@ export default function BnsReportsPage() {
         const registryRows = allChildren.map(child => [
             child.child_id || '-',
             child.child_name || `${child.first_name || ''} ${child.last_name || ''}`,
+            child.mother_name || '-',
+            child.father_name || '-',
             child.sex || '-',
             child.dob ? formatDate(child.dob) : '-',
             calculateAge(child.dob),
@@ -507,22 +509,24 @@ export default function BnsReportsPage() {
         if (registryRows.length > 0) {
             autoTable(doc, {
                 startY: currentY + 8, // Add spacing after title
-                head: [['Child ID', 'Child Name', 'Sex', 'Date of Birth', 'Age', 'Address', 'Guardian', 'BHS Name', 'Family No.']],
+                head: [['Child ID', 'Child Name', 'Mother\'s Name', 'Father\'s Name', 'Sex', 'Date of Birth', 'Age', 'Address', 'Guardian', 'BHS Name', 'Family No.']],
                 body: registryRows,
                 theme: 'striped',
                 headStyles: { fillColor: [39, 174, 96] },
                 styles: { fontSize: 7 },
                 margin: { left: 15, right: 15 },
                 columnStyles: {
-                    0: { cellWidth: 20 }, // ID
-                    1: { cellWidth: 30 }, // Name
-                    2: { cellWidth: 15 }, // Sex
-                    3: { cellWidth: 25 }, // DOB
-                    4: { cellWidth: 20 }, // Age
-                    5: { cellWidth: 25 }, // Address
-                    6: { cellWidth: 25 }, // Guardian
-                    7: { cellWidth: 20 }, // BHS
-                    8: { cellWidth: 20 }  // Family No
+                    0: { cellWidth: 18 }, // ID
+                    1: { cellWidth: 25 }, // Name
+                    2: { cellWidth: 20 }, // Mother's Name
+                    3: { cellWidth: 20 }, // Father's Name
+                    4: { cellWidth: 12 }, // Sex
+                    5: { cellWidth: 22 }, // DOB
+                    6: { cellWidth: 18 }, // Age
+                    7: { cellWidth: 22 }, // Address
+                    8: { cellWidth: 20 }, // Guardian
+                    9: { cellWidth: 18 }, // BHS
+                    10: { cellWidth: 18 }  // Family No
                 }
             });
             currentY = doc.lastAutoTable.finalY + 15; // Add space after table
@@ -1168,11 +1172,17 @@ export default function BnsReportsPage() {
             let dataPackage = {};
             
             if (item.type === 'children') {
-                // Filter child data for child health reports
-                const allChildren = allData.child_records;
-                const summary = calculateChildHealthSummary(allChildren, item.startDate, item.endDate);
+                // Filter child data for child health reports by date created in period
+                const filteredChildren = allData.child_records.filter(child => {
+                    if (!child.created_at) return false; // Skip records without creation date
+                    const createdDate = new Date(child.created_at);
+                    // Check if child was registered (created) within this period
+                    return createdDate >= item.startDate && createdDate <= item.endDate;
+                });
+                
+                const summary = calculateChildHealthSummary(filteredChildren, item.startDate, item.endDate);
                 dataPackage = { 
-                    children: allChildren,
+                    children: filteredChildren,
                     summary: summary,
                     startDate: item.startDate,
                     endDate: item.endDate

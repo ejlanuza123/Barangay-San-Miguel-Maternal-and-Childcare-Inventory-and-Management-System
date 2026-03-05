@@ -515,10 +515,14 @@ export default function MidwifeDashboard() {
   const fetchDashboardData = useCallback(async () => {
     setLoading(true);
     const today = new Date();
-    const firstDayOfMonth = getStartOfMonth(today);
-    const firstDayOfNextMonth = getStartOfMonth(new Date(today.getFullYear(), today.getMonth() + 1, 1));
     
-    const formatForSupabase = (date) => date.toISOString().split('T')[0];
+    // Get current month start and end in local time (Philippine timezone)
+    const currentMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    const currentMonthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
+    
+    // Convert to ISO strings for Supabase queries
+    const monthStartISO = currentMonthStart.toISOString();
+    const monthEndISO = currentMonthEnd.toISOString();
 
     try {
       const [
@@ -538,13 +542,15 @@ export default function MidwifeDashboard() {
         supabase
           .from('mother_records')
           .select('*', { count: 'exact', head: true })
-          .gte('created_at', formatForSupabase(firstDayOfMonth))
-          .lt('created_at', formatForSupabase(firstDayOfNextMonth)),
+          .eq('is_deleted', false)
+          .gte('created_at', monthStartISO)
+          .lte('created_at', monthEndISO),
         supabase
           .from('child_records')
           .select('*', { count: 'exact', head: true })
-          .gte('created_at', formatForSupabase(firstDayOfMonth))
-          .lt('created_at', formatForSupabase(firstDayOfNextMonth)),
+          .eq('is_deleted', false)
+          .gte('created_at', monthStartISO)
+          .lte('created_at', monthEndISO),
         supabase
           .from('mother_records')
           .select('*', { count: 'exact', head: true })
@@ -570,17 +576,17 @@ export default function MidwifeDashboard() {
         totalChildren: totalChildrenRes.count || 0
       });
 
-      // Chart Data (Last 6 Months)
+      // Chart Data (Last 6 Months) - More accurate calculation
       const chartData = [];
       const shortMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       
       for (let i = 5; i >= 0; i--) {
-        const monthDate = new Date();
-        monthDate.setMonth(monthDate.getMonth() - i);
+        const monthDate = new Date(today.getFullYear(), today.getMonth() - i, 1);
         const monthKey = shortMonths[monthDate.getMonth()];
-        const monthStart = getStartOfMonth(monthDate);
-        const monthEnd = getEndOfMonth(monthDate);
+        const monthStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+        const monthEnd = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0, 23, 59, 59, 999);
         
+        // Filter data for this specific month
         const maternityCount = allMaternityRes.data?.filter(p => {
           const created = new Date(p.created_at);
           return created >= monthStart && created <= monthEnd;
@@ -592,8 +598,7 @@ export default function MidwifeDashboard() {
         }).length || 0;
 
         chartData.push({
-          month: monthKey,
-          monthDate,
+          month: `${monthKey} ${monthDate.getFullYear()}`,
           Maternity: maternityCount,
           Children: childrenCount
         });

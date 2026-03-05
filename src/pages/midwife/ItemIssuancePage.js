@@ -407,17 +407,34 @@ export default function ItemIssuancePage() {
 
     const fetchLowStock = useCallback(async () => {
         setLoading(true);
-        const [bhwRes, bnsRes] = await Promise.all([
-            supabase.from('inventory').select('*').or('status.eq.Low,status.eq.Critical'),
-            supabase.from('bns_inventory').select('*').or('status.eq.Low,status.eq.Critical')
-        ]);
+        
+        // Determine status using quantity thresholds to keep logic centralized
+        const calculateStatus = (quantity) => {
+            if (!quantity && quantity !== 0) return 'Normal';
+            if (quantity === 0) return 'Critical';
+            if (quantity < 10) return 'Critical';
+            if (quantity < 30) return 'Low';
+            if (quantity < 50) return 'Moderate';
+            return 'High';
+        };
 
-        const combined = [
-            ...(bhwRes.data || []).map(i => ({ ...i, source: 'BHW' })),
-            ...(bnsRes.data || []).map(i => ({ ...i, source: 'BNS' }))
-        ];
+        // Fetch all inventory entries from the inventory table (owner_role field distinguishes BHW, BNS, etc.)
+        const inventoryRes = await supabase
+            .from('inventory')
+            .select('*')
+            .eq('is_deleted', false);
 
-        setLowStockItems(combined);
+        const lowStockItems = (inventoryRes.data || [])
+            .map(item => ({
+                ...item,
+                status: calculateStatus(item.quantity),
+                // Use owner_role from database, fallback to 'BHW' if not specified
+                owner_role: item.owner_role || 'BHW'
+            }))
+            .filter(item => item.status === 'Critical' || item.status === 'Low')
+            .sort((a, b) => a.quantity - b.quantity); // Sort by quantity ascending (most critical first)
+
+        setLowStockItems(lowStockItems);
         setLoading(false);
     }, []);
 
@@ -527,6 +544,7 @@ export default function ItemIssuancePage() {
                                         onChange={handleSelectAll} 
                                         checked={lowStockItems.length > 0 && selectedItems.length === lowStockItems.length}
                                         className="w-5 h-5 rounded border-gray-300 text-red-600 focus:ring-red-500 cursor-pointer transition-all"
+                                        disabled={lowStockItems.length === 0}
                                     />
                                     <span className="text-sm font-semibold text-gray-700">
                                         {selectedItems.length} of {lowStockItems.length} items selected
@@ -632,9 +650,10 @@ export default function ItemIssuancePage() {
                                                 </td>
                                                 <td className="p-4">
                                                     <div className="font-semibold text-gray-900">{item.item_name}</div>
-                                                    <div className="text-xs text-gray-500 mt-1 flex items-center gap-2">
-                                                        <span className="bg-gray-100 px-2 py-0.5 rounded">Source: {item.source}</span>
-                                                        <span>{item.category || 'Uncategorized'}</span>
+                                                    <div className="text-xs text-gray-500 mt-1 flex items-center gap-2 flex-wrap">
+                                                        <span className="bg-gray-100 px-2 py-0.5 rounded">Owner: {item.owner_role}</span>
+                                                        <span className="bg-blue-50 px-2 py-0.5 rounded text-blue-700">{item.category || 'Uncategorized'}</span>
+                                                        {item.supplier && <span className="bg-amber-50 px-2 py-0.5 rounded text-amber-700">Supplier: {item.supplier}</span>}
                                                     </div>
                                                 </td>
                                                 <td className="p-4">
@@ -642,6 +661,11 @@ export default function ItemIssuancePage() {
                                                         {item.quantity} 
                                                         <span className="text-sm text-gray-500 ml-1">{item.unit || 'pc'}</span>
                                                     </div>
+                                                    {item.expiry_date && (
+                                                        <div className="text-xs text-gray-500 mt-1">
+                                                            Exp: {new Date(item.expiry_date).toLocaleDateString()}
+                                                        </div>
+                                                    )}
                                                 </td>
                                                 <td className="p-4">
                                                     <span className={`

@@ -58,7 +58,7 @@ export default function AddBnsAppointmentModal({ onClose, onSave }) {
         const { data: { user } } = await supabase.auth.getUser();
         const { error: insertError } = await supabase.from('follow_up_visit').insert([{
             patient_display_id: formData.patient_id,
-            patient_name: formData.patient_name,
+            // do not store patient_name in the table; names are looked up from records to avoid redundancy
             reason: formData.reason,
             date: formData.date,
             time: formData.time,

@@ -222,9 +222,8 @@ const StatsWidget = ({ employees }) => {
     const bhwCount = employees.filter(e => e.role === 'BHW').length;
     const bnsCount = employees.filter(e => e.role === 'BNS').length;
     const midwifeCount = employees.filter(e => e.role === 'Midwife').length;
-    const adminCount = employees.filter(e => e.role === 'Admin').length;
     
-    return { total, bhwCount, bnsCount, midwifeCount, adminCount };
+    return { total, bhwCount, bnsCount, midwifeCount };
   }, [employees]);
 
   const StatCard = ({ title, value, color, icon }) => (
@@ -462,7 +461,6 @@ const AddEmployeeModal = ({ onClose, onSave }) => {
                 <option value="BHW">Barangay Health Worker</option>
                 <option value="BNS">Barangay Nutrition Scholar</option>
                 <option value="Midwife">Midwife</option>
-                <option value="Admin">Admin</option>
               </select>
             </div>
           </div>
@@ -1256,11 +1254,12 @@ export default function EmployeesPage() {
     setLoading(true);
     
     try {
-      // Query all profiles (including Midwife, BHW, BNS, Admin)
+      // Query all profiles (excluding Midwife, BHW, BNS, Admin)
       const { data, error } = await supabase
         .from("profiles")
         .select("*")
         .neq("role", "USER/MOTHER/GUARDIAN")
+        .neq("role", "Admin")
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -1273,7 +1272,7 @@ export default function EmployeesPage() {
     } finally {
       setLoading(false);
     }
-  }, [addNotification]);
+  }, []);
 
   useEffect(() => {
     fetchEmployees();
@@ -1404,7 +1403,7 @@ export default function EmployeesPage() {
                       <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                         Filter by Role
                       </div>
-                      {["All", "BHW", "BNS", "Midwife", "Admin"].map((role) => (
+                      {["All", "BHW", "BNS", "Midwife"].map((role) => (
                         <button
                           key={role}
                           onClick={() => {

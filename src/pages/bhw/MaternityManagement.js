@@ -253,7 +253,7 @@ const StatusLegend = () => (
   </div>
 );
 
-const PrescriptionModal = ({ patient, onClose, onSave }) => {
+const PrescriptionModal = ({ patient, onClose, onSave, isOpen }) => {
   const [activeTab, setActiveTab] = useState('dispense');
   const [inventoryItems, setInventoryItems] = useState([]);
   const [itemsToDispense, setItemsToDispense] = useState([{ 
@@ -264,6 +264,7 @@ const PrescriptionModal = ({ patient, onClose, onSave }) => {
     searchTerm: ""
   }]);
   const [loading, setLoading] = useState(false);
+  const [prescriptionHistory, setPrescriptionHistory] = useState([]);
   const { addNotification } = useNotification();
   const { profile } = useAuth();
   const [searchInputs, setSearchInputs] = useState({});
@@ -282,6 +283,29 @@ const PrescriptionModal = ({ patient, onClose, onSave }) => {
     };
     fetchInventory();
   }, []);
+
+  // Fetch prescription history from prescriptions table
+  useEffect(() => {
+    const fetchPrescriptionHistory = async () => {
+      if (!isOpen || !patient?.id) return;
+      
+      try {
+        const { data, error } = await supabase
+          .from('prescriptions')
+          .select('*, dispensing(quantity_dispensed, dispensed_by, dispensed_date, status)')
+          .eq('patient_record_id', patient.id)
+          .eq('patient_type', 'mother')
+          .order('date_given', { ascending: false });
+        
+        if (error) throw error;
+        setPrescriptionHistory(data || []);
+      } catch (error) {
+        console.error("Error fetching prescription history:", error);
+      }
+    };
+
+    fetchPrescriptionHistory();
+  }, [isOpen, patient?.id]);
 
   const handleAddItem = () => {
     const newId = Date.now();
@@ -347,39 +371,61 @@ const PrescriptionModal = ({ patient, onClose, onSave }) => {
     }
 
     try {
-      const newRecords = [];
-      const updatePromises = [];
+      const inventoryUpdatePromises = [];
+      const prescriptionsToInsert = [];
 
       for (const itemRequest of itemsToDispense) {
         const inventoryItem = inventoryItems.find(i => i.id === itemRequest.itemId);
 
-        updatePromises.push(
+        // Update inventory
+        inventoryUpdatePromises.push(
           supabase.from('inventory')
             .update({ quantity: inventoryItem.quantity - parseInt(itemRequest.quantity) })
             .eq('id', inventoryItem.id)
         );
 
-        newRecords.push({
-          date: new Date().toISOString(),
-          itemName: inventoryItem.item_name,
-          quantity: itemRequest.quantity,
-          instructions: itemRequest.instructions,
-          issuer: `${profile.first_name} ${profile.last_name}`
+        // Prepare prescription record for prescriptions table
+        prescriptionsToInsert.push({
+          patient_type: 'mother',
+          patient_record_id: patient.id,
+          item_name: inventoryItem.item_name,
+          quantity: parseInt(itemRequest.quantity),
+          instructions: itemRequest.instructions || null,
+          issuer_id: profile.id,
+          inventory_item_id: inventoryItem.id,
+          status: 'Dispensed',
+          quantity_remaining: 0
         });
         
         await logActivity("Medicine Dispensed", `Dispensed ${itemRequest.quantity} ${inventoryItem.item_name} to ${patient.first_name} ${patient.last_name}`);
       }
 
-      await Promise.all(updatePromises);
+      // Execute inventory updates
+      await Promise.all(inventoryUpdatePromises);
 
-      const currentHistory = patient.medical_history || {};
-      const prescriptions = currentHistory.prescriptions || [];
-      const { error: patError } = await supabase
-        .from('mother_records')
-        .update({ medical_history: { ...currentHistory, prescriptions: [...newRecords, ...prescriptions] } })
-        .eq('id', patient.id);
+      // Insert prescriptions
+      const { data: prescriptionData, error: prescError } = await supabase
+        .from('prescriptions')
+        .insert(prescriptionsToInsert)
+        .select();
+      
+      if (prescError) throw prescError;
+
+      // Create dispensing records for each prescription
+      if (prescriptionData && prescriptionData.length > 0) {
+        const dispensingRecords = prescriptionData.map(presc => ({
+          prescription_id: presc.id,
+          dispensed_by: profile.id,
+          quantity_dispensed: presc.quantity,
+          status: 'Dispensed'
+        }));
+
+        const { error: dispError } = await supabase
+          .from('dispensing')
+          .insert(dispensingRecords);
         
-      if (patError) throw patError;
+        if (dispError) throw dispError;
+      }
       
       addNotification("Medicines dispensed successfully.", "success");
       onSave(); 
@@ -392,7 +438,7 @@ const PrescriptionModal = ({ patient, onClose, onSave }) => {
     }
   };
 
-  const history = patient.medical_history?.prescriptions || [];
+  const history = prescriptionHistory;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
@@ -598,9 +644,18 @@ const PrescriptionModal = ({ patient, onClose, onSave }) => {
                       <div className="flex justify-between items-start">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2">
-                            <span className="font-bold text-gray-800">{rec.itemName}</span>
+                            <span className="font-bold text-gray-800">{rec.item_name}</span>
                             <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded-full">
                               Qty: {rec.quantity}
+                            </span>
+                            <span className={`px-2 py-1 text-xs font-bold rounded-full ${
+                              rec.status === 'Dispensed' 
+                                ? 'bg-green-100 text-green-700' 
+                                : rec.status === 'Partially Dispensed'
+                                ? 'bg-yellow-100 text-yellow-700'
+                                : 'bg-gray-100 text-gray-700'
+                            }`}>
+                              {rec.status}
                             </span>
                           </div>
                           {rec.instructions && (
@@ -608,18 +663,22 @@ const PrescriptionModal = ({ patient, onClose, onSave }) => {
                               <span className="font-semibold">Instructions:</span> {rec.instructions}
                             </p>
                           )}
+                          {rec.dispensing && rec.dispensing.length > 0 && (
+                            <div className="mb-2 text-xs text-gray-600">
+                              <span className="font-semibold">Dispensing Details:</span>
+                              {rec.dispensing.map((disp, didx) => (
+                                <div key={didx} className="ml-2 mt-1">
+                                  - {disp.quantity_dispensed} units dispensed on {new Date(disp.dispensed_date).toLocaleDateString()}
+                                </div>
+                              ))}
+                            </div>
+                          )}
                           <div className="flex items-center gap-4 text-xs text-gray-500">
                             <span className="flex items-center gap-1">
                               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                               </svg>
-                              {new Date(rec.date).toLocaleDateString()}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                              </svg>
-                              {rec.issuer || 'Unknown'}
+                              {new Date(rec.date_given).toLocaleDateString()}
                             </span>
                           </div>
                         </div>
@@ -736,7 +795,193 @@ const ViewPatientModal = ({ patient, onClose }) => {
   const [isQrModalVisible, setIsQrModalVisible] = useState(false);
   const [children, setChildren] = useState([]);
   const [loadingChildren, setLoadingChildren] = useState(false);
-  const details = patient.medical_history || {};
+  const [details, setDetails] = useState({});
+  const [loadingDetails, setLoadingDetails] = useState(true);
+
+  // Fetch detailed patient data from database
+  useEffect(() => {
+    const fetchPatientDetails = async () => {
+      if (!patient) return;
+      
+      try {
+        setLoadingDetails(true);
+        const baseData = {
+          first_name: patient.first_name || "",
+          middle_name: patient.middle_name || "",
+          last_name: patient.last_name || "",
+          age: patient.age || "",
+          contact_no: patient.contact_no || "",
+          risk_level: patient.risk_level || "",
+          weeks: patient.weeks || "",
+          last_visit: patient.last_visit || "",
+          patient_id: patient.patient_id || "",
+          purok: patient.purok || "",
+          street: patient.street || "",
+          sms_notifications_enabled: patient.sms_notifications_enabled ?? true,
+          blood_type: patient.blood_type || "",
+          dob: patient.dob || "",
+          family_folder_no: patient.family_folder_no || "",
+          nhts_no: patient.nhts_no || "",
+          philhealth_no: patient.philhealth_no || "",
+          allergy_history: patient.allergy_history || "",
+          family_planning_history: patient.family_planning_history || "",
+        };
+
+        // Fetch obstetrical score
+        const { data: scoreData } = await supabase
+          .from('maternal_obstetrical_score')
+          .select('*')
+          .eq('mother_record_id', patient.id)
+          .single();
+
+        if (scoreData) {
+          baseData.g_score = scoreData.g_score || "";
+          baseData.p_score = scoreData.p_score || "";
+          baseData.term = scoreData.term || "";
+          baseData.preterm = scoreData.preterm || "";
+          baseData.abortion = scoreData.abortion || "";
+          baseData.living_children = scoreData.living_children || "";
+        }
+
+        // Fetch obstetrical history
+        const { data: obstetricalData } = await supabase
+          .from('maternal_obstetrical_history')
+          .select('*')
+          .eq('mother_record_id', patient.id);
+
+        if (obstetricalData) {
+          obstetricalData.forEach((record, index) => {
+            baseData[`pregnancy_${index}_gravida`] = record.gravida || "";
+            baseData[`pregnancy_${index}_outcome`] = record.outcome || "";
+            baseData[`pregnancy_${index}_sex`] = record.sex || "";
+            baseData[`pregnancy_${index}_delivery_type`] = record.delivery_type || "";
+            baseData[`pregnancy_${index}_delivered_at`] = record.delivered_at || "";
+          });
+        }
+
+        // Fetch treatment records
+        const { data: treatmentsData } = await supabase
+          .from('maternal_treatment_records')
+          .select('*')
+          .eq('mother_record_id', patient.id)
+          .order('visit_date', { ascending: true });
+
+        if (treatmentsData) {
+          treatmentsData.forEach((record, index) => {
+            baseData[`treatment_${index}_date`] = record.visit_date || "";
+            baseData[`treatment_${index}_arrival`] = record.arrival_time || "";
+            baseData[`treatment_${index}_departure`] = record.departure_time || "";
+            baseData[`treatment_${index}_height`] = record.height_cm || "";
+            baseData[`treatment_${index}_weight`] = record.weight_kg || "";
+            baseData[`treatment_${index}_bp`] = record.bp || "";
+            baseData[`treatment_${index}_muac`] = record.muac_cm || "";
+            baseData[`treatment_${index}_bmi`] = record.bmi || "";
+            baseData[`treatment_${index}_aog`] = record.aog_weeks || "";
+            baseData[`treatment_${index}_fh`] = record.fh_cm || "";
+            baseData[`treatment_${index}_fhb`] = record.fhb || "";
+            baseData[`treatment_${index}_loc`] = record.loc || "";
+            baseData[`treatment_${index}_presentation`] = record.presentation || "";
+            baseData[`treatment_${index}_fe_fa`] = record.fe_fa || "";
+            baseData[`treatment_${index}_admitted`] = record.admitted || "";
+            baseData[`treatment_${index}_examined`] = record.examined || "";
+          });
+        }
+
+        // Fetch pregnancy outcomes
+        const { data: outcomesData } = await supabase
+          .from('maternal_pregnancy_outcomes')
+          .select('*')
+          .eq('mother_record_id', patient.id);
+
+        if (outcomesData) {
+          outcomesData.forEach((record, index) => {
+            baseData[`outcome_${index}_date_terminated`] = record.date_terminated || "";
+            baseData[`outcome_${index}_delivery_type`] = record.delivery_type || "";
+            baseData[`outcome_${index}_outcome`] = record.outcome || "";
+            baseData[`outcome_${index}_sex`] = record.child_sex || "";
+            baseData[`outcome_${index}_birth_weight`] = record.birth_weight_grams || "";
+            baseData[`outcome_${index}_age_weeks`] = record.age_weeks || "";
+            baseData[`outcome_${index}_place_of_birth`] = record.place_of_birth || "";
+            baseData[`outcome_${index}_attended_by`] = record.attended_by || "";
+          });
+        }
+
+        // Fetch menstrual history
+        const { data: menstrualData } = await supabase
+          .from('maternal_menstrual_history')
+          .select('*')
+          .eq('mother_record_id', patient.id)
+          .single();
+
+        if (menstrualData) {
+          baseData.lmp = menstrualData.lmp || "";
+          baseData.edc = menstrualData.edc || "";
+          baseData.age_of_menarche = menstrualData.age_of_menarche || "";
+          baseData.menstruation_duration = menstrualData.menstruation_duration || "";
+          baseData.bleeding_amount = menstrualData.bleeding_amount || "";
+          baseData.age_first_period = menstrualData.age_first_period || "";
+        }
+
+        // Fetch vaccinations
+        const { data: vaccinesData } = await supabase
+          .from('maternal_vaccinations')
+          .select('*')
+          .eq('mother_record_id', patient.id);
+
+        if (vaccinesData) {
+          vaccinesData.forEach(vac => {
+            const vaccineKey = `vaccine_${vac.vaccine_type.toLowerCase()}`;
+            baseData[vaccineKey] = vac.date_given || "";
+          });
+        }
+
+        // Fetch medical conditions
+        const { data: conditionsData } = await supabase
+          .from('maternal_medical_conditions')
+          .select('*')
+          .eq('mother_record_id', patient.id);
+
+        if (conditionsData) {
+          conditionsData.forEach(cond => {
+            if (cond.condition_category === 'Personal') {
+              baseData[`ph_${cond.condition_type}`] = cond.is_present || false;
+            } else if (cond.condition_category === 'Hereditary') {
+              baseData[`hdh_${cond.condition_type}`] = cond.is_present || false;
+            } else if (cond.condition_category === 'Social') {
+              baseData[`sh_${cond.condition_type}`] = cond.is_present || false;
+            }
+          });
+        }
+
+        // Fetch supplementation
+        const { data: suppsData } = await supabase
+          .from('maternal_supplementation')
+          .select('*')
+          .eq('mother_record_id', patient.id);
+
+        if (suppsData) {
+          suppsData.forEach(sup => {
+            if (sup.supplement_type === 'Iron') {
+              baseData.iron_supp_date = sup.date_given || "";
+              baseData.iron_supp_amount = sup.amount || "";
+            } else if (sup.supplement_type === 'Vitamin A') {
+              baseData.vitamin_a_date = sup.date_given || "";
+              baseData.vitamin_a_amount = sup.amount || "";
+            }
+          });
+        }
+
+        setDetails(baseData);
+      } catch (error) {
+        console.error('Error fetching patient details:', error);
+        setDetails(patient.medical_history || {});
+      } finally {
+        setLoadingDetails(false);
+      }
+    };
+
+    fetchPatientDetails();
+  }, [patient]);
 
   // Fetch children data when modal opens
   useEffect(() => {
@@ -1006,7 +1251,7 @@ const ViewPatientModal = ({ patient, onClose }) => {
           `Age of Menarche: ${details.age_of_menarche || "N/A"}`,
           `Duration of Menses: ${details.menstruation_duration || "N/A"} days`,
         ],
-        [`Risk Code: ${details.risk_code || "N/A"}`],
+
         [`Age of First Period: ${details.age_first_period || "N/A"}`],
         [`Bleeding Amount: ${details.bleeding_amount || "N/A"}`],
       ],
@@ -1618,14 +1863,23 @@ const ViewPatientModal = ({ patient, onClose }) => {
 
           {/* Main Content Body with Scrolling */}
           <div className="p-6 overflow-y-auto flex-1">
-            <SectionHeader title="Personal Information" />
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-6">
-              <Field
-                label="Full Name"
-                value={`${patient.first_name || ""} ${
-                  details.middle_name || ""
-                } ${patient.last_name || ""}`}
-              />
+            {loadingDetails ? (
+              <div className="flex justify-center items-center h-64">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-3"></div>
+                  <p className="text-gray-600">Loading patient details...</p>
+                </div>
+              </div>
+            ) : (
+              <>
+                <SectionHeader title="Personal Information" />
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-6">
+                  <Field
+                    label="Full Name"
+                    value={`${patient.first_name || ""} ${
+                      patient.middle_name || ""
+                    } ${patient.last_name || ""}`}
+                  />
               <Field label="Age" value={patient.age} />
               <Field label="Date of Birth" value={details.dob} />
               <Field label="Contact No." value={patient.contact_no} />
@@ -1672,7 +1926,7 @@ const ViewPatientModal = ({ patient, onClose }) => {
                 label="Menstruation Duration"
                 value={`${details.menstruation_duration || "N/A"} days`}
               />
-              <Field label="Risk Code" value={details.risk_code} />
+
             </div>
 
             <SectionHeader title="Vaccination Record (Tetanus Toxoid)" />
@@ -1826,6 +2080,8 @@ const ViewPatientModal = ({ patient, onClose }) => {
 
             {/* Children Section */}
             <ChildrenSection />
+              </>
+            )}
           </div>
 
           {/* Footer */}
@@ -2226,6 +2482,7 @@ export default function MaternityManagement() {
         {isPrescriptionModalOpen && selectedPatient && (
             <PrescriptionModal 
                 patient={selectedPatient}
+                isOpen={isPrescriptionModalOpen}
                 onClose={() => setIsPrescriptionModalOpen(false)}
                 onSave={fetchPageData}
             />
@@ -2429,7 +2686,7 @@ export default function MaternityManagement() {
                       "Contact",
                       "Weeks",
                       "Last Visit",
-                      "Risk",
+                      "Risk Level",
                       "Actions",
                     ].map((header) => (
                       <th key={header} className="px-2 py-2">
