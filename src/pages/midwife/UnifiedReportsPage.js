@@ -12,6 +12,7 @@ import rightLogoIcon from '../../assets/rightLogo.png';
 
 // --- ICONS ---
 const DownloadIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>;
+const LockIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>;
 const ViewIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>;
 const SearchIcon = () => <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>;
 const ChevronLeftIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>;
@@ -35,6 +36,16 @@ const getRemainingShelfLife = (expiryDate) => {
 };
 
 const getQuarterMonths = (q) => [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9, 10, 11]][q - 1];
+
+// Check if a period is complete (end date has passed)
+const isPeriodComplete = (endDate) => {
+    const today = new Date();
+    const periodEnd = new Date(endDate);
+    // Reset time to compare dates only
+    today.setHours(23, 59, 59, 999);
+    periodEnd.setHours(23, 59, 59, 999);
+    return today >= periodEnd;
+};
 
 const formatDate = (date) => !date ? 'N/A' : new Date(date).toLocaleDateString('en-PH', { 
     year: 'numeric', 
@@ -278,7 +289,7 @@ const calculateInventorySummary = (inventoryData) => {
 
 // --- MODAL COMPONENTS ---
 const ViewReportModal = ({ reportItem, onClose, onDownload }) => {
-    const { name, year, type, data } = reportItem;
+    const { name, year, type, data, isComplete } = reportItem;
     
     let summaryStats = [];
     if (type === 'inventory') {
@@ -375,14 +386,26 @@ const ViewReportModal = ({ reportItem, onClose, onDownload }) => {
                     </div>
 
                     <div className="bg-blue-50 p-4 rounded-lg border text-center border-blue-200">
+                        {!isComplete && (
+                            <p className="text-sm text-orange-600 mb-2 font-semibold">
+                                ⚠️ This period is not yet complete. Reports can only be downloaded after the period ends.
+                            </p>
+                        )}
                         <p className="text-sm text-blue-600 mb-4 font-semibold">
-                            Click below to generate the full PDF report with detailed tables, analytics, and official signatures.
+                            {isComplete 
+                                ? "Click below to generate the full PDF report with detailed tables, analytics, and official signatures."
+                                : "This report is currently locked. Please wait until the reporting period is complete."}
                         </p>
                         <button
                             onClick={() => onDownload(reportItem)}
-                            className="flex items-center justify-center gap-2 w-full py-3 bg-blue-600 text-white rounded-md font-bold hover:bg-blue-700 transition-colors"
+                            disabled={!isComplete}
+                            className={`flex items-center justify-center gap-2 w-full py-3 rounded-md font-bold transition-colors ${
+                                isComplete 
+                                    ? "bg-blue-600 text-white hover:bg-blue-700" 
+                                    : "bg-gray-400 text-gray-200 cursor-not-allowed"
+                            }`}
                         >
-                            <DownloadIcon /> Download Full PDF Report
+                            <DownloadIcon /> {isComplete ? "Download Full PDF Report" : "Report Locked"}
                         </button>
                     </div>
                 </div>
@@ -440,9 +463,9 @@ export default function UnifiedReportsPage() {
         setLoading(true);
         try {
             const [pat, child, inv, prof, appt, userProfileRes] = await Promise.all([
-                supabase.from('mother_records').select('*').eq('is_deleted', false),
-                supabase.from('child_records').select('*').eq('is_deleted', false),
-                supabase.from('inventory').select('*').eq('is_deleted', false),
+                supabase.from('mother_records').select('*'),
+                supabase.from('child_records').select('*'),
+                supabase.from('inventory').select('*'),
                 supabase.from('profiles').select('*'),
                 supabase.from('appointments').select('*').eq('status', 'Completed'),
                 supabase.from('profiles').select('*').eq('id', user?.id).single()
@@ -543,6 +566,9 @@ export default function UnifiedReportsPage() {
                 size = `${summary.totalItems} Items (${summary.criticalCount} Crit)`;
             }
 
+            // Check if the period is complete (end date has passed)
+            const complete = isPeriodComplete(endDate);
+
             list.push({ 
                 id: `${frequency}_${i}_${reportCategory}_${filterOwner}_${filterCategory}_${filterStatus}`,
                 name, 
@@ -553,7 +579,8 @@ export default function UnifiedReportsPage() {
                 summary,
                 months,
                 startDate,
-                endDate
+                endDate,
+                isComplete: complete
             });
         }
         return list;
@@ -670,7 +697,7 @@ export default function UnifiedReportsPage() {
         }
 
         // --- 3. HIGH-RISK PREGNANCY MONITORING ---
-        if (currentY > pageHeight - 50) {
+        if (currentY > pageHeight - 70) {
             doc.addPage();
             currentY = 20;
         }
@@ -710,10 +737,15 @@ export default function UnifiedReportsPage() {
                 margin: { left: 15, right: 15 },
             });
             currentY = doc.lastAutoTable.finalY + 15;
+        } else {
+            currentY += 8;
+            doc.setFontSize(10).setTextColor(150, 150, 150);
+            doc.text("No high-risk pregnancies identified for this period.", 20, currentY);
+            currentY += 20;
         }
 
         // --- 4. MISSED OR INACTIVE PATIENTS ---
-        if (currentY > pageHeight - 50) {
+        if (currentY > pageHeight - 70) {
             doc.addPage();
             currentY = 20;
         }
@@ -1181,9 +1213,14 @@ export default function UnifiedReportsPage() {
         doc.text(`Normal Stock: ${summary.normalCount}`, summaryCol2, currentY + 8);
         doc.text(`Low Stock: ${summary.lowCount}`, summaryCol2, currentY + 14);
         doc.text(`Critical Stock: ${summary.criticalCount}`, summaryCol2, currentY + 20);
-        currentY += 10;
+        currentY += 30;
 
         // --- 2. DISTRIBUTION TABLES ---
+        if (currentY > pageHeight - 70) {
+            doc.addPage();
+            currentY = 20;
+        }
+        
         doc.setFontSize(12).setFont(undefined, 'bold').setTextColor(41, 128, 185);
         doc.text("2. DISTRIBUTION ANALYSIS", 15, currentY);
         
@@ -1214,7 +1251,7 @@ export default function UnifiedReportsPage() {
         currentY = doc.lastAutoTable.finalY + 15;
 
         // --- 3. DETAILED INVENTORY LIST ---
-        if (currentY > pageHeight - 50) {
+        if (currentY > pageHeight - 70) {
             doc.addPage();
             currentY = 20;
         }
@@ -1245,12 +1282,17 @@ export default function UnifiedReportsPage() {
                 margin: { left: 15, right: 15 }
             });
 
-            currentY = doc.lastAutoTable.finalY + 10;
+            currentY = doc.lastAutoTable.finalY + 15;
+        } else {
+            currentY += 8;
+            doc.setFontSize(10).setTextColor(150, 150, 150);
+            doc.text("No inventory items available.", 20, currentY);
+            currentY += 15;
         }
 
         // --- 4. EXPIRY & BATCH MONITORING ---
         if (item.data.inventory.some(itm => itm.expiry_date)) {
-            if (currentY > pageHeight - 40) {
+            if (currentY > pageHeight - 70) {
                 doc.addPage();
                 currentY = 20;
             }
@@ -1300,7 +1342,7 @@ export default function UnifiedReportsPage() {
 
             if (expiryRows.length > 0) {
                 autoTable(doc, {
-                    startY: currentY + 5,
+                    startY: currentY + 8,
                     head: [['Item Name', 'Batch No', 'Expiry Date', 'Days Remaining', 'Status', 'Qty']],
                     body: expiryRows,
                     theme: 'striped',
@@ -1316,12 +1358,17 @@ export default function UnifiedReportsPage() {
                         5: { cellWidth: 15 }
                     }
                 });
-                currentY = doc.lastAutoTable.finalY + 10;
+                currentY = doc.lastAutoTable.finalY + 15;
+            } else {
+                currentY += 8;
+                doc.setFontSize(10).setTextColor(150, 150, 150);
+                doc.text("No items with expiry dates.", 20, currentY);
+                currentY += 15;
             }
         }
 
         // --- 5. REMARKS & RECOMMENDATIONS ---
-        if (currentY > pageHeight - 60) {
+        if (currentY > pageHeight - 70) {
             doc.addPage();
             currentY = 20;
         }
@@ -1339,20 +1386,23 @@ export default function UnifiedReportsPage() {
             '• Update stock levels after distribution'
         ].filter(r => r !== '');
 
+        currentY += 8;
         if (remarks.length > 0) {
             remarks.forEach((remark, index) => {
                 doc.text(remark, 20, currentY + 10 + (index * 5));
             });
+            currentY += remarks.length * 5 + 20;
         } else {
             doc.text("No urgent actions required. Inventory status is satisfactory.", 20, currentY + 10);
+            currentY += 25;
         }
 
-        currentY += remarks.length * 5 + 20;
-
         // --- 6. SIGNATURES ---
-        if (currentY > pageHeight - 60) {
+        if (currentY > pageHeight - 70) {
             doc.addPage();
             currentY = 20;
+        } else {
+            currentY += 10;
         }
         
         doc.setFontSize(10).setFont(undefined, 'bold').setTextColor(0, 0, 0);
@@ -1386,6 +1436,12 @@ export default function UnifiedReportsPage() {
     };
 
     const generateReport = async (item) => {
+        // Security check: Verify period is complete before generating
+        if (!item.isComplete) {
+            addNotification('This report is locked. Please wait until the reporting period is complete.', 'error');
+            return;
+        }
+
         if (item.type === 'mother') {
             await generateMaternalReport(item);
         } else if (item.type === 'children') {
@@ -1638,17 +1694,27 @@ export default function UnifiedReportsPage() {
                                                 )}
                                             </td>
                                             <td className="p-3 flex items-center space-x-2">
-                                                <button 
-                                                    onClick={() => generateReport(report)}
-                                                    className={`p-2 rounded-full transition-colors ${
-                                                        report.type === 'mother' ? 'bg-purple-50 text-purple-600 hover:bg-purple-100 hover:text-purple-800' :
-                                                        report.type === 'children' ? 'bg-cyan-50 text-cyan-600 hover:bg-cyan-100 hover:text-cyan-800' :
-                                                        'bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-800'
-                                                    }`}
-                                                    title="Download PDF Report"
-                                                >
-                                                    <DownloadIcon />
-                                                </button>
+                                                {report.isComplete ? (
+                                                    <button 
+                                                        onClick={() => generateReport(report)}
+                                                        className={`p-2 rounded-full transition-colors ${
+                                                            report.type === 'mother' ? 'bg-purple-50 text-purple-600 hover:bg-purple-100 hover:text-purple-800' :
+                                                            report.type === 'children' ? 'bg-cyan-50 text-cyan-600 hover:bg-cyan-100 hover:text-cyan-800' :
+                                                            'bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-800'
+                                                        }`}
+                                                        title="Download PDF Report"
+                                                    >
+                                                        <DownloadIcon />
+                                                    </button>
+                                                ) : (
+                                                    <button 
+                                                        disabled
+                                                        className="p-2 rounded-full bg-gray-100 text-gray-400 cursor-not-allowed"
+                                                        title="Report locked until period is complete"
+                                                    >
+                                                        <LockIcon />
+                                                    </button>
+                                                )}
                                                 <button 
                                                     onClick={() => setSelectedReport(report)}
                                                     className="text-gray-500 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors"

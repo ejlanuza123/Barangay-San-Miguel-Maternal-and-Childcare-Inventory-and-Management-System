@@ -213,7 +213,6 @@ const PrescriptionModal = ({ child, onClose, onSave, isOpen }) => {
         .from('inventory')
         .select('*')
         .gt('quantity', 0)
-        .eq('is_deleted', false)
         .eq('owner_role', 'BNS');
       setInventoryItems(data || []);
     };
@@ -329,8 +328,7 @@ const PrescriptionModal = ({ child, onClose, onSave, isOpen }) => {
           instructions: itemRequest.instructions || null,
           issuer_id: profile.id,
           inventory_item_id: inventoryItem.id,
-          status: 'Dispensed',
-          quantity_remaining: 0
+          status: 'Dispensed'
         });
         
         await logActivity("Medicine Dispensed (Child)", `Dispensed ${itemRequest.quantity} ${inventoryItem.item_name} to ${child.first_name} ${child.last_name}`);
@@ -1169,7 +1167,6 @@ export default function ChildHealthRecords() {
       const { data: allChildren, error } = await supabase
         .from('child_records')
         .select('*')
-        .eq('is_deleted', false)
         .order('child_id', { ascending: true });
 
       if (error) throw error;
@@ -1246,7 +1243,6 @@ export default function ChildHealthRecords() {
       const { data: allChildren, error } = await supabase
         .from('child_records')
         .select('*')
-        .eq('is_deleted', false)
         .order('child_id', { ascending: true });
 
       if (error) throw error;
@@ -1347,7 +1343,6 @@ export default function ChildHealthRecords() {
     let query = supabase
       .from("child_records")
       .select("*", { count: "exact" })
-      .eq('is_deleted', false);
 
     // Apply search filter if exists
     if (searchTerm) {
@@ -1375,7 +1370,6 @@ export default function ChildHealthRecords() {
         const { count } = await supabase
           .from("child_records")
           .select("*", { count: "exact", head: true })
-          .eq('is_deleted', false);
         
         setChildRecords([]);
         setTotalRecords(count || 0);

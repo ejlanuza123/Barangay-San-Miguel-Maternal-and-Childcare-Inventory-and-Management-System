@@ -27,8 +27,9 @@ export default function AddInventoryModal({ onClose, onSave, mode = "add", initi
     sku: "",
     batch_no: "",
     supply_source: "",
-    manufacture_date: "",
-    expiry_date: ""
+    expiry_date: "",
+    min_stock_level: 10,
+    reorder_quantity: 50
   });
   const [batchMode, setBatchMode] = useState(false);
   const [batchItems, setBatchItems] = useState([{ ...formData }]);
@@ -47,8 +48,9 @@ export default function AddInventoryModal({ onClose, onSave, mode = "add", initi
         sku: initialData.sku || "",
         batch_no: initialData.batch_no || "",
         supply_source: initialData.supply_source || initialData.supplier || "",
-        manufacture_date: initialData.manufacture_date || "",
         expiry_date: initialData.expiry_date || "",
+        min_stock_level: initialData.min_stock_level || 10,
+        reorder_quantity: initialData.reorder_quantity || 50,
       });
     }
   }, [mode, initialData]);
@@ -116,11 +118,11 @@ export default function AddInventoryModal({ onClose, onSave, mode = "add", initi
           quantity: parseInt(item.quantity),
           unit: item.unit,
           sku: item.sku ? item.sku.toUpperCase() : null,
-          batch_no: item.batch_no || null, // Convert empty string to null
-          supplier: item.supply_source,
+          batch_no: item.batch_no || null,
           supply_source: item.supply_source,
-          manufacture_date: item.manufacture_date || null, // FIX: Convert empty string to null
-          expiry_date: item.expiry_date || null, // FIX: Convert empty string to null
+          expiry_date: item.expiry_date || null,
+          min_stock_level: parseInt(item.min_stock_level) || 10,
+          reorder_quantity: parseInt(item.reorder_quantity) || 50,
           owner_role: 'BHW',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
@@ -147,12 +149,11 @@ export default function AddInventoryModal({ onClose, onSave, mode = "add", initi
         const dataPayload = {
           ...formData,
           sku: formData.sku ? formData.sku.toUpperCase() : null,
-          supplier: formData.supply_source,
           supply_source: formData.supply_source,
-          // FIX: Convert empty strings to null for date fields
-          manufacture_date: formData.manufacture_date || null,
           expiry_date: formData.expiry_date || null,
           batch_no: formData.batch_no || null,
+          min_stock_level: parseInt(formData.min_stock_level) || 10,
+          reorder_quantity: parseInt(formData.reorder_quantity) || 50,
           owner_role: 'BHW',
           updated_at: new Date().toISOString()
         };
@@ -712,6 +713,38 @@ export default function AddInventoryModal({ onClose, onSave, mode = "add", initi
                         onChange={handleChange} 
                         className="w-full mt-1 p-2 border rounded-md text-sm" 
                       />
+                    </div>
+                  </div>
+
+                  <div className="border-t pt-4 mt-4">
+                    <h3 className="text-sm font-semibold text-gray-700 mb-3">Reorder Settings</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-xs font-semibold text-gray-600">Minimum Stock Level</label>
+                        <input 
+                          type="number" 
+                          name="min_stock_level" 
+                          value={formData.min_stock_level || 10} 
+                          onChange={handleChange} 
+                          className="w-full mt-1 p-2 border rounded-md text-sm" 
+                          min="1"
+                          placeholder="10"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Alert when stock drops below this level</p>
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-gray-600">Reorder Quantity</label>
+                        <input 
+                          type="number" 
+                          name="reorder_quantity" 
+                          value={formData.reorder_quantity || 50} 
+                          onChange={handleChange} 
+                          className="w-full mt-1 p-2 border rounded-md text-sm" 
+                          min="1"
+                          placeholder="50"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Suggest ordering this quantity</p>
+                      </div>
                     </div>
                   </div>
                   

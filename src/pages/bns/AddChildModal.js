@@ -340,7 +340,6 @@ const Step2 = ({ formData, handleChange }) => {
           .from('mother_records')
           .select('id, first_name, last_name, middle_name, contact_no, age, dob, purok')
           .or(`first_name.ilike.%${motherSearchTerm}%,last_name.ilike.%${motherSearchTerm}%,middle_name.ilike.%${motherSearchTerm}%`)
-          .eq('is_deleted', false)
           .limit(10);
 
         if (!error && data) {
@@ -1171,7 +1170,6 @@ export default function AddChildModal({ onClose, onSave, mode = 'add', initialDa
             const { data, error } = await supabase
                 .from('inventory')
                 .select('*')
-                .eq('is_deleted', false)
                 .or('owner_role.eq.BNS,owner_role.is.null,owner_role.eq.BHW')
                 .order('item_name');
             

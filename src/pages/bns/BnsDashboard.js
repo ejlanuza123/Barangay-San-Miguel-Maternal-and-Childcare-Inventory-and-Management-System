@@ -363,8 +363,7 @@ export default function BnsDashboard() {
       // 1. Fetch Children & Activity
       const [childrenRes, activityRes] = await Promise.all([
         supabase.from('child_records')
-            .select('id, child_id, first_name, last_name, mother_name, father_name, dob, nutrition_status, created_at, last_checkup, is_deleted')
-            .eq('is_deleted', false)
+            .select('id, child_id, first_name, last_name, mother_name, father_name, dob, nutrition_status, created_at, last_checkup')
             .order('last_name', { ascending: true }),
         
         supabase.from("activity_log")

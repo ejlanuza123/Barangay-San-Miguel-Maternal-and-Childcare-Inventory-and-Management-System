@@ -421,8 +421,7 @@ export default function ItemIssuancePage() {
         // Fetch all inventory entries from the inventory table (owner_role field distinguishes BHW, BNS, etc.)
         const inventoryRes = await supabase
             .from('inventory')
-            .select('*')
-            .eq('is_deleted', false);
+            .select('*');
 
         const lowStockItems = (inventoryRes.data || [])
             .map(item => ({
@@ -653,7 +652,7 @@ export default function ItemIssuancePage() {
                                                     <div className="text-xs text-gray-500 mt-1 flex items-center gap-2 flex-wrap">
                                                         <span className="bg-gray-100 px-2 py-0.5 rounded">Owner: {item.owner_role}</span>
                                                         <span className="bg-blue-50 px-2 py-0.5 rounded text-blue-700">{item.category || 'Uncategorized'}</span>
-                                                        {item.supplier && <span className="bg-amber-50 px-2 py-0.5 rounded text-amber-700">Supplier: {item.supplier}</span>}
+                                                        {item.supply_source && <span className="bg-amber-50 px-2 py-0.5 rounded text-amber-700">Supply Source: {item.supply_source}</span>}
                                                     </div>
                                                 </td>
                                                 <td className="p-4">

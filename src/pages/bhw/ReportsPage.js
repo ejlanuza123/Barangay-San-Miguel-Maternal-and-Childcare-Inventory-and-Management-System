@@ -45,6 +45,16 @@ const getQuarterMonths = (q) => {
     ][q - 1];
 };
 
+// Check if a period is complete (end date has passed)
+const isPeriodComplete = (endDate) => {
+    const today = new Date();
+    const periodEnd = new Date(endDate);
+    // Reset time to compare dates only
+    today.setHours(23, 59, 59, 999);
+    periodEnd.setHours(23, 59, 59, 999);
+    return today >= periodEnd;
+};
+
 const formatDate = (date) => {
     if (!date) return 'N/A';
     return new Date(date).toLocaleDateString('en-PH', {
@@ -69,7 +79,7 @@ const calculateMaternalSummary = (patients, startDate, endDate) => {
     });
 
     // Calculate summary statistics
-    const totalRegistered = patients.length;
+    const totalRegistered = patients.filter(p => new Date(p.created_at) <= endDate).length;
     const newRegistrations = periodPatients.length;
     
     // Active mothers (with visits in the period)
@@ -142,7 +152,7 @@ const extractMedicalNotes = (medicalHistory) => {
 
 // --- MODAL COMPONENTS ---
 const ViewReportModal = ({ reportItem, onClose, onDownload }) => {
-    const { name, year, type, data } = reportItem;
+    const { name, year, type, data, isComplete } = reportItem;
     
     // Calculate summary stats
     let summaryStats = [];
@@ -219,13 +229,21 @@ const ViewReportModal = ({ reportItem, onClose, onDownload }) => {
 
                     <div className="bg-blue-50 p-4 rounded-lg border text-center border-blue-200">
                         <p className="text-sm text-blue-600 mb-4 font-semibold">
-                            Click below to generate the full PDF report with detailed tables, analytics, and official signatures.
+                            {isComplete 
+                                ? "Click below to generate the full PDF report with detailed tables, analytics, and official signatures."
+                                : `This report is not yet available. Reports can only be downloaded after the period ends (${formatDate(data.endDate)}).`
+                            }
                         </p>
                         <button
-                            onClick={() => onDownload(reportItem)}
-                            className="flex items-center justify-center gap-2 w-full py-3 bg-blue-600 text-white rounded-md font-bold hover:bg-blue-700 transition-colors"
+                            onClick={() => isComplete ? onDownload(reportItem) : null}
+                            disabled={!isComplete}
+                            className={`flex items-center justify-center gap-2 w-full py-3 rounded-md font-bold transition-colors ${
+                                isComplete 
+                                    ? 'bg-blue-600 text-white hover:bg-blue-700'
+                                    : 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                            }`}
                         >
-                            <DownloadIcon /> Download Full PDF Report
+                            <DownloadIcon /> {isComplete ? 'Download Full PDF Report' : 'Report Not Available'}
                         </button>
                     </div>
                 </div>
@@ -295,11 +313,11 @@ export default function ReportsPage() {
                 userProfileRes,
                 appointmentsRes
             ] = await Promise.all([
-                supabase.from('patients').select('*').eq('is_deleted', false),
-                supabase.from('inventory').select('*').eq('is_deleted', false),
+                supabase.from('mother_records').select('*'),
+                supabase.from('inventory').select('*'),
                 supabase.from('profiles').select('*'),
                 supabase.from('profiles').select('*').eq('id', user?.id).single(),
-                supabase.from('appointments').select('*').eq('status', 'Completed')
+                supabase.from('follow_up_visit').select('*').eq('status', 'Completed')
             ]);
 
             setAllData({
@@ -563,7 +581,7 @@ export default function ReportsPage() {
             });
         
         const highRiskRows = highRiskPatients.map(patient => {
-            const medicalNotes = extractMedicalNotes(patient.medical_history);
+            const medicalNotes = extractMedicalNotes(patient.allergy_history);
             
             return [
                 `${patient.first_name} ${patient.last_name}`.substring(0, 25),
@@ -656,8 +674,8 @@ export default function ReportsPage() {
         // Collect all medical history notes
         let allMedicalNotes = [];
         data.patients.forEach(patient => {
-            if (patient.medical_history) {
-                const notes = extractMedicalNotes(patient.medical_history);
+            if (patient.allergy_history) {
+                const notes = extractMedicalNotes(patient.allergy_history);
                 if (notes) {
                     allMedicalNotes.push({
                         patient: `${patient.first_name} ${patient.last_name}`,
@@ -1115,17 +1133,21 @@ export default function ReportsPage() {
             }
 
             // Calculate "size" for display
-            let size = '0 Items';
+            let size = '0';
             if (item.type === 'mother') {
-                size = `${dataPackage.patients?.length || 0} Mothers`;
+                size = `${dataPackage.summary.newRegistrations} New / ${dataPackage.summary.totalRegistered} Total`;
             } else {
                 size = `${dataPackage.inventory?.length || 0} Items`;
             }
 
+            // Check if the period is complete (end date has passed)
+            const complete = isPeriodComplete(item.endDate);
+
             return { 
                 ...item, 
                 data: dataPackage, 
-                size: size
+                size: size,
+                isComplete: complete
             };
         });
     }, [allData, currentYear, frequency, reportType, filterCategory, filterStatus, filterOwnerRole]);
@@ -1362,12 +1384,14 @@ export default function ReportsPage() {
                                             </td>
                                             <td className="p-3 flex items-center space-x-2">
                                                 <button 
-                                                    onClick={() => generateReport(report)}
+                                                    onClick={() => report.isComplete ? generateReport(report) : null}
+                                                    disabled={!report.isComplete}
                                                     className={`p-2 rounded-full transition-colors ${
-                                                        report.type === 'mother' ? 'bg-purple-50 text-purple-600 hover:bg-purple-100 hover:text-purple-800' :
-                                                        'bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-800'
+                                                        report.isComplete 
+                                                            ? (report.type === 'mother' ? 'bg-purple-50 text-purple-600 hover:bg-purple-100 hover:text-purple-800' : 'bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-800')
+                                                            : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                                                     }`}
-                                                    title="Download PDF Report"
+                                                    title={report.isComplete ? "Download PDF Report" : `Report not available until ${formatDate(report.endDate)}`}
                                                 >
                                                     <DownloadIcon />
                                                 </button>

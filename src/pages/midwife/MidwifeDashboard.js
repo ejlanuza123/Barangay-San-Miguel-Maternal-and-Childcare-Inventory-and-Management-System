@@ -11,9 +11,9 @@ const MaternityIcon = () => (
   </svg>
 );
 
-const InfantIcon = () => (
+const ChildIcon = () => (
   <svg className="w-10 h-10 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5 2.5a6 6 0 01-9 0" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 2a5 5 0 110 10 5 5 0 010-10zM19 21c0-1.5-.5-4-1-5s-2-2-6-2-5.5 1-6 2-.5 3.5-1 5" />
   </svg>
 );
 
@@ -542,31 +542,25 @@ export default function MidwifeDashboard() {
         supabase
           .from('mother_records')
           .select('*', { count: 'exact', head: true })
-          .eq('is_deleted', false)
           .gte('created_at', monthStartISO)
           .lte('created_at', monthEndISO),
         supabase
           .from('child_records')
           .select('*', { count: 'exact', head: true })
-          .eq('is_deleted', false)
           .gte('created_at', monthStartISO)
           .lte('created_at', monthEndISO),
         supabase
           .from('mother_records')
-          .select('*', { count: 'exact', head: true })
-          .eq('is_deleted', false),
+          .select('*', { count: 'exact', head: true }),
         supabase
           .from('child_records')
-          .select('*', { count: 'exact', head: true })
-          .eq('is_deleted', false),
+          .select('*', { count: 'exact', head: true }),
         supabase
           .from('mother_records')
-          .select('created_at')
-          .eq('is_deleted', false),
+          .select('created_at'),
         supabase
           .from('child_records')
           .select('created_at')
-          .eq('is_deleted', false)
       ]);
       
       setStats({
@@ -666,7 +660,7 @@ export default function MidwifeDashboard() {
             delay={0.1}
           />
           <StatCard 
-            icon={<InfantIcon />}
+            icon={<ChildIcon />}
             count={stats.newInfant}
             label="New Children Records (This Month)"
             trend={8}

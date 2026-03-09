@@ -5,6 +5,7 @@ import { useNotification } from '../../context/NotificationContext';
 import AddBnsInventoryModal from './AddBnsInventoryModal';
 import { logActivity } from '../../services/activityLogger';
 import { useAuth } from '../../context/AuthContext';
+import { getExpiryStatus, needsReordering } from '../../services/inventoryService';
  
 
 
@@ -61,12 +62,10 @@ const ViewItemModal = ({ item, onClose }) => {
                     <p><span className="font-semibold text-gray-600">Status:</span> <StatusBadge status={item.status} /></p>
                     <p><span className="font-semibold text-gray-600">Batch/Lot No:</span> {item.batch_no || 'N/A'}</p>
                     <div className="grid grid-cols-2 gap-4">
-                        <p><span className="font-semibold text-gray-600">Manufacture Date:</span><br/>{item.manufacture_date || 'N/A'}</p>
                         <p><span className="font-semibold text-gray-600">Expiration Date:</span><br/>{item.expiry_date || 'N/A'}</p>
                     </div>
                     <div className="mt-4 pt-4 border-t border-dashed">
-                        <p><span className="font-semibold text-gray-600">Supplier:</span> {item.supplier || 'N/A'}</p>
-                        <p><span className="font-semibold text-gray-600">Source:</span> {item.supply_source || 'N/A'}</p>
+                        <p><span className="font-semibold text-gray-600">Supply Source:</span> {item.supply_source || 'N/A'}</p>
                     </div>
                 </div>
                 <div className="flex justify-end mt-6">
@@ -261,7 +260,6 @@ export default function BnsInventoryPage() {
             let query = supabase
                 .from('inventory')
                 .select('*', { count: 'exact', head: false })
-                .eq('is_deleted', false) // Filter out deleted items
                 .eq('owner_role', 'BNS') // <--- Filter for BNS items
                 .order('created_at', { ascending: false });
 

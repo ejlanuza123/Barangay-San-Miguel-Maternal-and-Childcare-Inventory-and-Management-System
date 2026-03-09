@@ -1256,8 +1256,7 @@ const MaternityManagementTab = () => {
     // Build query with filters
     let query = supabase
       .from("mother_records")
-      .select("*", { count: "exact" })
-      .eq('is_deleted', false);
+      .select("*", { count: "exact" });
 
     // Apply search filter if exists
     if (searchTerm) {
@@ -1347,7 +1346,6 @@ const MaternityManagementTab = () => {
       const { data: allPatients, error } = await supabase
         .from("mother_records")
         .select("*")
-        .eq('is_deleted', false)
         .order("patient_id", { ascending: true });
 
       if (error) throw error;
@@ -1391,7 +1389,6 @@ const MaternityManagementTab = () => {
       const { data: allPatients, error } = await supabase
         .from("mother_records")
         .select("*")
-        .eq('is_deleted', false)
         .order("patient_id", { ascending: true });
 
       if (error) throw error;
@@ -1735,7 +1732,6 @@ const ChildHealthRecordsTab = () => {
     let query = supabase
       .from("child_records")
       .select("*", { count: "exact" })
-      .eq('is_deleted', false); // Filter out deleted records
 
     // Apply search filter if exists
     if (searchTerm) {
@@ -1815,7 +1811,6 @@ const ChildHealthRecordsTab = () => {
       const { data: allChildren, error } = await supabase
         .from("child_records")
         .select("*")
-        .eq('is_deleted', false) // Only non-deleted records
         .order("child_id", { ascending: true });
 
       if (error) throw error;
@@ -1863,7 +1858,6 @@ const ChildHealthRecordsTab = () => {
       const { data: allChildren, error } = await supabase
         .from("child_records")
         .select("*")
-        .eq('is_deleted', false)
         .order("child_id", { ascending: true });
 
       if (error) throw error;

@@ -427,8 +427,7 @@ export default function BhwDashboard() {
       // 1. Fetch Patients & Activity
       const [patientsRes, activityRes] = await Promise.all([
         supabase.from('mother_records')
-            .select('id, first_name, last_name, purok, risk_level, created_at, last_visit, is_deleted')
-            .eq('is_deleted', false)
+            .select('id, first_name, last_name, purok, risk_level, created_at, last_visit')
             .order('last_name', { ascending: true }),
         
         supabase.from("activity_log")

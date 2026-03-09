@@ -5,13 +5,14 @@ import { AnimatePresence, motion } from "framer-motion";
 import { logActivity } from "../../services/activityLogger";
 import { useNotification } from "../../context/NotificationContext";
 import { useAuth } from "../../context/AuthContext";
+import { recordInventoryMovement } from "../../services/inventoryService";
 import { QRCodeSVG } from "qrcode.react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from 'xlsx';
 import PatientQRCode from "../../components/reusables/PatientQRCode";
 import PatientQRCodeModal from "../../components/reusables/PatientQRCodeModal";
-import HistoryModal from "../../components/reusables/HistoryModal"; // Import History Modal
+import HistoryModal from "../../components/reusables/HistoryModal";
 
 
 // --- ICONS ---
@@ -277,7 +278,6 @@ const PrescriptionModal = ({ patient, onClose, onSave, isOpen }) => {
         .from('inventory')
         .select('*')
         .gt('quantity', 0)
-        .eq('is_deleted', false) // <--- Added this filter
         .eq('owner_role', 'BHW');
       setInventoryItems(data || []);
     };
@@ -372,36 +372,55 @@ const PrescriptionModal = ({ patient, onClose, onSave, isOpen }) => {
 
     try {
       const inventoryUpdatePromises = [];
+      const movementRecords = [];
       const prescriptionsToInsert = [];
 
       for (const itemRequest of itemsToDispense) {
         const inventoryItem = inventoryItems.find(i => i.id === itemRequest.itemId);
+        const quantityToDispense = parseInt(itemRequest.quantity);
+        const newQuantity = inventoryItem.quantity - quantityToDispense;
 
         // Update inventory
         inventoryUpdatePromises.push(
           supabase.from('inventory')
-            .update({ quantity: inventoryItem.quantity - parseInt(itemRequest.quantity) })
+            .update({ quantity: newQuantity })
             .eq('id', inventoryItem.id)
         );
+
+        // Prepare movement record for tracking
+        movementRecords.push({
+          inventory_id: inventoryItem.id,
+          movement_type: 'OUT',
+          quantity_change: -quantityToDispense,
+          quantity_before: inventoryItem.quantity,
+          quantity_after: newQuantity,
+          reason: `Dispensed to patient ${patient.first_name} ${patient.last_name}`,
+          reference_type: 'prescription',
+          created_by: profile.id
+        });
 
         // Prepare prescription record for prescriptions table
         prescriptionsToInsert.push({
           patient_type: 'mother',
           patient_record_id: patient.id,
           item_name: inventoryItem.item_name,
-          quantity: parseInt(itemRequest.quantity),
+          quantity: quantityToDispense,
           instructions: itemRequest.instructions || null,
           issuer_id: profile.id,
           inventory_item_id: inventoryItem.id,
-          status: 'Dispensed',
-          quantity_remaining: 0
+          status: 'Dispensed'
         });
         
-        await logActivity("Medicine Dispensed", `Dispensed ${itemRequest.quantity} ${inventoryItem.item_name} to ${patient.first_name} ${patient.last_name}`);
+        await logActivity("Medicine Dispensed", `Dispensed ${quantityToDispense} ${inventoryItem.item_name} to ${patient.first_name} ${patient.last_name}`);
       }
 
       // Execute inventory updates
       await Promise.all(inventoryUpdatePromises);
+
+      // Record all movements
+      if (movementRecords.length > 0) {
+        await supabase.from('inventory_movements').insert(movementRecords);
+      }
 
       // Insert prescriptions
       const { data: prescriptionData, error: prescError } = await supabase
@@ -416,6 +435,7 @@ const PrescriptionModal = ({ patient, onClose, onSave, isOpen }) => {
         const dispensingRecords = prescriptionData.map(presc => ({
           prescription_id: presc.id,
           dispensed_by: profile.id,
+          dispensed_date: new Date().toISOString(),
           quantity_dispensed: presc.quantity,
           status: 'Dispensed'
         }));
@@ -997,7 +1017,6 @@ const ViewPatientModal = ({ patient, onClose }) => {
         const { data: exactMatch, error: exactError } = await supabase
           .from('child_records')
           .select('*')
-          .eq('is_deleted', false)
           .or(`mother_name.ilike.%${motherFullName}%`)
           .order('dob', { ascending: false });
         
@@ -1010,7 +1029,6 @@ const ViewPatientModal = ({ patient, onClose }) => {
           const { data: allChildren, error: allError } = await supabase
             .from('child_records')
             .select('*')
-            .eq('is_deleted', false)
             .order('dob', { ascending: false });
           
           if (allError) throw allError;
@@ -2189,7 +2207,6 @@ export default function MaternityManagement() {
       const { data: allPatients, error } = await supabase
         .from('mother_records')
         .select('*')
-        .eq('is_deleted', false)
         .order('patient_id', { ascending: true });
 
       if (error) throw error;
@@ -2262,7 +2279,6 @@ export default function MaternityManagement() {
       const { data: allPatients, error } = await supabase
         .from('mother_records')
         .select('*')
-        .eq('is_deleted', false)
         .order('patient_id', { ascending: true });
 
       if (error) throw error;
@@ -2341,8 +2357,7 @@ export default function MaternityManagement() {
     // Build the query
     let query = supabase
       .from("mother_records")
-      .select("*", { count: "exact" })
-      .eq('is_deleted', false);
+      .select("*", { count: "exact" });
 
     // Apply search filter if exists
     if (searchTerm) {

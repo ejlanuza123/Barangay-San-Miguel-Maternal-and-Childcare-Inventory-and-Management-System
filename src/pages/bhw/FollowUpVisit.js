@@ -762,7 +762,6 @@ export default function AppointmentPage() {
         const { data, error } = await supabase
             .from('mother_records')
             .select('*')
-            .eq('is_deleted', false)
             .order('last_name', { ascending: true });
 
         if (error) {

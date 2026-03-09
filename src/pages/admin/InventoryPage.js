@@ -4,11 +4,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import * as XLSX from 'xlsx'; 
 import { useNotification } from '../../context/NotificationContext';
 import { logActivity } from '../../services/activityLogger';
+import { getExpiryStatus, needsReordering, getInventoryMovements } from '../../services/inventoryService';
 import AddInventoryModal from '../bhw/AddInventoryModal'; 
 import AddBnsInventoryModal from '../bns/AddBnsInventoryModal'; 
 import { useAuth } from '../../context/AuthContext';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
+import UsageAnalytics from '../../components/analytics/UsageAnalytics';
+import ExpiryRiskDashboard from '../../components/analytics/ExpiryRiskDashboard';
 
 // --- Import your logo images ---
 import leftLogo from '../../assets/leftLogo.png';
@@ -66,9 +69,27 @@ const StatusLegend = () => (
     <div className="bg-white p-4 rounded-lg shadow-sm border h-fit">
         <h3 className="font-bold text-gray-700 text-sm mb-3">Status Legend</h3>
         <div className="space-y-2 text-sm">
-            <div className="flex items-center"><div className="w-3 h-3 rounded-full mr-2 bg-green-500"></div><span>Normal Stock</span></div>
-            <div className="flex items-center"><div className="w-3 h-3 rounded-full mr-2 bg-yellow-400"></div><span>Low Stock</span></div>
-            <div className="flex items-center"><div className="w-3 h-3 rounded-full mr-2 bg-red-500"></div><span>Critical Stock</span></div>
+            <div className="border-b pb-2 mb-2">
+                <p className="font-semibold text-gray-700 text-xs">Stock Status</p>
+            </div>
+            <div className="flex items-center"><div className="w-4 h-4 rounded-full mr-2 bg-green-500"></div><span>Normal Stock</span></div>
+            <div className="flex items-center"><div className="w-4 h-4 rounded-full mr-2 bg-yellow-400"></div><span>Low Stock</span></div>
+            <div className="flex items-center"><div className="w-4 h-4 rounded-full mr-2 bg-red-500"></div><span>Critical Stock</span></div>
+
+            <div className="border-b pb-2 my-2"></div>
+            <div className="border-b pb-2 mb-2">
+                <p className="font-semibold text-gray-700 text-xs">Expiry Alerts</p>
+            </div>
+            <div className="flex items-center"><span className="mr-2">🔴</span><span>Expired</span></div>
+            <div className="flex items-center"><span className="mr-2">🟠</span><span>Expiring Soon (7 days)</span></div>
+            <div className="flex items-center"><span className="mr-2">🟡</span><span>Expiring in 30 days</span></div>
+
+            <div className="border-b pb-2 my-2"></div>
+            <div className="border-b pb-2 mb-2">
+                <p className="font-semibold text-gray-700 text-xs">Inventory Alerts</p>
+            </div>
+            <div className="flex items-center"><span className="mr-2">⛔</span><span>Critical Stock (≤5)</span></div>
+            <div className="flex items-center"><span className="mr-2">⚠️</span><span>Low Stock / Reorder</span></div>
         </div>
     </div>
 );
@@ -166,61 +187,112 @@ const RefillItemModal = ({ item, onClose, onSave }) => {
 };
 
 const ViewItemDetailsModal = ({ item, onClose }) => {
-    const [history, setHistory] = useState([]);
+    const [movements, setMovements] = useState([]);
     const [loadingHistory, setLoadingHistory] = useState(true);
 
     useEffect(() => {
-        const fetchHistory = async () => {
-            if (!item) return;
-            const { data, error } = await supabase
-                .from('activity_log')
-                .select('*, profiles(first_name, last_name, role)')
-                .ilike('details', `%${item.item_name}%`)
-                .order('created_at', { ascending: false });
-
-            if (!error) setHistory(data || []);
+        const fetchMovements = async () => {
+            if(!item) return;
+            
+            // Try to get inventory movements first
+            const { data: movementsData, error: movementsError } = await supabase
+                .from('inventory_movements')
+                .select('*, profiles(full_name, role)')
+                .eq('inventory_id', item.id)
+                .order('created_at', { ascending: false })
+                .limit(50);
+            
+            if(!movementsError && movementsData) {
+                setMovements(movementsData);
+            } else {
+                // Fallback to activity log if no movements
+                const { data: activityData } = await supabase
+                    .from('activity_log')
+                    .select('*, profiles(first_name, last_name, role)')
+                    .ilike('details', `%${item.item_name}%`)
+                    .order('created_at', { ascending: false });
+                
+                setMovements(activityData || []);
+            }
+            
             setLoadingHistory(false);
         };
-        fetchHistory();
+        fetchMovements();
     }, [item]);
+
+    const getMovementColor = (type) => {
+        switch(type) {
+            case 'IN': return 'bg-green-50 border-green-200';
+            case 'OUT': return 'bg-blue-50 border-blue-200';
+            case 'ADJUSTMENT': return 'bg-yellow-50 border-yellow-200';
+            case 'WASTE': return 'bg-red-50 border-red-200';
+            default: return 'bg-gray-50 border-gray-200';
+        }
+    };
+
+    const getMovementIcon = (type) => {
+        switch(type) {
+            case 'IN': return '📥';
+            case 'OUT': return '📤';
+            case 'ADJUSTMENT': return '⚙️';
+            case 'WASTE': return '🗑️';
+            default: return '📋';
+        }
+    };
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-[60] p-4">
             <motion.div
-                className="bg-white rounded-lg shadow-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto"
-                initial={{ opacity: 0, y: -30 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 30 }}
+                className="bg-white rounded-lg shadow-2xl w-full max-w-2xl p-6 max-h-[80vh] flex flex-col"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
             >
-                <h2 className="text-xl font-bold text-gray-800 mb-4">{item.item_name}</h2>
-                <div className="space-y-2 text-sm border-b pb-4 mb-4">
-                    <p><span className="font-semibold">SKU:</span> {item.sku || 'N/A'}</p>
-                    <p><span className="font-semibold">Category:</span> {item.category}</p>
-                    <p><span className="font-semibold">Stock:</span> {item.quantity} {item.unit || 'units'}</p>
-                    <p><span className="font-semibold">Status:</span> <StatusBadge status={item.status} /></p>
-                    <p><span className="font-semibold">Batch No:</span> {item.batch_no || 'N/A'}</p>
-                    <p><span className="font-semibold">Expiry Date:</span> {item.expiry_date || 'N/A'}</p>
-                    <div className="mt-2 pt-2 border-t border-dashed">
-                        <p><span className="font-semibold">Supplier/Source:</span> {item.supply_source || item.supplier || 'N/A'}</p>
-                        <p><span className="font-semibold">Inventory Type:</span> {item.owner_role}</p>
+                <div className="border-b pb-3 mb-3">
+                    <h2 className="text-lg font-bold text-gray-800">{item.item_name}</h2>
+                    <div className="grid grid-cols-2 gap-4 mt-2 text-xs">
+                        <p><span className="font-semibold">SKU:</span> {item.sku || 'N/A'}</p>
+                        <p><span className="font-semibold">Category:</span> {item.category}</p>
+                        <p><span className="font-semibold">Current Stock:</span> {item.quantity} {item.unit}</p>
+                        <p><span className="font-semibold">Batch No:</span> {item.batch_no || 'N/A'}</p>
+                        <p><span className="font-semibold">Expiry:</span> {item.expiry_date || 'N/A'}</p>
+                        <p><span className="font-semibold">Supply Source:</span> {item.supply_source || 'N/A'}</p>
                     </div>
                 </div>
 
-                <h3 className="font-bold text-gray-700 text-sm mb-2">Item History (Issuance & Updates)</h3>
-                <div className="bg-gray-50 rounded-md p-2 h-48 overflow-y-auto space-y-2">
-                    {loadingHistory ? <p className="text-xs text-center">Loading history...</p> : 
-                     history.length === 0 ? <p className="text-xs text-center text-gray-500">No recorded history found.</p> :
-                     history.map(log => (
-                        <div key={log.id} className="text-xs border-b pb-1 last:border-0">
-                            <p className="font-semibold">{log.action}</p>
-                            <p className="text-gray-600">{log.details}</p>
-                            <div className="flex justify-between mt-1 text-gray-400">
-                                <span>by {log.profiles?.first_name} ({log.profiles?.role})</span>
-                                <span>{new Date(log.created_at).toLocaleDateString()}</span>
+                <div className="flex-1 overflow-y-auto bg-gray-50 rounded-md p-3 space-y-3">
+                    <p className="text-xs font-semibold text-gray-600 sticky top-0">Stock Movement History</p>
+                    {loadingHistory ? (
+                        <p className="text-xs text-center text-gray-500 py-4">Loading history...</p>
+                    ) : movements.length === 0 ? (
+                        <p className="text-xs text-center text-gray-500 py-4">No movement history found.</p>
+                    ) : (
+                        movements.map(movement => (
+                            <div key={movement.id} className={`text-xs bg-white p-3 rounded border ${getMovementColor(movement.movement_type || 'default')}`}>
+                                <div className="flex justify-between items-start mb-2">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-lg">{getMovementIcon(movement.movement_type)}</span>
+                                        <span className="font-bold text-gray-800">{movement.movement_type || movement.action || 'Activity'}</span>
+                                        {movement.quantity_change && (
+                                            <span className={`font-semibold ${movement.quantity_change > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                {movement.quantity_change > 0 ? '+' : ''}{movement.quantity_change}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <span className="text-gray-400">{new Date(movement.created_at).toLocaleDateString()}</span>
+                                </div>
+                                {movement.reason && (
+                                    <p className="text-gray-700 mb-1"><strong>Reason:</strong> {movement.reason}</p>
+                                )}
+                                {movement.details && (
+                                    <p className="text-gray-700 mb-1">{movement.details}</p>
+                                )}
+                                {movement.quantity_before !== undefined && (
+                                    <p className="text-gray-600"><strong>Before:</strong> {movement.quantity_before} → <strong>After:</strong> {movement.quantity_after}</p>
+                                )}
                             </div>
-                        </div>
-                     ))
-                    }
+                        ))
+                    )}
                 </div>
 
                 <div className="flex justify-end mt-6">
@@ -245,6 +317,7 @@ export default function AdminInventoryPage() {
     const [activeCategory, setActiveCategory] = useState('All');
     const [selectedItem, setSelectedItem] = useState(null);
     const [modalMode, setModalMode] = useState(null);
+    const [activeTab, setActiveTab] = useState('inventory');
     const { addNotification } = useNotification();
     const [showReport, setShowReport] = useState(false);
 
@@ -254,7 +327,6 @@ export default function AdminInventoryPage() {
         const { data, error } = await supabase
             .from('inventory')
             .select('*')
-            .eq('is_deleted', false)
             .order('item_name', { ascending: true });
         
         if (error) {
@@ -276,18 +348,6 @@ export default function AdminInventoryPage() {
         setSelectedItem(item);
         // Check owner_role
         setModalMode(item.owner_role === 'BNS' ? 'edit-bns' : 'edit-bhw');
-    };
-
-    const handleDelete = async (item) => {
-        if (!window.confirm(`Are you sure you want to delete ${item.item_name}?`)) return;
-        const { error } = await supabase.from('inventory').update({ is_deleted: true, deleted_at: new Date() }).eq('id', item.id);
-        
-        if (error) addNotification("Error deleting item.", "error");
-        else {
-            addNotification("Item moved to Recycle Bin.", "success");
-            logActivity('Item Deleted', `Deleted ${item.item_name}`);
-            fetchInventories();
-        }
     };
 
     const filteredItems = useMemo(() => {
@@ -316,7 +376,6 @@ export default function AdminInventoryPage() {
             Unit: item.unit || 'pc',
             'Batch No': item.batch_no || 'N/A',
             'Expiry Date': item.expiry_date || 'N/A',
-            Supplier: item.supplier || 'N/A',
             'Supply Source': item.supply_source || 'N/A',
             Source: item.owner_role || 'BHW'
         }));
@@ -349,9 +408,42 @@ export default function AdminInventoryPage() {
 
             <div className="p-6 bg-gray-50 min-h-screen">
                 <div className="max-w-8xl mx-auto">
-                    {/* Inventory Report Section */}
-                    
-                    
+                    {/* Tab Navigation */}
+                    <div className="flex gap-4 mb-6 border-b bg-white p-4 rounded-t-lg">
+                        <button
+                            onClick={() => setActiveTab('inventory')}
+                            className={`px-6 py-2 font-semibold text-sm transition-colors ${
+                                activeTab === 'inventory'
+                                    ? 'text-blue-600 border-b-2 border-blue-600'
+                                    : 'text-gray-600 hover:text-gray-800'
+                            }`}
+                        >
+                            📦 Master Inventory
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('usage')}
+                            className={`px-6 py-2 font-semibold text-sm transition-colors ${
+                                activeTab === 'usage'
+                                    ? 'text-blue-600 border-b-2 border-blue-600'
+                                    : 'text-gray-600 hover:text-gray-800'
+                            }`}
+                        >
+                            📊 Usage Analytics
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('expiry')}
+                            className={`px-6 py-2 font-semibold text-sm transition-colors ${
+                                activeTab === 'expiry'
+                                    ? 'text-blue-600 border-b-2 border-blue-600'
+                                    : 'text-gray-600 hover:text-gray-800'
+                            }`}
+                        >
+                            📅 Expiry Risk
+                        </button>
+                    </div>
+
+                    {/* Inventory Tab Content */}
+                    {activeTab === 'inventory' && (
                     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                         <div className="lg:col-span-3 bg-white p-4 rounded-lg shadow-sm border">
                             <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
@@ -406,7 +498,8 @@ export default function AdminInventoryPage() {
                                             <th className="p-3 font-semibold">Category</th>
                                             <th className="p-3 font-semibold">Batch No.</th>
                                             <th className="p-3 font-semibold">Stock Level</th>
-                                            <th className="p-3 font-semibold">Expiry</th>
+                                            <th className="p-3 font-semibold">Expiry Status</th>
+                                            <th className="p-3 font-semibold">Alert</th>
                                             <th className="p-3 font-semibold">Supplier</th>
                                             <th className="p-3 font-semibold">Source</th>
                                             <th className="p-3 font-semibold">Action</th>
@@ -414,56 +507,81 @@ export default function AdminInventoryPage() {
                                     </thead>
                                     <tbody className="divide-y">
                                         {loading ? (
-                                            <tr><td colSpan="9" className="text-center p-6">Loading inventory...</td></tr>
+                                            <tr><td colSpan="10" className="text-center p-6">Loading inventory...</td></tr>
                                         ) : paginatedItems.length === 0 ? (
-                                            <tr><td colSpan="9" className="text-center p-6 text-gray-500">No items found.</td></tr>
-                                        ) : paginatedItems.map((item) => (
-                                            <tr 
-                                                key={`${item.id}-${item.owner_role}`} 
-                                                className="text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
-                                                onClick={() => { setSelectedItem(item); setModalMode('view'); }}
-                                            >
-                                                <td className="p-3 font-mono text-gray-500">{item.sku || '-'}</td>
-                                                <td className="p-3 font-semibold">{item.item_name}</td>
-                                                <td className="p-3">{item.category}</td>
-                                                <td className="p-3">{item.batch_no || 'N/A'}</td>
-                                                <td className="p-3">
-                                                    <QuantityCell quantity={item.quantity} unit={item.unit || 'pc'} status={item.status} />
-                                                </td>
-                                                <td className="p-3">{item.expiry_date || 'N/A'}</td>
-                                                <td className="p-3">
-                                                    <div className="flex flex-col">
-                                                        <span>{item.supplier || 'N/A'}</span>
-                                                        <span className="text-[10px] text-gray-400">{item.supply_source || ''}</span>
-                                                    </div>
-                                                </td>
-                                                <td className="p-3">
-                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.owner_role === 'BHW' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
-                                                        {item.owner_role || 'BHW'}
-                                                    </span>
-                                                </td>
-                                                <td className="p-3">
-                                                    <div className="flex items-center gap-1">
-                                                        {profile?.role === 'Midwife' && (
+                                            <tr><td colSpan="10" className="text-center p-6 text-gray-500">No items found.</td></tr>
+                                        ) : paginatedItems.map((item) => {
+                                            const expiryStatus = getExpiryStatus(item.expiry_date);
+                                            const needsReorder = needsReordering(item.quantity, item.min_stock_level);
+                                            const isStockCritical = item.quantity <= 5;
+                                            
+                                            return (
+                                                <tr 
+                                                    key={`${item.id}-${item.owner_role}`} 
+                                                    className="text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
+                                                    onClick={() => { setSelectedItem(item); setModalMode('view'); }}
+                                                >
+                                                    <td className="p-3 font-mono text-gray-500">{item.sku || '-'}</td>
+                                                    <td className="p-3 font-semibold">{item.item_name}</td>
+                                                    <td className="p-3">{item.category}</td>
+                                                    <td className="p-3">{item.batch_no || 'N/A'}</td>
+                                                    <td className="p-3">
+                                                        <QuantityCell quantity={item.quantity} unit={item.unit || 'pc'} status={item.status} />
+                                                    </td>
+                                                    <td className="p-3">
+                                                        <div className="flex items-center gap-1">
+                                                            {expiryStatus.status === 'expired' && <span title="Expired">🔴</span>}
+                                                            {expiryStatus.status === 'expiring-soon' && <span title={`Expiring in ${expiryStatus.daysRemaining} days`}>🟠</span>}
+                                                            {expiryStatus.status === 'expiring' && <span title={`Expiring in ${expiryStatus.daysRemaining} days`}>🟡</span>}
+                                                            {expiryStatus.status === 'ok' && <span title="Not expiring soon" className="text-green-600">✓</span>}
+                                                            <span className="text-[10px] text-gray-500">{item.expiry_date || 'N/A'}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-3">
+                                                        <div className="flex items-center gap-1">
+                                                            {isStockCritical && <span title="Critical Stock (≤5)">⛔</span>}
+                                                            {!isStockCritical && needsReorder && <span title="Reorder needed">⚠️</span>}
+                                                            {!isStockCritical && !needsReorder && <span className="text-green-600">✓</span>}
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-3">
+                                                        <span>{item.supply_source || 'N/A'}</span>
+                                                    </td>
+                                                    <td className="p-3">
+                                                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.owner_role === 'BHW' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
+                                                            {item.owner_role || 'BHW'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="p-3">
+                                                        <div className="flex items-center gap-1">
                                                             <button 
-                                                                onClick={(e) => { e.stopPropagation(); setSelectedItem(item); setModalMode('refill'); }} 
-                                                                className="text-orange-600 hover:text-orange-800 bg-orange-50 p-1.5 rounded-md border border-orange-200" 
-                                                                title="Refill Stock"
+                                                                onClick={(e) => { e.stopPropagation(); setSelectedItem(item); setModalMode('view'); }} 
+                                                                className="text-blue-600 hover:text-blue-800 bg-blue-50 p-1.5 rounded-md border border-blue-200" 
+                                                                title="View History"
                                                             >
-                                                                <RefillIcon />
+                                                                <HistoryIcon />
                                                             </button>
-                                                        )}
-                                                        <button 
-                                                            onClick={(e) => { e.stopPropagation(); handleEdit(item); }} 
-                                                            className="text-green-600 hover:text-green-800 bg-green-50 p-1.5 rounded-md border border-green-200"
-                                                            title="Edit"
-                                                        >
-                                                            <UpdateIcon />
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))}
+                                                            {profile?.role === 'Midwife' && (
+                                                                <button 
+                                                                    onClick={(e) => { e.stopPropagation(); setSelectedItem(item); setModalMode('refill'); }} 
+                                                                    className="text-orange-600 hover:text-orange-800 bg-orange-50 p-1.5 rounded-md border border-orange-200" 
+                                                                    title="Refill Stock"
+                                                                >
+                                                                    <RefillIcon />
+                                                                </button>
+                                                            )}
+                                                            <button 
+                                                                onClick={(e) => { e.stopPropagation(); handleEdit(item); }} 
+                                                                className="text-green-600 hover:text-green-800 bg-green-50 p-1.5 rounded-md border border-green-200"
+                                                                title="Edit"
+                                                            >
+                                                                <UpdateIcon />
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
                                     </tbody>
                                 </table>
                             </div>
@@ -475,6 +593,21 @@ export default function AdminInventoryPage() {
                             <StatusLegend />
                         </div>
                     </div>
+                    )}
+
+                    {/* Usage Analytics Tab Content */}
+                    {activeTab === 'usage' && (
+                        <div className="bg-white rounded-lg shadow-sm border p-6">
+                            <UsageAnalytics />
+                        </div>
+                    )}
+
+                    {/* Expiry Risk Tab Content */}
+                    {activeTab === 'expiry' && (
+                        <div className="bg-white rounded-lg shadow-sm border p-6">
+                            <ExpiryRiskDashboard />
+                        </div>
+                    )}
                 </div>
             </div>
         </>

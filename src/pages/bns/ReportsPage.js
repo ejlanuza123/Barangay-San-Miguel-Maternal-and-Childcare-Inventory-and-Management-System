@@ -42,6 +42,16 @@ const getQuarterMonths = (q) => {
     ][q - 1];
 };
 
+// Check if a period is complete (end date has passed)
+const isPeriodComplete = (endDate) => {
+    const today = new Date();
+    const periodEnd = new Date(endDate);
+    // Reset time to compare dates only
+    today.setHours(23, 59, 59, 999);
+    periodEnd.setHours(23, 59, 59, 999);
+    return today >= periodEnd;
+};
+
 const formatDate = (date) => {
     if (!date) return 'N/A';
     return new Date(date).toLocaleDateString('en-PH', {
@@ -72,7 +82,7 @@ const calculateAge = (dob) => {
 };
 
 // Calculate child health summary statistics
-const calculateChildHealthSummary = (childrenData, startDate, endDate) => {
+const calculateChildHealthSummary = (childrenData, startDate, endDate, measurements = []) => {
     const now = new Date();
     const sixMonthsAgo = new Date();
     sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
@@ -113,8 +123,14 @@ const calculateChildHealthSummary = (childrenData, startDate, endDate) => {
             }
         }
 
-        // Nutrition status
-        const nutritionStatus = child.nutrition_status || 'Normal';
+        // Nutrition status - use latest measurement if available, otherwise use child_records
+        let nutritionStatus = 'Normal';
+        const latestMeasurement = measurements.find(m => m.child_record_id === child.id);
+        if (latestMeasurement && latestMeasurement.nutrition_status) {
+            nutritionStatus = latestMeasurement.nutrition_status;
+        } else if (child.nutrition_status) {
+            nutritionStatus = child.nutrition_status;
+        }
         if (nutritionStatus.includes('Underweight') || nutritionStatus === 'Underweight') {
             summary.underweight++;
         } else if (nutritionStatus.includes('Severely') || nutritionStatus === 'Severely Underweight') {
@@ -157,7 +173,7 @@ const calculateChildHealthSummary = (childrenData, startDate, endDate) => {
 
 // --- MODAL COMPONENTS ---
 const ViewReportModal = ({ reportItem, onClose, onDownload }) => {
-    const { name, year, type, data } = reportItem;
+    const { name, year, type, data, isComplete } = reportItem;
     
     // Calculate summary stats
     let summaryStats = [];
@@ -232,15 +248,31 @@ const ViewReportModal = ({ reportItem, onClose, onDownload }) => {
                     )}
 
                     <div className="bg-blue-50 p-4 rounded-lg border text-center border-blue-200">
-                        <p className="text-sm text-blue-600 mb-4 font-semibold">
-                            Click below to generate the full PDF report with detailed tables, analytics, and official signatures.
-                        </p>
-                        <button
-                            onClick={() => onDownload(reportItem)}
-                            className="flex items-center justify-center gap-2 w-full py-3 bg-blue-600 text-white rounded-md font-bold hover:bg-blue-700 transition-colors"
-                        >
-                            <DownloadIcon /> Download Full PDF Report
-                        </button>
+                        {isComplete ? (
+                            <>
+                                <p className="text-sm text-blue-600 mb-4 font-semibold">
+                                    Click below to generate the full PDF report with detailed tables, analytics, and official signatures.
+                                </p>
+                                <button
+                                    onClick={() => onDownload(reportItem)}
+                                    className="flex items-center justify-center gap-2 w-full py-3 bg-blue-600 text-white rounded-md font-bold hover:bg-blue-700 transition-colors"
+                                >
+                                    <DownloadIcon /> Download Full PDF Report
+                                </button>
+                            </>
+                        ) : (
+                            <>
+                                <p className="text-sm text-orange-600 mb-4 font-semibold">
+                                    ⚠️ This report period is not yet complete. Reports can only be generated after the period has ended.
+                                </p>
+                                <button
+                                    disabled
+                                    className="flex items-center justify-center gap-2 w-full py-3 bg-gray-400 text-gray-200 rounded-md font-bold cursor-not-allowed"
+                                >
+                                    <DownloadIcon /> Download Unavailable
+                                </button>
+                            </>
+                        )}
                     </div>
                 </div>
                 
@@ -274,7 +306,8 @@ export default function BnsReportsPage() {
     const [allData, setAllData] = useState({ 
         child_records: [], 
         inventory: [],
-        profiles: [] 
+        profiles: [],
+        child_measurements: []
     });
     const [loading, setLoading] = useState(true);
     const [isGenerating, setIsGenerating] = useState(false);
@@ -298,23 +331,26 @@ export default function BnsReportsPage() {
     const fetchAllData = useCallback(async () => {
         setLoading(true);
         try {
-            // Fetch all necessary data for BNS
+            // Fetch all necessary data for BNS - without is_deleted filter to match UnifiedReportsPage
             const [
                 childRecordsRes, 
                 inventoryRes, 
                 profilesRes, 
-                userProfileRes
+                userProfileRes,
+                childMeasurementsRes
             ] = await Promise.all([
-                supabase.from('child_records').select('*').eq('is_deleted', false),
-                supabase.from('inventory').select('*').eq('is_deleted', false),
+                supabase.from('child_records').select('*'),
+                supabase.from('inventory').select('*'),
                 supabase.from('profiles').select('*'),
-                supabase.from('profiles').select('*').eq('id', user?.id).single()
+                supabase.from('profiles').select('*').eq('id', user?.id).single(),
+                supabase.from('child_measurements').select('*').order('measurement_date', { ascending: false })
             ]);
 
             setAllData({
                 child_records: childRecordsRes.data || [],
                 inventory: inventoryRes.data || [],
-                profiles: profilesRes.data || []
+                profiles: profilesRes.data || [],
+                child_measurements: childMeasurementsRes.data || []
             });
 
             if (userProfileRes.data) {
@@ -496,37 +532,33 @@ export default function BnsReportsPage() {
             child.child_id || '-',
             child.child_name || `${child.first_name || ''} ${child.last_name || ''}`,
             child.mother_name || '-',
-            child.father_name || '-',
             child.sex || '-',
             child.dob ? formatDate(child.dob) : '-',
             calculateAge(child.dob),
             child.address || '-',
             child.guardian_name || '-',
-            child.bhs_name || '-',
-            child.family_number || '-'
+            child.bhs_name || '-'
         ]);
 
         if (registryRows.length > 0) {
             autoTable(doc, {
                 startY: currentY + 8, // Add spacing after title
-                head: [['Child ID', 'Child Name', 'Mother\'s Name', 'Father\'s Name', 'Sex', 'Date of Birth', 'Age', 'Address', 'Guardian', 'BHS Name', 'Family No.']],
+                head: [['Child ID', 'Child Name', 'Mother\'s Name', 'Sex', 'Date of Birth', 'Age', 'Address', 'Guardian', 'BHS Name']],
                 body: registryRows,
                 theme: 'striped',
                 headStyles: { fillColor: [39, 174, 96] },
                 styles: { fontSize: 7 },
                 margin: { left: 15, right: 15 },
                 columnStyles: {
-                    0: { cellWidth: 18 }, // ID
-                    1: { cellWidth: 25 }, // Name
-                    2: { cellWidth: 20 }, // Mother's Name
-                    3: { cellWidth: 20 }, // Father's Name
-                    4: { cellWidth: 12 }, // Sex
-                    5: { cellWidth: 22 }, // DOB
-                    6: { cellWidth: 18 }, // Age
-                    7: { cellWidth: 22 }, // Address
-                    8: { cellWidth: 20 }, // Guardian
-                    9: { cellWidth: 18 }, // BHS
-                    10: { cellWidth: 18 }  // Family No
+                    0: { cellWidth: 16 }, // ID
+                    1: { cellWidth: 28 }, // Name
+                    2: { cellWidth: 22 }, // Mother's Name
+                    3: { cellWidth: 12 }, // Sex
+                    4: { cellWidth: 22 }, // DOB
+                    5: { cellWidth: 16 }, // Age
+                    6: { cellWidth: 25 }, // Address
+                    7: { cellWidth: 20 }, // Guardian
+                    8: { cellWidth: 18 }  // BHS
                 }
             });
             currentY = doc.lastAutoTable.finalY + 15; // Add space after table
@@ -994,19 +1026,10 @@ export default function BnsReportsPage() {
                         if (daysRemaining < 0) {
                             status = 'EXPIRED';
                         } else if (daysRemaining <= 30) {
-                            // CHANGE THIS:
-                            // status = 'Urgent (≤30 days)'; 
-                            // TO THIS:
                             status = 'Urgent (<= 30 days)'; 
                         } else if (daysRemaining <= 60) {
-                            // CHANGE THIS:
-                            // status = 'Warning (≤60 days)';
-                            // TO THIS:
                             status = 'Warning (<= 60 days)';
                         } else if (daysRemaining <= 90) {
-                            // CHANGE THIS:
-                            // status = 'Monitor (≤90 days)';
-                            // TO THIS:
                             status = 'Monitor (<= 90 days)';
                         } else {
                             status = 'Safe (> 90 days)';
@@ -1172,17 +1195,15 @@ export default function BnsReportsPage() {
             let dataPackage = {};
             
             if (item.type === 'children') {
-                // Filter child data for child health reports by date created in period
-                const filteredChildren = allData.child_records.filter(child => {
-                    if (!child.created_at) return false; // Skip records without creation date
-                    const createdDate = new Date(child.created_at);
-                    // Check if child was registered (created) within this period
-                    return createdDate >= item.startDate && createdDate <= item.endDate;
+                // Filter children by report period (based on created_at or updated_at)
+                const childrenInPeriod = allData.child_records.filter(child => {
+                    const childDate = new Date(child.created_at || child.updated_at);
+                    return childDate >= item.startDate && childDate <= item.endDate;
                 });
                 
-                const summary = calculateChildHealthSummary(filteredChildren, item.startDate, item.endDate);
+                const summary = calculateChildHealthSummary(childrenInPeriod, item.startDate, item.endDate, allData.child_measurements);
                 dataPackage = { 
-                    children: filteredChildren,
+                    children: childrenInPeriod,
                     summary: summary,
                     startDate: item.startDate,
                     endDate: item.endDate
@@ -1211,18 +1232,24 @@ export default function BnsReportsPage() {
                 };
             }
 
-            // Calculate "size" for display
+            // Calculate "size" for display - simplified format
             let size = '0 Items';
             if (item.type === 'children') {
-                size = `${dataPackage.children?.length || 0} Children`;
+                const summary = dataPackage.summary;
+                // Simplified format: New Reg / Overall Total(Underweight in period)
+                size = `${summary.newRegistrations} New / ${allData.child_records.length} Total(${summary.underweight} underweight)`;
             } else {
                 size = `${dataPackage.inventory?.length || 0} Items`;
             }
 
+            // Check if the period is complete (end date has passed)
+            const complete = isPeriodComplete(item.endDate);
+
             return { 
                 ...item, 
                 data: dataPackage, 
-                size: size
+                size: size,
+                isComplete: complete
             };
         });
     }, [allData, currentYear, frequency, reportType, filterCategory, filterStatus, filterOwnerRole]);
@@ -1251,9 +1278,10 @@ export default function BnsReportsPage() {
         return calculateChildHealthSummary(
             allData.child_records,
             new Date(currentYear, 0, 1),
-            new Date(currentYear, 11, 31)
+            new Date(currentYear, 11, 31),
+            allData.child_measurements
         );
-    }, [allData.child_records, currentYear]);
+    }, [allData.child_records, allData.child_measurements, currentYear]);
 
     return (
         <>
@@ -1446,11 +1474,6 @@ export default function BnsReportsPage() {
                                             </td>
                                             <td className="p-3">
                                                 <span className="font-semibold">{report.size}</span>
-                                                {report.type === 'children' && (
-                                                    <span className="text-xs text-gray-500 ml-2">
-                                                        ({report.data.summary.underweight} underweight)
-                                                    </span>
-                                                )}
                                                 {report.type === 'inventory' && report.data.summary && (
                                                     <span className="text-xs text-gray-500 ml-2">
                                                         ({report.data.summary.criticalCount} critical)
@@ -1460,11 +1483,13 @@ export default function BnsReportsPage() {
                                             <td className="p-3 flex items-center space-x-2">
                                                 <button 
                                                     onClick={() => generateReport(report)}
+                                                    disabled={!report.isComplete}
                                                     className={`p-2 rounded-full transition-colors ${
-                                                        report.type === 'children' ? 'bg-cyan-50 text-cyan-600 hover:bg-cyan-100 hover:text-cyan-800' :
-                                                        'bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-800'
+                                                        report.isComplete 
+                                                            ? (report.type === 'children' ? 'bg-cyan-50 text-cyan-600 hover:bg-cyan-100 hover:text-cyan-800' : 'bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-800')
+                                                            : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                                                     }`}
-                                                    title="Download PDF Report"
+                                                    title={report.isComplete ? "Download PDF Report" : "Report not yet available - period not complete"}
                                                 >
                                                     <DownloadIcon />
                                                 </button>

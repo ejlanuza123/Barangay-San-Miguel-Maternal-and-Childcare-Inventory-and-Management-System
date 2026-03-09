@@ -630,19 +630,17 @@ export default function AdminDashboard() {
                 newInfantCountRes,
                 processedTodayRes
             ] = await Promise.all([
-                supabase.from('inventory').select('*').eq('is_deleted', false),
-                supabase.from('bns_inventory').select('*').eq('is_deleted', false),
+                supabase.from('inventory').select('*'),
+                supabase.from('bns_inventory').select('*'),
                 supabase.from('requestions')
                     .select('*, profiles:worker_id!inner(first_name, last_name, role, user_id_no, contact_no)')
                     .eq('status', 'Pending')
                     .order('created_at', { ascending: false })
                     .limit(5),
                 supabase.from('mother_records').select('*', { count: 'exact', head: true })
-                    .eq('is_deleted', false)
                     .gte('created_at', firstDayOfMonth)
                     .lt('created_at', firstDayOfNextMonth),
                 supabase.from('child_records').select('*', { count: 'exact', head: true })
-                    .eq('is_deleted', false)
                     .gte('created_at', firstDayOfMonth)
                     .lt('created_at', firstDayOfNextMonth),
                 supabase.from('requestions')

@@ -5,6 +5,7 @@ import { motion,AnimatePresence } from 'framer-motion';
 import { logActivity } from '../../services/activityLogger';
 import { useNotification } from '../../context/NotificationContext'; 
 import { useAuth } from '../../context/AuthContext';
+import { getExpiryStatus, needsReordering, getInventoryMovements } from '../../services/inventoryService';
 
 
 // --- ICONS ---
@@ -27,9 +28,11 @@ const StatusBadge = ({ status }) => {
 
 const StatusLegend = () => (
     <div className="bg-white p-4 rounded-lg shadow-sm border">
-        <h3 className="font-bold text-gray-700 text-sm mb-3">Status Legend of Stock</h3>
+        <h3 className="font-bold text-gray-700 text-sm mb-3">Status Legend</h3>
         <div className="space-y-2 text-sm">
-            {/* UPDATED: Changed checkbox to a colored div to match the badge styles */}
+            <div className="border-b pb-2 mb-2">
+                <p className="font-semibold text-gray-700 text-xs">Stock Status</p>
+            </div>
             <div className="flex items-center">
                 <div className="w-4 h-4 rounded mr-2 bg-green-300 border border-green-400"></div>
                 <span className="text-gray-600">Normal</span>
@@ -42,10 +45,41 @@ const StatusLegend = () => (
                 <div className="w-4 h-4 rounded mr-2 bg-red-300 border border-red-400"></div>
                 <span className="text-gray-600">Critical</span>
             </div>
-            <div className="border-t my-2"></div>
-            <div className="flex items-center space-x-2 text-gray-700"><ViewIcon /><span>View</span></div>
-            <div className="flex items-center space-x-2 text-gray-700"><UpdateIcon /><span>Update</span></div>
-        <div className="flex items-center space-x-2 text-gray-700"><HistoryIcon /><span>Log/History</span></div>
+
+            <div className="border-b pb-2 my-2"></div>
+            <div className="border-b pb-2 mb-2">
+                <p className="font-semibold text-gray-700 text-xs">Expiry Alerts</p>
+            </div>
+            <div className="flex items-center">
+                <span className="mr-2">🔴</span>
+                <span className="text-gray-600">Expired</span>
+            </div>
+            <div className="flex items-center">
+                <span className="mr-2">🟠</span>
+                <span className="text-gray-600">Expiring Soon (7 days)</span>
+            </div>
+            <div className="flex items-center">
+                <span className="mr-2">🟡</span>
+                <span className="text-gray-600">Expiring in 30 days</span>
+            </div>
+
+            <div className="border-b pb-2 my-2"></div>
+            <div className="border-b pb-2 mb-2">
+                <p className="font-semibold text-gray-700 text-xs">Inventory Alerts</p>
+            </div>
+            <div className="flex items-center">
+                <span className="mr-2">⛔</span>
+                <span className="text-gray-600">Critical Stock (≤5)</span>
+            </div>
+            <div className="flex items-center">
+                <span className="mr-2">⚠️</span>
+                <span className="text-gray-600">Low Stock / Reorder</span>
+            </div>
+
+            <div className="border-b pb-2 my-2"></div>
+            <div className="flex items-center space-x-2 text-gray-700"><ViewIcon /><span className="text-xs">View Details</span></div>
+            <div className="flex items-center space-x-2 text-gray-700"><UpdateIcon /><span className="text-xs">Edit Item</span></div>
+            <div className="flex items-center space-x-2 text-gray-700"><HistoryIcon /><span className="text-xs">View Movements</span></div>
         </div>
     </div>
 );
@@ -105,12 +139,10 @@ const ViewItemModal = ({ item, onClose }) => {
                     <p><span className="font-semibold text-gray-600">Status:</span> <StatusBadge status={item.status} /></p>
                     <p><span className="font-semibold text-gray-600">Batch/Lot No:</span> {item.batch_no || 'N/A'}</p>
                     <div className="grid grid-cols-2 gap-4">
-                        <p><span className="font-semibold text-gray-600">Manufacture Date:</span><br/>{item.manufacture_date || 'N/A'}</p>
-                        <p><span className="font-semibold text-gray-600">Expiration Date:</span><br/>{item.expiry_date || 'N/A'}</p>
+                        <p><span className="font-semibold text-gray-600">Expiation Date:</span><br/>{item.expiry_date || 'N/A'}</p>
                     </div>
                     <div className="mt-4 pt-4 border-t border-dashed">
-                        <p><span className="font-semibold text-gray-600">Supplier:</span> {item.supplier || 'N/A'}</p>
-                        <p><span className="font-semibold text-gray-600">Source:</span> {item.supply_source || 'N/A'}</p>
+                        <p><span className="font-semibold text-gray-600">Supply Source:</span> {item.supply_source || 'N/A'}</p>
                     </div>
                 </div>
                 <div className="flex justify-end mt-6">
@@ -121,55 +153,108 @@ const ViewItemModal = ({ item, onClose }) => {
     );
 };
 
-// --- NEW: DEDICATED HISTORY MODAL ---
+// --- NEW: IMPROVED HISTORY MODAL WITH STOCK MOVEMENTS ---
 const ItemHistoryModal = ({ item, onClose }) => {
-    const [history, setHistory] = useState([]);
+    const [movements, setMovements] = useState([]);
     const [loadingHistory, setLoadingHistory] = useState(true);
 
     useEffect(() => {
-        const fetchHistory = async () => {
+        const fetchMovements = async () => {
             if(!item) return;
-            const { data, error } = await supabase
-                .from('activity_log')
-                .select('*, profiles(first_name, last_name, role)')
-                .ilike('details', `%${item.item_name}%`)
-                .order('created_at', { ascending: false });
             
-            if(!error) setHistory(data || []);
+            // Try to get inventory movements first
+            const { data: movementsData, error: movementsError } = await supabase
+                .from('inventory_movements')
+                .select('*, profiles(full_name, role)')
+                .eq('inventory_id', item.id)
+                .order('created_at', { ascending: false })
+                .limit(50);
+            
+            if(!movementsError && movementsData) {
+                setMovements(movementsData);
+            } else {
+                // Fallback to activity log if no movements
+                const { data: activityData } = await supabase
+                    .from('activity_log')
+                    .select('*, profiles(first_name, last_name, role)')
+                    .ilike('details', `%${item.item_name}%`)
+                    .order('created_at', { ascending: false });
+                
+                setMovements(activityData || []);
+            }
+            
             setLoadingHistory(false);
         };
-        fetchHistory();
+        fetchMovements();
     }, [item]);
+
+    const getMovementColor = (type) => {
+        switch(type) {
+            case 'IN': return 'bg-green-50 border-green-200';
+            case 'OUT': return 'bg-blue-50 border-blue-200';
+            case 'ADJUSTMENT': return 'bg-yellow-50 border-yellow-200';
+            case 'WASTE': return 'bg-red-50 border-red-200';
+            default: return 'bg-gray-50 border-gray-200';
+        }
+    };
+
+    const getMovementIcon = (type) => {
+        switch(type) {
+            case 'IN': return '📥';
+            case 'OUT': return '📤';
+            case 'ADJUSTMENT': return '⚙️';
+            case 'WASTE': return '🗑️';
+            default: return '📋';
+        }
+    };
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-[60] p-4">
             <motion.div
-                className="bg-white rounded-lg shadow-2xl w-full max-w-lg p-6 max-h-[80vh] flex flex-col"
+                className="bg-white rounded-lg shadow-2xl w-full max-w-2xl p-6 max-h-[80vh] flex flex-col"
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
             >
                 <div className="border-b pb-3 mb-3">
-                    <h2 className="text-lg font-bold text-gray-800">Activity Log</h2>
-                    <p className="text-xs text-gray-500">History for: <span className="font-semibold">{item.item_name}</span></p>
+                    <h2 className="text-lg font-bold text-gray-800">Stock Movement History</h2>
+                    <p className="text-xs text-gray-500">Item: <span className="font-semibold">{item.item_name}</span></p>
                 </div>
 
                 <div className="flex-1 overflow-y-auto bg-gray-50 rounded-md p-3 space-y-3">
                     {loadingHistory ? (
                         <p className="text-xs text-center text-gray-500 py-4">Loading history...</p>
-                    ) : history.length === 0 ? (
-                        <p className="text-xs text-center text-gray-500 py-4">No recorded history found.</p>
+                    ) : movements.length === 0 ? (
+                        <p className="text-xs text-center text-gray-500 py-4">No movement history found.</p>
                     ) : (
-                        history.map(log => (
-                            <div key={log.id} className="text-xs bg-white p-3 rounded border shadow-sm">
-                                <div className="flex justify-between items-start mb-1">
-                                    <span className="font-bold text-blue-700">{log.action}</span>
-                                    <span className="text-gray-400">{new Date(log.created_at).toLocaleDateString()}</span>
+                        movements.map(movement => (
+                            <div key={movement.id} className={`text-xs bg-white p-3 rounded border ${getMovementColor(movement.movement_type || 'default')}`}>
+                                <div className="flex justify-between items-start mb-2">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-lg">{getMovementIcon(movement.movement_type)}</span>
+                                        <span className="font-bold text-gray-800">{movement.movement_type || movement.action || 'Activity'}</span>
+                                        {movement.quantity_change && (
+                                            <span className={`font-semibold ${movement.quantity_change > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                {movement.quantity_change > 0 ? '+' : ''}{movement.quantity_change}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <span className="text-gray-400">{new Date(movement.created_at).toLocaleDateString()}</span>
                                 </div>
-                                <p className="text-gray-700 mb-2">{log.details}</p>
+                                {movement.reason && (
+                                    <p className="text-gray-700 mb-2"><strong>Reason:</strong> {movement.reason}</p>
+                                )}
+                                {movement.details && (
+                                    <p className="text-gray-700 mb-2">{movement.details}</p>
+                                )}
+                                {movement.quantity_before !== undefined && (
+                                    <p className="text-gray-600 mb-1 text-[10px]">
+                                        {movement.quantity_before} → {movement.quantity_after}
+                                    </p>
+                                )}
                                 <div className="text-[10px] text-gray-400 border-t pt-1 flex justify-between">
-                                    <span>User: {log.profiles?.first_name} {log.profiles?.last_name}</span>
-                                    <span>{new Date(log.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                                    <span>By: {movement.profiles?.full_name || `${movement.profiles?.first_name} ${movement.profiles?.last_name}` || 'System'}</span>
+                                    <span>{new Date(movement.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                                 </div>
                             </div>
                         ))
@@ -190,7 +275,6 @@ const EditInventoryModal = ({ item, onClose, onSave }) => {
         category: item.category,
         quantity: item.quantity,
         status: item.status,
-        manufacture_date: item.manufacture_date || '',
         expiry_date: item.expiry_date || '',
     });
 
@@ -208,7 +292,6 @@ const EditInventoryModal = ({ item, onClose, onSave }) => {
                 category: formData.category,
                 quantity: formData.quantity,
                 status: formData.status,
-                manufacture_date: formData.manufacture_date,
                 expiry_date: formData.expiry_date,
             })
             .eq('id', item.id);
@@ -266,16 +349,6 @@ const EditInventoryModal = ({ item, onClose, onSave }) => {
                             onChange={handleChange}
                             className="w-full border rounded-md px-3 py-2"
                             required
-                        />
-                    </div>
-                    <div>
-                        <label className="block font-semibold">Manufacture Date</label>
-                        <input
-                            type="date"
-                            name="manufacture_date"
-                            value={formData.manufacture_date}
-                            onChange={handleChange}
-                            className="w-full border rounded-md px-3 py-2"
                         />
                     </div>
                     <div>
@@ -404,11 +477,10 @@ export default function InventoryPage() {
     const fetchInventory = useCallback(async () => {
         setLoading(true);
         
-        // ADD is_deleted filter here
+        // Search and filter
         let query = supabase
             .from('inventory')
             .select('*')
-            .eq('is_deleted', false) // ADD THIS LINE
             .eq('owner_role', 'BHW')
             .order('created_at', { ascending: false });
 
@@ -585,31 +657,58 @@ export default function InventoryPage() {
                         <table className="w-full text-sm">
                             <thead className="bg-gray-50">
                                 <tr className="text-left text-gray-600">
-                                    {['Item Name', 'Category', 'Stock', 'Status', 'Expiry Date', 'Actions'].map(h => <th key={h} className="p-3 font-semibold">{h}</th>)}
+                                    {['Item Name', 'Category', 'Stock', 'Status', 'Expiry', 'Alert', 'Actions'].map(h => <th key={h} className="p-3 font-semibold">{h}</th>)}
                                 </tr>
                             </thead>
                             <tbody className="divide-y">
                                 {loading ? (
-                                    <tr><td colSpan="6" className="text-center p-4">Loading...</td></tr>
+                                    <tr><td colSpan="7" className="text-center p-4">Loading...</td></tr>
                                 ) : (
                                     filteredInventory
-                                        .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage) // ✅ show only 10 items
-                                        .map(item => (
-                                            <tr key={item.id} className="text-gray-700">
-                                                <td className="p-3 font-semibold">{item.item_name}</td>
-                                                <td className="p-3">{item.category}</td>
-                                                <td className="p-3">{item.quantity} units</td>
-                                                <td className="p-3"><StatusBadge status={item.status.toLowerCase()} /></td>
-                                                <td className="p-3">{item.expiry_date || '---'}</td>
-                                                <td className="p-3">
-                                                    <div className="flex space-x-1">
-                                                        <button onClick={() => { setSelectedItem(item); setModalMode('view'); }} className="text-gray-400 hover:text-blue-600 p-1"><ViewIcon /></button>
-                                                        <button onClick={() => handleEdit(item)} className="text-gray-400 hover:text-green-600 p-1"><UpdateIcon /></button>
-                                                        <button onClick={() => handleViewHistory(item)} className="text-gray-400 hover:text-orange-600 p-1" title="View History"><HistoryIcon /></button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))
+                                        .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+                                        .map(item => {
+                                            const expiryStatus = getExpiryStatus(item.expiry_date);
+                                            const needsReorder = needsReordering(item.quantity, item.min_stock_level);
+                                            return (
+                                                <tr key={item.id} className={`text-gray-700 ${expiryStatus.status === 'expired' || expiryStatus.status === 'expiring-soon' ? 'bg-red-50' : needsReorder ? 'bg-yellow-50' : ''}`}>
+                                                    <td className="p-3 font-semibold">{item.item_name}</td>
+                                                    <td className="p-3">{item.category}</td>
+                                                    <td className="p-3">
+                                                        <div className="flex items-center gap-1">
+                                                            {item.quantity} {item.unit || 'units'}
+                                                            {needsReorder && <span className="text-xs text-red-600 font-bold">⚠️</span>}
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-3"><StatusBadge status={item.status.toLowerCase()} /></td>
+                                                    <td className="p-3">
+                                                        <div className="text-xs">
+                                                            <div className={`font-semibold ${expiryStatus.color === 'red' ? 'text-red-600' : expiryStatus.color === 'yellow' ? 'text-yellow-600' : 'text-gray-600'}`}>
+                                                                {item.expiry_date ? new Date(item.expiry_date).toLocaleDateString() : '---'}
+                                                            </div>
+                                                            <div className={`text-[10px] ${expiryStatus.color === 'red' ? 'text-red-500' : expiryStatus.color === 'yellow' ? 'text-yellow-500' : 'text-gray-500'}`}>
+                                                                {expiryStatus.message}
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-3">
+                                                        <div className="flex items-center gap-2">
+                                                            {expiryStatus.status === 'expired' && <span title="Expired">🔴</span>}
+                                                            {expiryStatus.status === 'expiring-soon' && <span title="Expiring Soon">🟠</span>}
+                                                            {expiryStatus.status === 'expiring' && <span title="Expiring in 30 days">🟡</span>}
+                                                            {needsReorder && item.quantity <= 5 && <span title="Critical Stock">⛔</span>}
+                                                            {needsReorder && item.quantity > 5 && <span title="Low Stock">⚠️</span>}
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-3">
+                                                        <div className="flex space-x-1">
+                                                            <button onClick={() => { setSelectedItem(item); setModalMode('view'); }} className="text-gray-400 hover:text-blue-600 p-1" title="View Details"><ViewIcon /></button>
+                                                            <button onClick={() => handleEdit(item)} className="text-gray-400 hover:text-green-600 p-1" title="Edit"><UpdateIcon /></button>
+                                                            <button onClick={() => handleViewHistory(item)} className="text-gray-400 hover:text-orange-600 p-1" title="View History"><HistoryIcon /></button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })
                                 )}
 
                             </tbody>
