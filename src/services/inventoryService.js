@@ -363,3 +363,128 @@ export const getExpiryRiskDashboard = async () => {
     };
   }
 };
+
+
+export const getItemBatches = async (itemName, excludeItemId = null) => {
+  try {
+    let query = supabase
+      .from('inventory')
+      .select('*')
+      .ilike('item_name', `%${itemName}%`)
+      .order('expiry_date', { ascending: true })
+      .order('batch_no', { ascending: true });
+
+    if (excludeItemId) {
+      query = query.neq('id', excludeItemId);
+    }
+
+    const { data, error } = await query;
+    
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.error('Error fetching item batches:', err);
+    return [];
+  }
+};
+
+/**
+ * Refill a specific batch of an item
+ * @param {string} itemId - The specific inventory item ID to refill
+ * @param {number} quantityToAdd - Quantity to add
+ * @param {string} remarks - Optional remarks
+ * @param {string} userId - User performing the refill
+ * @returns {Promise<object>}
+ */
+export const refillInventoryItem = async (itemId, quantityToAdd, remarks = '', userId = null) => {
+  try {
+    // Get current item state
+    const { data: currentItem, error: fetchError } = await supabase
+      .from('inventory')
+      .select('*')
+      .eq('id', itemId)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    const newQuantity = (currentItem.quantity || 0) + quantityToAdd;
+    
+    // Calculate new status
+    let newStatus = 'Normal';
+    if (newQuantity <= 10) newStatus = 'Critical';
+    else if (newQuantity <= 20) newStatus = 'Low';
+
+    // Update the inventory
+    const { error: updateError } = await supabase
+      .from('inventory')
+      .update({ 
+        quantity: newQuantity, 
+        status: newStatus, 
+        updated_at: new Date().toISOString() 
+      })
+      .eq('id', itemId);
+
+    if (updateError) throw updateError;
+
+    // Record the movement
+    await recordInventoryMovement(
+      itemId,
+      'IN',
+      quantityToAdd,
+      currentItem.quantity,
+      newQuantity,
+      remarks || 'Stock refill',
+      'refill',
+      null,
+      userId,
+      remarks
+    );
+
+    return { 
+      success: true, 
+      item: { 
+        ...currentItem, 
+        quantity: newQuantity, 
+        status: newStatus 
+      } 
+    };
+  } catch (err) {
+    console.error('Error in refillInventoryItem:', err);
+    return { success: false, error: err.message };
+  }
+};
+
+/**
+ * Get all items grouped by name with their batches
+ * @returns {Promise<array>} - Array of item groups with their batches
+ */
+export const getInventoryGroupedByName = async () => {
+  try {
+    const { data: inventory, error } = await supabase
+      .from('inventory')
+      .select('*')
+      .order('item_name', { ascending: true })
+      .order('expiry_date', { ascending: true });
+
+    if (error) throw error;
+
+    // Group by item name
+    const grouped = {};
+    inventory.forEach(item => {
+      if (!grouped[item.item_name]) {
+        grouped[item.item_name] = {
+          itemName: item.item_name,
+          totalQuantity: 0,
+          batches: []
+        };
+      }
+      grouped[item.item_name].totalQuantity += item.quantity || 0;
+      grouped[item.item_name].batches.push(item);
+    });
+
+    return Object.values(grouped);
+  } catch (err) {
+    console.error('Error in getInventoryGroupedByName:', err);
+    return [];
+  }
+};

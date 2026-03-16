@@ -12,6 +12,7 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import UsageAnalytics from '../../components/analytics/UsageAnalytics';
 import ExpiryRiskDashboard from '../../components/analytics/ExpiryRiskDashboard';
+import EnhancedRefillModal from '../../components/reusables/EnhancedRefillModal';
 
 // --- Import your logo images ---
 import leftLogo from '../../assets/leftLogo.png';
@@ -111,80 +112,7 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
     );
 };
 
-const RefillItemModal = ({ item, onClose, onSave }) => {
-    const [addQty, setAddQty] = useState('');
-    const [remarks, setRemarks] = useState('');
-    const [loading, setLoading] = useState(false);
-    const { addNotification } = useNotification();
 
-    const handleRefill = async (e) => {
-        e.preventDefault();
-        setLoading(true);
-        const qtyToAdd = parseInt(addQty);
-
-        if (isNaN(qtyToAdd) || qtyToAdd <= 0) {
-            addNotification("Please enter a valid quantity.", "error");
-            setLoading(false);
-            return;
-        }
-
-        const newQuantity = (item.quantity || 0) + qtyToAdd;
-        
-        // No need to check source - always use 'inventory' table
-        // The item is already in the inventory table with owner_role
-
-        let newStatus = 'Normal';
-        if (newQuantity <= 10) newStatus = 'Critical';
-        else if (newQuantity <= 20) newStatus = 'Low';
-
-        const { error } = await supabase
-            .from('inventory') // Always use inventory table
-            .update({ 
-                quantity: newQuantity, 
-                status: newStatus, 
-                updated_at: new Date().toISOString() 
-            })
-            .eq('id', item.id);
-
-        if (error) {
-            addNotification(`Error refilling item: ${error.message}`, "error");
-        } else {
-            await logActivity('Stock Refill', `Added ${qtyToAdd} units to ${item.item_name}. Remarks: ${remarks}`);
-            addNotification(`${item.item_name} refilled successfully.`, "success");
-            onSave();
-            onClose();
-        }
-        setLoading(false);
-    };
-
-    return (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-[60] p-4">
-             <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-lg shadow-2xl w-full max-w-sm p-6">
-                <h2 className="text-xl font-bold text-gray-800 mb-4">Refill Stock</h2>
-                <div className="mb-4 text-sm">
-                    <p className="text-gray-500">Item: <span className="font-semibold text-gray-800">{item.item_name}</span></p>
-                    <p className="text-gray-500">Current Stock: <span className="font-semibold text-gray-800">{item.quantity} {item.unit}</span></p>
-                </div>
-                <form onSubmit={handleRefill} className="space-y-4">
-                    <div>
-                        <label className="block text-xs font-bold text-gray-700 mb-1">Quantity to Add</label>
-                        <input type="number" min="1" value={addQty} onChange={e => setAddQty(e.target.value)} className="w-full border rounded p-2 text-sm" required />
-                    </div>
-                    <div>
-                        <label className="block text-xs font-bold text-gray-700 mb-1">Remarks (Optional)</label>
-                        <input type="text" value={remarks} onChange={e => setRemarks(e.target.value)} className="w-full border rounded p-2 text-sm" placeholder="e.g. New delivery" />
-                    </div>
-                    <div className="flex justify-end gap-3 pt-2">
-                        <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-200 rounded text-sm font-semibold">Cancel</button>
-                        <button type="submit" disabled={loading} className="px-4 py-2 bg-green-600 text-white rounded text-sm font-semibold hover:bg-green-700 disabled:bg-gray-400">
-                            {loading ? "Refilling..." : "Confirm Refill"}
-                        </button>
-                    </div>
-                </form>
-             </motion.div>
-        </div>
-    );
-};
 
 const ViewItemDetailsModal = ({ item, onClose }) => {
     const [movements, setMovements] = useState([]);
@@ -393,7 +321,11 @@ export default function AdminInventoryPage() {
                     <ViewItemDetailsModal item={selectedItem} onClose={() => { setSelectedItem(null); setModalMode(null); }} />
                 )}
                 {modalMode === 'refill' && selectedItem && (
-                    <RefillItemModal item={selectedItem} onClose={() => { setSelectedItem(null); setModalMode(null); }} onSave={fetchInventories} />
+                    <EnhancedRefillModal 
+                        initialItem={selectedItem} 
+                        onClose={() => { setSelectedItem(null); setModalMode(null); }} 
+                        onSave={fetchInventories} 
+                    />
                 )}
                 {(modalMode === 'edit-bhw') && selectedItem && (
                     <AddInventoryModal mode="edit" initialData={selectedItem} onClose={() => { setSelectedItem(null); setModalMode(null); }} onSave={fetchInventories} />
