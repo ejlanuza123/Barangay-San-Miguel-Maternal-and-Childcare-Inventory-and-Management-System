@@ -18,7 +18,7 @@ const UNIT_OPTIONS = [
   "Gram", "Kilogram", "Liter", "Milliliter", "Dozen", "Unit"
 ];
 
-export default function AddInventoryModal({ onClose, onSave, mode = "add", initialData = null }) {
+export default function AddInventoryModal({ onClose, onSave, mode = "add", initialData = null, submitAsRequest = false, requesterId = null }) {
   const [formData, setFormData] = useState({
     item_name: "",
     category: "",
@@ -103,6 +103,10 @@ export default function AddInventoryModal({ onClose, onSave, mode = "add", initi
     setError("");
 
     try {
+      if (submitAsRequest && !requesterId) {
+        throw new Error("Unable to submit request: missing requester account.");
+      }
+
       if (batchMode) {
         // Batch save
         const validationError = validateBatchItems();
@@ -128,19 +132,39 @@ export default function AddInventoryModal({ onClose, onSave, mode = "add", initi
           updated_at: new Date().toISOString()
         }));
 
-        const { error: insertError } = await supabase
-          .from("inventory")
-          .insert(itemsToInsert);
+        if (submitAsRequest) {
+          const requests = itemsToInsert.map((item) => ({
+            worker_id: requesterId,
+            request_type: "Add",
+            target_table: "inventory",
+            request_data: item,
+            status: "Pending",
+          }));
 
-        if (insertError) throw insertError;
+          const { error: requestError } = await supabase.from("requestions").insert(requests);
+          if (requestError) throw requestError;
 
-        // Log activity for batch insert
-        await logActivity(
-          "Batch Items Added", 
-          `Added ${batchItems.length} items: ${batchItems.map(item => item.item_name).join(", ")}`
-        );
-        
-        addNotification(`${batchItems.length} items added successfully!`, "success");
+          await logActivity(
+            "Inventory Batch Add Request",
+            `Submitted ${batchItems.length} inventory add request(s): ${batchItems.map(item => item.item_name).join(", ")}`
+          );
+
+          addNotification(`${batchItems.length} add request(s) submitted for approval.`, "success");
+        } else {
+          const { error: insertError } = await supabase
+            .from("inventory")
+            .insert(itemsToInsert);
+
+          if (insertError) throw insertError;
+
+          await logActivity(
+            "Batch Items Added", 
+            `Added ${batchItems.length} items: ${batchItems.map(item => item.item_name).join(", ")}`
+          );
+          
+          addNotification(`${batchItems.length} items added successfully!`, "success");
+        }
+
         onSave();
         onClose();
         
@@ -158,7 +182,33 @@ export default function AddInventoryModal({ onClose, onSave, mode = "add", initi
           updated_at: new Date().toISOString()
         };
 
-        if (mode === "edit") {
+        if (submitAsRequest) {
+          const requestPayload = {
+            worker_id: requesterId,
+            request_type: mode === "edit" ? "Update" : "Add",
+            target_table: "inventory",
+            target_record_id: mode === "edit" ? initialData.id : null,
+            request_data: dataPayload,
+            status: "Pending",
+          };
+
+          const { error: requestError } = await supabase
+            .from("requestions")
+            .insert([requestPayload]);
+
+          if (requestError) throw requestError;
+
+          await logActivity(
+            mode === "edit" ? "Inventory Update Request" : "Inventory Add Request",
+            `${mode === "edit" ? "Submitted update request for" : "Submitted add request for"} item: ${formData.item_name}`
+          );
+          addNotification(
+            mode === "edit"
+              ? "Update request submitted for approval."
+              : "Add request submitted for approval.",
+            "success"
+          );
+        } else if (mode === "edit") {
           const { error: updateError } = await supabase
             .from("inventory")
             .update(dataPayload)

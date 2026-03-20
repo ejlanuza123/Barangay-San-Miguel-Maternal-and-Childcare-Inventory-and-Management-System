@@ -579,6 +579,8 @@ export default function InventoryPage() {
                     <AddInventoryModal
                         mode={modalMode}
                         initialData={selectedItem}
+                        submitAsRequest
+                        requesterId={user?.id}
                         onClose={() => setModalMode(null)}
                         onSave={() => {
                             setModalMode(null);

@@ -1153,7 +1153,7 @@ export default function ChildHealthRecords() {
   const [itemsPerPage] = useState(10);
   const [totalRecords, setTotalRecords] = useState(0);
   const [selectedChildForQR, setSelectedChildForQR] = useState(null);
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { addNotification } = useNotification();
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isPrescriptionModalOpen, setIsPrescriptionModalOpen] = useState(false);
@@ -1687,7 +1687,9 @@ export default function ChildHealthRecords() {
                           <td className="px-2 py-2">{record.last_checkup}</td>
                           <td className="px-2 py-2">
                             <div className="flex space-x-1">
-                              <button onClick={() => handlePrescribe(record)} className="text-purple-500 hover:text-purple-700 p-1 bg-purple-50 rounded" title="Prescribe"> <PillIcon /> </button>
+                              {profile?.role === 'Midwife' && (
+                                <button onClick={() => handlePrescribe(record)} className="text-purple-500 hover:text-purple-700 p-1 bg-purple-50 rounded" title="Prescribe"> <PillIcon /> </button>
+                              )}
                               <button
                                 onClick={() => {
                                   setSelectedChild(record);

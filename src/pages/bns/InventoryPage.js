@@ -381,7 +381,7 @@ export default function BnsInventoryPage() {
     return (
         <>
             <AnimatePresence>
-                {(modalMode === 'add' || modalMode === 'edit') && ( <AddBnsInventoryModal mode={modalMode} initialData={itemToManage} onClose={() => setModalMode(null)} onSave={() => { setModalMode(null); fetchPageData(); }} /> )}
+                {(modalMode === 'add' || modalMode === 'edit') && ( <AddBnsInventoryModal mode={modalMode} initialData={itemToManage} submitAsRequest requesterId={user?.id} onClose={() => setModalMode(null)} onSave={() => { setModalMode(null); fetchPageData(); }} /> )}
                 {modalMode === 'view' && (
                     <ViewItemModal
                         item={itemToManage}

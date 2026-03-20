@@ -12,7 +12,7 @@ const UNIT_OPTIONS = [
   "Gram", "Kilogram", "Liter", "Milliliter", "Dozen", "Unit"
 ];
 
-export default function AddBnsInventoryModal({ onClose, onSave, mode = "add", initialData = null }) {
+export default function AddBnsInventoryModal({ onClose, onSave, mode = "add", initialData = null, submitAsRequest = false, requesterId = null }) {
   const [formData, setFormData] = useState({
     item_name: "",
     category: "",
@@ -30,6 +30,10 @@ export default function AddBnsInventoryModal({ onClose, onSave, mode = "add", in
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const { addNotification } = useNotification();
+
+  if (submitAsRequest && !requesterId) {
+    throw new Error('Unable to submit request: missing requester account.');
+  }
 
   useEffect(() => {
     if (mode === "edit" && initialData) {
@@ -114,19 +118,51 @@ export default function AddBnsInventoryModal({ onClose, onSave, mode = "add", in
           updated_at: new Date().toISOString()
         }));
 
-        const { error: insertError } = await supabase
-          .from("inventory")
-          .insert(itemsToInsert);
+        if (submitAsRequest) {
+          // Route to requestions table for approval workflow
+          const requests = batchItems.map((item) => ({
+            worker_id: requesterId,
+            request_type: "Add",
+            target_table: "inventory",
+            request_data: {
+              item_name: item.item_name,
+              category: item.category,
+              quantity: parseInt(item.quantity),
+              unit: item.unit,
+              sku: item.sku ? item.sku.toUpperCase() : null,
+              batch_no: item.batch_no || null,
+              supply_source: item.supply_source,
+              expiry_date: item.expiration_date || null,
+              min_stock_level: parseInt(item.min_stock_level) || 10,
+              reorder_quantity: parseInt(item.reorder_quantity) || 50,
+              owner_role: 'BNS',
+            },
+            status: "Pending",
+          }));
+          const { error: requestError } = await supabase.from("requestions").insert(requests);
+          if (requestError) throw requestError;
+          
+          await logActivity(
+            "BNS Batch Items Add Requested", 
+            `Requested to add ${batchItems.length} items: ${batchItems.map(item => item.item_name).join(", ")}`
+          );
+          addNotification(`${batchItems.length} BNS items submitted for approval!`, "success");
+        } else {
+          // Direct insert to inventory table (for admin panel)
+          const { error: insertError } = await supabase
+            .from("inventory")
+            .insert(itemsToInsert);
 
-        if (insertError) throw insertError;
+          if (insertError) throw insertError;
 
-        // Log activity for batch insert
-        await logActivity(
-          "BNS Batch Items Added", 
-          `Added ${batchItems.length} items: ${batchItems.map(item => item.item_name).join(", ")}`
-        );
-        
-        addNotification(`${batchItems.length} BNS items added successfully!`, "success");
+          // Log activity for batch insert
+          await logActivity(
+            "BNS Batch Items Added", 
+            `Added ${batchItems.length} items: ${batchItems.map(item => item.item_name).join(", ")}`
+          );
+          
+          addNotification(`${batchItems.length} BNS items added successfully!`, "success");
+        }
         onSave();
         onClose();
         
@@ -147,25 +183,44 @@ export default function AddBnsInventoryModal({ onClose, onSave, mode = "add", in
         // Remove the expiration_date field since we're using expiry_date
         delete dataPayload.expiration_date;
 
-        if (mode === "edit") {
-          const { error: updateError } = await supabase
-            .from("inventory")
-            .update(dataPayload)
-            .eq("id", initialData.id);
+        if (submitAsRequest) {
+          // Route to requestions table for approval workflow
+          const requestPayload = {
+            worker_id: requesterId,
+            request_type: mode === "edit" ? "Update" : "Add",
+            target_table: "inventory",
+            target_record_id: mode === "edit" ? initialData.id : null,
+            request_data: dataPayload,
+            status: "Pending",
+          };
+          const { error: requestError } = await supabase.from("requestions").insert([requestPayload]);
+          if (requestError) throw requestError;
           
-          if (updateError) throw updateError;
-          
-          await logActivity("BNS Inventory Updated", `Updated item: ${formData.item_name}`);
-          addNotification("BNS item updated successfully.", "success");
+          const action = mode === "edit" ? "BNS Inventory Update Requested" : "New BNS Item Add Requested";
+          await logActivity(action, `Item: ${formData.item_name}`);
+          addNotification(`Item ${mode === "edit" ? "update" : "add"} submitted for approval.`, "success");
         } else {
-          const { error: insertError } = await supabase
-            .from("inventory")
-            .insert([dataPayload]);
-          
-          if (insertError) throw insertError;
-          
-          await logActivity("New BNS Item Added", `Added item: ${formData.item_name}`);
-          addNotification("New BNS item added to inventory.", "success");
+          // Direct save to inventory table (for admin panel)
+          if (mode === "edit") {
+            const { error: updateError } = await supabase
+              .from("inventory")
+              .update(dataPayload)
+              .eq("id", initialData.id);
+            
+            if (updateError) throw updateError;
+            
+            await logActivity("BNS Inventory Updated", `Updated item: ${formData.item_name}`);
+            addNotification("BNS item updated successfully.", "success");
+          } else {
+            const { error: insertError } = await supabase
+              .from("inventory")
+              .insert([dataPayload]);
+            
+            if (insertError) throw insertError;
+            
+            await logActivity("New BNS Item Added", `Added item: ${formData.item_name}`);
+            addNotification("New BNS item added to inventory.", "success");
+          }
         }
         
         onSave();
