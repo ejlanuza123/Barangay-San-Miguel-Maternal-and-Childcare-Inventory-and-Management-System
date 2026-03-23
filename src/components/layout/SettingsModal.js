@@ -210,10 +210,15 @@ const MyProfile = ({ profile, onProfileUpdate }) => {
     if (e) e.preventDefault();
     setMessage({ type: "", text: "" });
 
+    const fullName = `${formData.first_name || ""} ${formData.last_name || ""}`
+      .trim()
+      .replace(/\s+/g, " ");
+
     const updates = {
       id: user.id,
       role: profile.role,
       ...formData,
+      full_name: fullName,
       ...additionalData,
       updated_at: new Date(),
     };

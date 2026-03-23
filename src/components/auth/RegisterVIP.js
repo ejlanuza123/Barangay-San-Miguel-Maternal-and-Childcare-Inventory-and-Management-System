@@ -178,6 +178,9 @@ export default function RegisterVIP() {
     setMessageType('info');
 
     try {
+      const { data: previousSessionData } = await supabase.auth.getSession();
+      const previousSession = previousSessionData?.session || null;
+
       // Split full name for first and last name
       const nameParts = fullName.split(' ');
       const firstName = nameParts[0] || '';
@@ -207,103 +210,72 @@ export default function RegisterVIP() {
 
       if (data.user) {
         console.log("VIP Auth user created:", data.user.id);
-        
-        // Step 2: Wait longer for automatic profile creation (2 seconds)
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        // Step 3: Check if profile exists
-        const { data: existingProfile, error: checkError } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', data.user.id)
-          .maybeSingle(); // Use maybeSingle to handle null case
 
-        if (checkError) {
-          console.error("Error checking profile:", checkError);
-          // Continue anyway, we'll try to insert/update
-        }
+        const profilePayload = {
+          id: data.user.id,
+          full_name: fullName,
+          role,
+          user_id_no: userIdNo,
+          assigned_purok: (role === 'BHW' || role === 'BNS' || role === 'Midwife') ? assignedPurok : null,
+          contact_no: contactNo || null,
+          birth_date: birthDate || null,
+          first_name: firstName,
+          last_name: lastName,
+          updated_at: new Date().toISOString()
+        };
 
-        // Step 4: INSERT or UPDATE profile based on whether it exists
-        let profileError = null;
-        
-        if (existingProfile) {
-          // Profile exists, UPDATE it
-          const { error: updateError } = await supabase
-            .from('profiles')
-            .update({
-              full_name: fullName,
-              role: role,
-              user_id_no: userIdNo,
-              assigned_purok: (role === 'BHW' || role === 'BNS' || role === 'Midwife') ? assignedPurok : null,
-              contact_no: contactNo,
-              birth_date: birthDate,
-              first_name: firstName,
-              last_name: lastName,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', data.user.id);
+        let profileSaved = null;
+        let profileSaveNote = '';
+        let activeSession = data.session || null;
 
-          profileError = updateError;
-          console.log("Updated existing profile");
-        } else {
-          // Profile doesn't exist, INSERT it
-          const { error: insertError } = await supabase
-            .from('profiles')
-            .insert({
-              id: data.user.id,
-              full_name: fullName,
-              role: role,
-              user_id_no: userIdNo,
-              assigned_purok: (role === 'BHW' || role === 'BNS' || role === 'Midwife') ? assignedPurok : null,
-              contact_no: contactNo,
-              birth_date: birthDate,
-              first_name: firstName,
-              last_name: lastName,
-              updated_at: new Date().toISOString(),
-              created_at: new Date().toISOString()
-            });
+        // If sign-up did not return a session (common when email confirmation is required),
+        // try logging in as the newly created account so profile upsert can pass RLS.
+        if (!activeSession) {
+          const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+            email,
+            password
+          });
 
-          profileError = insertError;
-          console.log("Inserted new profile");
-        }
-
-        if (profileError) {
-          console.error("Profile operation error:", profileError);
-          // Try one more approach - use upsert
-          const { error: upsertError } = await supabase
-            .from('profiles')
-            .upsert({
-              id: data.user.id,
-              full_name: fullName,
-              role: role,
-              user_id_no: userIdNo,
-              assigned_purok: (role === 'BHW' || role === 'BNS' || role === 'Midwife') ? assignedPurok : null,
-              contact_no: contactNo,
-              birth_date: birthDate,
-              first_name: firstName,
-              last_name: lastName,
-              updated_at: new Date().toISOString()
-            }, {
-              onConflict: 'id'
-            });
-
-          if (upsertError) {
-            console.error("Upsert also failed:", upsertError);
-            throw new Error(`Failed to save profile: ${upsertError.message}`);
+          if (signInError) {
+            profileSaveNote = 'Profile fields pending: email confirmation/login required before profile upsert.';
           } else {
-            console.log("Profile saved via upsert");
+            activeSession = signInData?.session || null;
           }
         }
 
-        // Step 5: Double-check the profile was saved
-        await new Promise(resolve => setTimeout(resolve, 500));
-        const { data: finalCheck } = await supabase
-          .from('profiles')
-          .select('user_id_no, role')
-          .eq('id', data.user.id)
-          .single();
+        if (activeSession?.access_token && activeSession?.refresh_token) {
+          const { error: setSessionError } = await supabase.auth.setSession({
+            access_token: activeSession.access_token,
+            refresh_token: activeSession.refresh_token
+          });
 
-        console.log("Final profile check:", finalCheck);
+          if (!setSessionError) {
+            const { data: savedProfile, error: profileUpsertError } = await supabase
+              .from('profiles')
+              .upsert(profilePayload, { onConflict: 'id' })
+              .select('id, user_id_no, role')
+              .single();
+
+            if (profileUpsertError) {
+              console.error('Profile upsert error:', profileUpsertError);
+              profileSaveNote = `Profile upsert blocked: ${profileUpsertError.message}`;
+            } else {
+              profileSaved = savedProfile;
+            }
+          } else {
+            profileSaveNote = `Could not set session for profile upsert: ${setSessionError.message}`;
+          }
+        }
+
+        // Restore the previous session (if any) so developer/admin context is not lost.
+        if (previousSession && previousSession.user?.id !== data.user.id) {
+          await supabase.auth.setSession({
+            access_token: previousSession.access_token,
+            refresh_token: previousSession.refresh_token
+          });
+        } else if (!previousSession) {
+          await supabase.auth.signOut();
+        }
 
         // Show success message
         setMessage(`
@@ -318,7 +290,7 @@ export default function RegisterVIP() {
           The user can now log in with their email and password.
           ${data.user.confirmed_at ? '✅ Email already confirmed' : '⚠️ Please check email for confirmation link'}
           
-          ${finalCheck ? `✅ Profile saved: ${finalCheck.user_id_no} (${finalCheck.role})` : '⚠️ Profile may not have saved correctly'}
+          ${profileSaved ? `✅ Profile saved: ${profileSaved.user_id_no} (${profileSaved.role})` : `⚠️ Profile may be incomplete. ${profileSaveNote || 'Check RLS/policies for profiles upsert.'}`}
         `);
         setMessageType('success');
         
