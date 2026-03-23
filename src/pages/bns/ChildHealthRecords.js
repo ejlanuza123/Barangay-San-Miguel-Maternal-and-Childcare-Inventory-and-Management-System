@@ -692,35 +692,6 @@ const PrescriptionModal = ({ child, onClose, onSave, isOpen }) => {
   );
 };
 
-const UpcomingAppointmentsWidget = ({ appointments }) => (
-  <div className="bg-white p-3 rounded-lg shadow-sm border">
-    <h3 className="font-bold text-gray-700 text-sm mb-3">
-      Upcoming Appointment
-    </h3>
-    <div className="space-y-3">
-      {appointments.length > 0 ? (
-        appointments.slice(0, 3).map((app) => (
-          <div key={app.id} className="flex items-center space-x-2">
-            <div className="bg-blue-100 p-1 rounded">
-              <CalendarIcon />
-            </div>
-            <div>
-              <p className="font-semibold text-gray-700 text-xs">
-                {app.patient_name}
-              </p>
-              <p className="text-xs text-blue-600 font-semibold">
-                {app.reason}
-              </p>
-            </div>
-          </div>
-        ))
-      ) : (
-        <p className="text-xs text-gray-500">No upcoming appointments.</p>
-      )}
-    </div>
-  </div>
-);
-
 const Pagination = ({ currentPage, totalPages, onPageChange }) => {
   const getPaginationItems = () => {
     if (totalPages <= 7)
@@ -1147,7 +1118,6 @@ export default function ChildHealthRecords() {
   const [searchTerm, setSearchTerm] = useState("");
   const [modalMode, setModalMode] = useState(null);
   const [selectedChild, setSelectedChild] = useState(null);
-  const [upcomingAppointments, setUpcomingAppointments] = useState([]);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState("All");
   const [patientToDelete, setPatientToDelete] = useState(null);
@@ -1387,17 +1357,6 @@ export default function ChildHealthRecords() {
       setTotalRecords(recordsCount || 0);
     }
 
-    // Rest of your existing code for follow-up visits...
-    const { data: appointmentsData, error: appointmentsError } = await supabase
-      .from("follow_up_visit")
-      .select("*")
-      .eq("created_by", user.id)
-      .order("date", { ascending: true })
-      .limit(3);
-      
-    if (!appointmentsError) {
-      setUpcomingAppointments(appointmentsData || []);
-    }
     setLoading(false);
   }, [addNotification, currentPage, itemsPerPage, user, searchTerm, activeFilter]);// Add searchTerm and activeFilter to dependencies
 
@@ -1760,7 +1719,6 @@ export default function ChildHealthRecords() {
               + New Child Record
             </button>
             <StatusLegend />
-            <UpcomingAppointmentsWidget appointments={upcomingAppointments} />
           </div>
         </div>
     </>

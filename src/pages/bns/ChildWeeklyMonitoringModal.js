@@ -53,6 +53,8 @@ export default function ChildWeeklyMonitoringModal({ child, isOpen, onClose, onS
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [recordToDelete, setRecordToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   const [formData, setFormData] = useState({
     measurement_date: toYMD(new Date()),
     weight_kg: "",
@@ -215,13 +217,47 @@ export default function ChildWeeklyMonitoringModal({ child, isOpen, onClose, onS
     doc.save(`weekly_growth_${fileSafeName}.pdf`);
   };
 
+  const handleDeleteRecord = async () => {
+    if (!recordToDelete?.id) return;
+
+    setDeleting(true);
+    const { error } = await supabase
+      .from("child_measurements")
+      .delete()
+      .eq("id", recordToDelete.id)
+      .eq("child_record_id", child.id);
+
+    if (error) {
+      addNotification(`Unable to remove weekly record: ${error.message}`, "error");
+      setDeleting(false);
+      return;
+    }
+
+    addNotification("Weekly record removed successfully.", "success");
+    logActivity(
+      "Removed weekly child measurement",
+      `Removed weekly measurement for ${child.first_name} ${child.last_name} (${child.child_id})`
+    );
+    setRecordToDelete(null);
+    setDeleting(false);
+    await fetchRecords();
+    if (onSaved) onSaved();
+  };
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
+    <motion.div
+      className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+    >
       <motion.div
         className="bg-white rounded-lg shadow-2xl w-full max-w-6xl max-h-[92vh] overflow-hidden flex flex-col"
-        initial={{ opacity: 0, scale: 0.97 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.97 }}
+        initial={{ opacity: 0, scale: 0.94, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.96, y: 10 }}
+        transition={{ duration: 0.25, ease: "easeOut" }}
       >
         <div className="p-4 border-b bg-gradient-to-r from-emerald-50 to-cyan-50 flex justify-between items-start">
           <div>
@@ -318,6 +354,7 @@ export default function ChildWeeklyMonitoringModal({ child, isOpen, onClose, onS
                       <th className="p-2 border">Status</th>
                       <th className="p-2 border">Purok (Profile)</th>
                       <th className="p-2 border">Cellphone (Profile)</th>
+                      <th className="p-2 border">Action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -332,6 +369,14 @@ export default function ChildWeeklyMonitoringModal({ child, isOpen, onClose, onS
                         <td className="p-2 border">{r.nutrition_status ?? "-"}</td>
                         <td className="p-2 border">{child.address ?? "-"}</td>
                         <td className="p-2 border">{effectiveContactNo}</td>
+                        <td className="p-2 border text-center">
+                          <button
+                            onClick={() => setRecordToDelete(r)}
+                            className="px-2 py-1 bg-red-100 text-red-700 rounded text-[11px] font-semibold hover:bg-red-200"
+                          >
+                            Remove
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -340,7 +385,47 @@ export default function ChildWeeklyMonitoringModal({ child, isOpen, onClose, onS
             )}
           </div>
         </div>
+
+        {recordToDelete && (
+          <motion.div
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+          >
+            <motion.div
+              className="bg-white rounded-lg shadow-xl w-full max-w-sm p-5"
+              initial={{ opacity: 0, scale: 0.95, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.98, y: 4 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+            >
+              <h3 className="text-base font-bold text-gray-800">Confirm Removal</h3>
+              <p className="text-sm text-gray-600 mt-2">
+                Are you sure you want to remove this weekly record dated
+                <span className="font-semibold"> {recordToDelete.measurement_date}</span>?
+              </p>
+              <div className="flex justify-end gap-2 mt-4">
+                <button
+                  onClick={() => setRecordToDelete(null)}
+                  disabled={deleting}
+                  className="px-3 py-2 bg-gray-200 text-gray-800 rounded-md text-sm font-semibold hover:bg-gray-300 disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteRecord}
+                  disabled={deleting}
+                  className="px-3 py-2 bg-red-600 text-white rounded-md text-sm font-semibold hover:bg-red-700 disabled:opacity-60"
+                >
+                  {deleting ? "Removing..." : "Yes, Remove"}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
       </motion.div>
-    </div>
+    </motion.div>
   );
 }

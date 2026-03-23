@@ -266,19 +266,19 @@ const RecentActivity = ({ activities, onViewAll }) => (
 );
 
 const UpcomingVisits = ({ visits }) => {
-    // Helper to get next Thursday
-    const getNextThursday = () => {
+  // Helper to get next Wednesday
+  const getNextWednesday = () => {
         const d = new Date();
-        const diff = (4 + 7 - d.getDay()) % 7; 
+    const diff = (3 + 7 - d.getDay()) % 7; 
         d.setDate(d.getDate() + diff);
         return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
     };
-    const nextDate = getNextThursday();
+  const nextDate = getNextWednesday();
 
     return (
         <div className="bg-white p-4 rounded-lg shadow border min-h-[380px]">
             <h3 className="font-bold text-gray-700 text-base mb-3">Upcoming Follow-up Visits</h3>
-            <p className="text-xs text-gray-500 mb-2">Next Visit Day: <span className="font-bold text-green-600">{nextDate}</span> (Thursday)</p>
+            <p className="text-xs text-gray-500 mb-2">Next Visit Day: <span className="font-bold text-green-600">{nextDate}</span> (Wednesday)</p>
             <div className="space-y-2 overflow-y-auto" style={{ maxHeight: '300px' }}>
                 {visits.length > 0 ? visits.map(child => (
                     <div key={child.id} className="flex justify-between items-start p-3 bg-green-50 rounded border hover:bg-green-100 transition-colors">
