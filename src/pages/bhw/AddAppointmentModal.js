@@ -113,7 +113,6 @@ export default function AddAppointmentModal({ onClose, onSave }) {
         }
 
         // --- 3. SAVE APPOINTMENT (Your existing code) ---
-        const { data: { user } } = await supabase.auth.getUser();
         const { error: insertError } = await supabase.from('follow_up_visit').insert([{
             patient_display_id: formData.patient_id,
             // patient_name is no longer stored in the table; we'll resolve names from mother_records when listing
@@ -121,8 +120,7 @@ export default function AddAppointmentModal({ onClose, onSave }) {
             date: formData.date,
             time: formData.time,
             notes: formData.notes,
-            status: 'Scheduled',
-            created_by: user?.id
+            status: 'Scheduled'
         }]);
 
         if (insertError) {

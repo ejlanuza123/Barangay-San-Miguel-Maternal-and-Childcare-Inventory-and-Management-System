@@ -467,7 +467,7 @@ export default function UnifiedReportsPage() {
                 supabase.from('child_records').select('*'),
                 supabase.from('inventory').select('*'),
                 supabase.from('profiles').select('*'),
-                supabase.from('appointments').select('*').eq('status', 'Completed'),
+                supabase.from('follow_up_visit').select('*').eq('status', 'Completed'),
                 supabase.from('profiles').select('*').eq('id', user?.id).single()
             ]);
             

@@ -24,15 +24,15 @@ const ExcelIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColo
 const ListIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>;
 
 // --- HELPER FUNCTIONS ---
-const getNextWednesday = () => {
+const getNextThursday = () => {
     const d = new Date();
-    const diff = (3 + 7 - d.getDay()) % 7; 
+    const diff = (4 + 7 - d.getDay()) % 7; 
     d.setDate(d.getDate() + diff);
     return d;
 };
 
-const isWednesday = (date) => {
-    return date.getDay() === 3;
+const isThursday = (date) => {
+    return date.getDay() === 4;
 };
 
 const isToday = (date) => {
@@ -57,8 +57,8 @@ const isPastDate = (date) => {
 };
 
 const canConfirmVisit = (date) => {
-    // Can only confirm on current day (today) AND it must be Wednesday
-    return isToday(date) && isWednesday(date);
+    // Can only confirm on current day (today) AND it must be Thursday
+    return isToday(date) && isThursday(date);
 };
 
 const formatDate = (date) => {
@@ -673,7 +673,7 @@ const CalendarWidget = ({ selectedDate, onDateSelect, onDateClick }) => {
             const dateStr = date.toISOString().split('T')[0];
             const isSelected = selectedDate && date.toDateString() === selectedDate.toDateString();
             const isToday = date.toDateString() === new Date().toDateString();
-            const isWed = isWednesday(date);
+            const isThu = isThursday(date);
             const hasVisits = visitCounts[dateStr] > 0;
 
             dates.push(
@@ -688,7 +688,7 @@ const CalendarWidget = ({ selectedDate, onDateSelect, onDateClick }) => {
                         className={`h-8 w-8 rounded-full flex items-center justify-center text-xs transition-colors relative
                             ${isSelected ? 'bg-blue-600 text-white font-bold shadow-md' : 'hover:bg-blue-50 text-gray-700'}
                             ${!isSelected && isToday ? 'border border-blue-400 font-semibold' : ''}
-                            ${!isSelected && isWed ? 'bg-blue-50 text-blue-600 font-medium' : ''}
+                            ${!isSelected && isThu ? 'bg-blue-50 text-blue-600 font-medium' : ''}
                         `}
                     >
                         {day}
@@ -750,7 +750,7 @@ export default function AppointmentPage() {
     const [confirmedToday, setConfirmedToday] = useState({});
     const { addNotification } = useNotification();
     
-    const nextVisitDate = useMemo(() => getNextWednesday().toLocaleDateString('en-US', { 
+    const nextVisitDate = useMemo(() => getNextThursday().toLocaleDateString('en-US', { 
         weekday: 'long', 
         year: 'numeric', 
         month: 'long', 
@@ -816,7 +816,7 @@ export default function AppointmentPage() {
     const handleConfirmVisit = async (patient) => {
         const today = new Date();
         if (!canConfirmVisit(today)) {
-            addNotification('Visits can only be confirmed on the current day (today) and only on Wednesdays.', 'warning');
+            addNotification('Visits can only be confirmed on the current day (today) and only on Thursdays.', 'warning');
             return;
         }
 
@@ -906,7 +906,7 @@ export default function AppointmentPage() {
     }, [patients, searchTerm]);
 
     const canConfirm = canConfirmVisit(selectedDate);
-    const isRegularVisitDay = isWednesday(selectedDate);
+    const isRegularVisitDay = isThursday(selectedDate);
     const isPast = isPastDate(selectedDate);
     const isFuture = isFutureDate(selectedDate);
     const todayConfirmedCount = Object.keys(confirmedToday).length;
@@ -919,7 +919,7 @@ export default function AppointmentPage() {
             return "You cannot confirm visits for future dates.";
         }
         if (!isRegularVisitDay) {
-            return "Visits can only be confirmed on Wednesdays (regular visit days).";
+            return "Visits can only be confirmed on Thursdays (regular visit days).";
         }
         return null;
     };
@@ -1118,7 +1118,7 @@ export default function AppointmentPage() {
                         <div className="bg-white p-5 rounded-lg shadow-sm border border-blue-200 bg-gradient-to-br from-white to-blue-50">
                             <p className="text-xs text-blue-500 font-bold uppercase tracking-wider mb-1">Next Regular Visit</p>
                             <p className="text-xl font-extrabold text-blue-800">{nextVisitDate}</p>
-                            <p className="text-xs text-blue-400 mt-2">Every Wednesday</p>
+                            <p className="text-xs text-blue-400 mt-2">Every Thursday</p>
                         </div>
 
                         {/* Calendar Widget */}
@@ -1149,7 +1149,7 @@ export default function AppointmentPage() {
                                     </>
                                 )}
                                 <div className="pt-2 border-t text-xs text-gray-500">
-                                    <p>✅ Confirmations only available on current day (today) and on Wednesdays.</p>
+                                    <p>✅ Confirmations only available on current day (today) and on Thursdays.</p>
                                     <p className="mt-1">📅 Click on a date with a green dot to view daily visits.</p>
                                     <button
                                         onClick={() => {

@@ -244,7 +244,7 @@ const MaternalUpcomingAppointmentsWidget = ({ appointments }) => (
             </div>
             <div>
               <p className="font-semibold text-gray-700 text-xs">
-                {app.patient_name}
+                {app.patient_name || app.patient_display_id || "N/A"}
               </p>
               <p className="text-xs text-gray-500">{app.reason}</p>
             </div>
@@ -907,7 +907,7 @@ const ChildUpcomingAppointmentsWidget = ({ appointments }) => (
             </div>
             <div>
               <p className="font-semibold text-gray-700 text-xs">
-                {app.patient_name}
+                {app.patient_name || app.patient_display_id || "N/A"}
               </p>
               <p className="text-xs text-blue-600 font-semibold">
                 {app.reason}
@@ -1302,7 +1302,7 @@ const MaternityManagementTab = () => {
     if (user && user.id) {
       const { data: appointmentsData, error: appointmentsError } =
         await supabase
-          .from("appointments")
+          .from("follow_up_visit")
           .select("*")
           .eq("created_by", user.id)
           .order("date", { ascending: true })
@@ -1765,7 +1765,7 @@ const ChildHealthRecordsTab = () => {
     if (user && user.id) {
       const { data: appointmentsData, error: appointmentsError } =
         await supabase
-          .from("appointments")
+          .from("follow_up_visit")
           .select("*")
           .eq("created_by", user.id)
           .order("date", { ascending: true })

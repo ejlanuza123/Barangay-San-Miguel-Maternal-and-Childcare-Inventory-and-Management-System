@@ -10,6 +10,7 @@ import autoTable from "jspdf-autotable";
 import * as XLSX from 'xlsx';
 import PatientQRCodeModal from "../../components/reusables/PatientQRCodeModal";
 import HistoryModal from "../../components/reusables/HistoryModal"; // Import
+import ChildWeeklyMonitoringModal from "./ChildWeeklyMonitoringModal";
 
 
 // --- ICONS ---
@@ -17,6 +18,7 @@ const PillIcon = () => ( <svg className="w-5 h-5" fill="none" stroke="currentCol
 const PlusIcon = () => ( <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg> );
 const TrashIcon = () => ( <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg> );
 const HistoryIcon = () => ( <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" > <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /> </svg> );
+const WeeklyIcon = () => ( <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg> );
 
 const ExportIcon = () => (
   <svg
@@ -1158,6 +1160,7 @@ export default function ChildHealthRecords() {
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isPrescriptionModalOpen, setIsPrescriptionModalOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false); // NEW
+  const [isWeeklyModalOpen, setIsWeeklyModalOpen] = useState(false);
 
 
   // Export functions
@@ -1384,9 +1387,9 @@ export default function ChildHealthRecords() {
       setTotalRecords(recordsCount || 0);
     }
 
-    // Rest of your existing code for appointments...
+    // Rest of your existing code for follow-up visits...
     const { data: appointmentsData, error: appointmentsError } = await supabase
-      .from("appointments")
+      .from("follow_up_visit")
       .select("*")
       .eq("created_by", user.id)
       .order("date", { ascending: true })
@@ -1443,6 +1446,11 @@ export default function ChildHealthRecords() {
   const handlePrescribe = (child) => {
       setSelectedChild(child);
       setIsPrescriptionModalOpen(true);
+  };
+
+  const handleWeeklyMonitoring = (child) => {
+    setSelectedChild(child);
+    setIsWeeklyModalOpen(true);
   };
 
   const filteredRecords = useMemo(() => {
@@ -1508,6 +1516,14 @@ export default function ChildHealthRecords() {
                 queryTerm={selectedChild.first_name} // Searching by name
                 onClose={() => setIsHistoryModalOpen(false)}
             />
+        )}
+        {isWeeklyModalOpen && selectedChild && (
+          <ChildWeeklyMonitoringModal
+            child={selectedChild}
+            isOpen={isWeeklyModalOpen}
+            onClose={() => setIsWeeklyModalOpen(false)}
+            onSaved={fetchPageData}
+          />
         )}
       </AnimatePresence>
          <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
@@ -1709,6 +1725,13 @@ export default function ChildHealthRecords() {
                                 title="Edit"
                               >
                                 <UpdateIcon />
+                              </button>
+                              <button
+                                onClick={() => handleWeeklyMonitoring(record)}
+                                className="text-gray-400 hover:text-emerald-600 p-1"
+                                title="Weekly Monitoring"
+                              >
+                                <WeeklyIcon />
                               </button>
                               <button onClick={() => handleShowHistory(record)} className="text-gray-400 hover:text-orange-600 p-1" title="View History"><HistoryIcon /></button>
                             </div>

@@ -208,7 +208,7 @@ const UpcomingAppointmentsWidget = ({ appointments }) => (
             </div>
             <div>
               <p className="font-semibold text-gray-700 text-xs">
-                {app.patient_name}
+                {app.patient_name || app.patient_display_id || "N/A"}
               </p>
               <p className="text-xs text-gray-500">{app.reason}</p>
             </div>
@@ -2400,11 +2400,10 @@ export default function MaternityManagement() {
       setTotalPatients(patientCount || 0);
     }
 
-    // Rest of your existing code for appointments...
+    // Rest of your existing code for follow-up visits...
     const { data: appointmentsData, error: appointmentsError } = await supabase
-      .from("appointments")
+      .from("follow_up_visit")
       .select("*")
-      .eq("created_by", user.id)
       .order("date", { ascending: true })
       .limit(3);
 

@@ -18,6 +18,7 @@ CREATE TABLE public.child_breastfeeding (
   is_exclusive boolean DEFAULT false,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone,
+  is_synced boolean DEFAULT false,
   CONSTRAINT child_breastfeeding_pkey PRIMARY KEY (id),
   CONSTRAINT child_breastfeeding_child_record_id_fkey FOREIGN KEY (child_record_id) REFERENCES public.child_records(id)
 );
@@ -38,6 +39,7 @@ CREATE TABLE public.child_immunizations (
   departure_time time without time zone,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone,
+  is_synced boolean DEFAULT false,
   CONSTRAINT child_immunizations_pkey PRIMARY KEY (id),
   CONSTRAINT child_immunizations_child_record_id_fkey FOREIGN KEY (child_record_id) REFERENCES public.child_records(id)
 );
@@ -53,6 +55,7 @@ CREATE TABLE public.child_measurements (
   recorded_by uuid,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone,
+  is_synced boolean DEFAULT false,
   CONSTRAINT child_measurements_pkey PRIMARY KEY (id),
   CONSTRAINT child_measurements_child_record_id_fkey FOREIGN KEY (child_record_id) REFERENCES public.child_records(id),
   CONSTRAINT child_measurements_recorded_by_fkey FOREIGN KEY (recorded_by) REFERENCES public.profiles(id)
@@ -64,6 +67,7 @@ CREATE TABLE public.child_mother_immunizations (
   date_given date,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone,
+  is_synced boolean DEFAULT false,
   CONSTRAINT child_mother_immunizations_pkey PRIMARY KEY (id),
   CONSTRAINT child_mother_immunizations_child_record_id_fkey FOREIGN KEY (child_record_id) REFERENCES public.child_records(id)
 );
@@ -106,6 +110,8 @@ CREATE TABLE public.child_records (
   place_of_delivery text,
   vitamin_a_amount text,
   vitamin_a_date date,
+  is_synced boolean DEFAULT false,
+  updated_at timestamp with time zone,
   CONSTRAINT child_records_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.child_supplementation (
@@ -117,6 +123,7 @@ CREATE TABLE public.child_supplementation (
   administered_by text,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone,
+  is_synced boolean DEFAULT false,
   CONSTRAINT child_supplementation_pkey PRIMARY KEY (id),
   CONSTRAINT child_supplementation_child_record_id_fkey FOREIGN KEY (child_record_id) REFERENCES public.child_records(id)
 );
@@ -139,16 +146,13 @@ CREATE TABLE public.follow_up_visit (
   date date NOT NULL,
   time text,
   reason text,
-  assigned_to text,
   status text DEFAULT 'Scheduled'::text,
   created_at timestamp with time zone DEFAULT now(),
   notes text,
   patient_display_id text,
-  created_by uuid,
   confirmed_by uuid,
   visit_type text DEFAULT 'maternal'::text,
   CONSTRAINT follow_up_visit_pkey PRIMARY KEY (id),
-  CONSTRAINT appointments_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id),
   CONSTRAINT follow_up_visit_confirmed_by_fkey FOREIGN KEY (confirmed_by) REFERENCES public.profiles(id)
 );
 CREATE TABLE public.inventory (
@@ -194,6 +198,7 @@ CREATE TABLE public.maternal_medical_conditions (
   is_present boolean DEFAULT false,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone,
+  is_synced boolean DEFAULT false,
   CONSTRAINT maternal_medical_conditions_pkey PRIMARY KEY (id),
   CONSTRAINT maternal_medical_conditions_mother_record_id_fkey FOREIGN KEY (mother_record_id) REFERENCES public.mother_records(id)
 );
@@ -209,6 +214,7 @@ CREATE TABLE public.maternal_menstrual_history (
   risk_code text,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone,
+  is_synced boolean DEFAULT false,
   CONSTRAINT maternal_menstrual_history_pkey PRIMARY KEY (id),
   CONSTRAINT maternal_menstrual_history_mother_record_id_fkey FOREIGN KEY (mother_record_id) REFERENCES public.mother_records(id)
 );
@@ -222,6 +228,7 @@ CREATE TABLE public.maternal_obstetrical_history (
   delivered_at text,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone,
+  is_synced boolean DEFAULT false,
   CONSTRAINT maternal_obstetrical_history_pkey PRIMARY KEY (id),
   CONSTRAINT maternal_obstetrical_history_mother_record_id_fkey FOREIGN KEY (mother_record_id) REFERENCES public.mother_records(id)
 );
@@ -236,6 +243,7 @@ CREATE TABLE public.maternal_obstetrical_score (
   living_children integer,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone,
+  is_synced boolean DEFAULT false,
   CONSTRAINT maternal_obstetrical_score_pkey PRIMARY KEY (id),
   CONSTRAINT maternal_obstetrical_score_mother_record_id_fkey FOREIGN KEY (mother_record_id) REFERENCES public.mother_records(id)
 );
@@ -252,6 +260,7 @@ CREATE TABLE public.maternal_pregnancy_outcomes (
   attended_by text,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone,
+  is_synced boolean DEFAULT false,
   CONSTRAINT maternal_pregnancy_outcomes_pkey PRIMARY KEY (id),
   CONSTRAINT maternal_pregnancy_outcomes_mother_record_id_fkey FOREIGN KEY (mother_record_id) REFERENCES public.mother_records(id)
 );
@@ -264,6 +273,7 @@ CREATE TABLE public.maternal_supplementation (
   administered_by text,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone,
+  is_synced boolean DEFAULT false,
   CONSTRAINT maternal_supplementation_pkey PRIMARY KEY (id),
   CONSTRAINT maternal_supplementation_mother_record_id_fkey FOREIGN KEY (mother_record_id) REFERENCES public.mother_records(id)
 );
@@ -288,6 +298,7 @@ CREATE TABLE public.maternal_treatment_records (
   examined text,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone,
+  is_synced boolean DEFAULT false,
   CONSTRAINT maternal_treatment_records_pkey PRIMARY KEY (id),
   CONSTRAINT maternal_treatment_records_mother_record_id_fkey FOREIGN KEY (mother_record_id) REFERENCES public.mother_records(id)
 );
@@ -301,6 +312,7 @@ CREATE TABLE public.maternal_vaccinations (
   remarks text,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone,
+  is_synced boolean DEFAULT false,
   CONSTRAINT maternal_vaccinations_pkey PRIMARY KEY (id),
   CONSTRAINT maternal_vaccinations_mother_record_id_fkey FOREIGN KEY (mother_record_id) REFERENCES public.mother_records(id)
 );
@@ -328,6 +340,7 @@ CREATE TABLE public.mother_records (
   philhealth_no text,
   allergy_history text,
   family_planning_history text,
+  is_synced boolean DEFAULT false,
   CONSTRAINT mother_records_pkey PRIMARY KEY (id),
   CONSTRAINT patients_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );

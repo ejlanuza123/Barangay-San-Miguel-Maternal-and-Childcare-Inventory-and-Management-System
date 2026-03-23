@@ -631,7 +631,7 @@ export default function AdminDashboard() {
                 processedTodayRes
             ] = await Promise.all([
                 supabase.from('inventory').select('*'),
-                supabase.from('bns_inventory').select('*'),
+                supabase.from('inventory').select('*'),
                 supabase.from('requestions')
                     .select('*, profiles:worker_id!inner(first_name, last_name, role, user_id_no, contact_no)')
                     .eq('status', 'Pending')

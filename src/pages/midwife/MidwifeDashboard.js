@@ -237,17 +237,17 @@ const FollowUpVisitsWidget = () => {
       </div>
       
       <div className="space-y-4">
-        {/* Maternal Follow-up (Wednesdays) */}
-        <div className={`p-4 rounded-xl border transition-all ${isWed ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'}`}>
+        {/* Maternal Follow-up (Thursdays) */}
+        <div className={`p-4 rounded-xl border transition-all ${isThu ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'}`}>
           <div className="flex items-start justify-between">
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-3 h-3 rounded-full bg-blue-500"></div>
                 <h4 className="font-semibold text-gray-900">Maternal Follow-up</h4>
               </div>
-              <p className="text-sm text-gray-600 mb-1">Every Wednesday</p>
-              <p className={`text-lg font-bold ${isWed ? 'text-blue-700' : 'text-gray-700'}`}>
-                {isWed ? "Today" : formatDate(nextWed, 'weekday') + ', ' + formatDate(nextWed, 'shortMonth') + ' ' + formatDate(nextWed, 'date')}
+              <p className="text-sm text-gray-600 mb-1">Every Thursday</p>
+              <p className={`text-lg font-bold ${isThu ? 'text-blue-700' : 'text-gray-700'}`}>
+                {isThu ? "Today" : formatDate(nextThu, 'weekday') + ', ' + formatDate(nextThu, 'shortMonth') + ' ' + formatDate(nextThu, 'date')}
               </p>
               <p className="text-xs text-gray-500 mt-2">
                 First Come, First Serve basis for all maternity patients
@@ -256,27 +256,27 @@ const FollowUpVisitsWidget = () => {
             <Link 
               to="/midwife/maternity-records" 
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                isWed 
+                isThu 
                   ? 'bg-blue-600 text-white hover:bg-blue-700' 
                   : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
               }`}
             >
-              {isWed ? 'View Records →' : 'View Records'}
+              {isThu ? 'View Records →' : 'View Records'}
             </Link>
           </div>
         </div>
 
-        {/* Child Health Follow-up (Thursdays) */}
-        <div className={`p-4 rounded-xl border transition-all ${isThu ? 'bg-emerald-50 border-emerald-200' : 'bg-gray-50 border-gray-200'}`}>
+        {/* Child Health Follow-up (Wednesdays) */}
+        <div className={`p-4 rounded-xl border transition-all ${isWed ? 'bg-emerald-50 border-emerald-200' : 'bg-gray-50 border-gray-200'}`}>
           <div className="flex items-start justify-between">
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
                 <h4 className="font-semibold text-gray-900">Child Health Follow-up</h4>
               </div>
-              <p className="text-sm text-gray-600 mb-1">Every Thursday</p>
-              <p className={`text-lg font-bold ${isThu ? 'text-emerald-700' : 'text-gray-700'}`}>
-                {isThu ? "Today" : formatDate(nextThu, 'weekday') + ', ' + formatDate(nextThu, 'shortMonth') + ' ' + formatDate(nextThu, 'date')}
+              <p className="text-sm text-gray-600 mb-1">Every Wednesday</p>
+              <p className={`text-lg font-bold ${isWed ? 'text-emerald-700' : 'text-gray-700'}`}>
+                {isWed ? "Today" : formatDate(nextWed, 'weekday') + ', ' + formatDate(nextWed, 'shortMonth') + ' ' + formatDate(nextWed, 'date')}
               </p>
               <p className="text-xs text-gray-500 mt-2">
                 Walk-in basis for all child health checkups
@@ -285,12 +285,12 @@ const FollowUpVisitsWidget = () => {
             <Link 
               to="/midwife/child-records" 
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                isThu 
+                isWed 
                   ? 'bg-emerald-600 text-white hover:bg-emerald-700' 
                   : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
               }`}
             >
-              {isThu ? 'View Records →' : 'View Records'}
+              {isWed ? 'View Records →' : 'View Records'}
             </Link>
           </div>
         </div>
@@ -301,11 +301,11 @@ const FollowUpVisitsWidget = () => {
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1">
               <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-              <span>Maternal Wednesdays</span>
+              <span>Maternal Thursdays</span>
             </div>
             <div className="flex items-center gap-1">
               <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-              <span>Child Thursdays</span>
+              <span>Child Wednesdays</span>
             </div>
           </div>
         </div>
@@ -472,7 +472,7 @@ const WeeklyScheduleWidget = () => (
           <div>
             <div className="flex items-center gap-2 mb-1">
               <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-              <span className="font-semibold text-gray-900">Wednesdays</span>
+              <span className="font-semibold text-gray-900">Thursdays</span>
             </div>
             <p className="text-sm text-gray-600">Maternal Follow-up Visits</p>
             <p className="text-xs text-gray-500 mt-1">All maternity patients, walk-in basis</p>
@@ -487,7 +487,7 @@ const WeeklyScheduleWidget = () => (
           <div>
             <div className="flex items-center gap-2 mb-1">
               <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
-              <span className="font-semibold text-gray-900">Thursdays</span>
+              <span className="font-semibold text-gray-900">Wednesdays</span>
             </div>
             <p className="text-sm text-gray-600">Child Health Follow-up</p>
             <p className="text-xs text-gray-500 mt-1">All child patients, walk-in basis</p>
