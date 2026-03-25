@@ -1685,14 +1685,14 @@ export default function ChildHealthRecords() {
                               >
                                 <UpdateIcon />
                               </button>
-                              <button onClick={() => handleShowHistory(record)} className="text-gray-400 hover:text-orange-600 p-1" title="View History"><HistoryIcon /></button>
-                                <button
+                              <button
                                   onClick={() => handleWeeklyMonitoring(record)}
                                   className="text-gray-400 hover:text-emerald-600 p-1"
                                   title="Weekly Monitoring"
                                 >
                                   <WeeklyIcon />
-                                </button>
+                              </button>
+                              <button onClick={() => handleShowHistory(record)} className="text-gray-400 hover:text-orange-600 p-1" title="View History"><HistoryIcon /></button>
                             </div>
                           </td>
                         </tr>
