@@ -449,29 +449,60 @@ export default function BnsInventoryPage() {
                         <table className="w-full text-sm">
                             <thead className="bg-gray-50">
                                 <tr className="text-left text-gray-600">
-                                    {['Item Name', 'Category', 'Quantity', 'Unit', 'Expiration Date', 'Status', 'Actions'].map(h => <th key={h} className="px-2 py-2">{h}</th>)}
+                                    {['Item Name', 'Category', 'Quantity', 'Unit', 'Expiration Date', 'Status', 'Alert', 'Actions'].map(h => <th key={h} className="px-2 py-2">{h}</th>)}
                                 </tr>
                             </thead>
                             <tbody className="divide-y">
                                 {loading ? (
-                                    <tr><td colSpan="7" className="text-center p-4">Loading...</td></tr>
+                                    <tr><td colSpan="8" className="text-center p-4">Loading...</td></tr>
                                 ) : (
                                     filteredInventory.map(item => (
-                                        <tr key={item.id} className="text-gray-600 hover:bg-gray-50">
-                                            <td className="px-2 py-2 font-medium">{item.item_name}</td>
-                                            <td className="px-2 py-2">{item.category}</td>
-                                            <td className="px-2 py-2">{item.quantity}</td>
-                                            <td className="px-2 py-2">{item.unit}</td>
-                                            <td className="px-2 py-2">{item.expiry_date}</td>
-                                            <td className="px-2 py-2"><StatusBadge status={item.status} /></td>
-                                            <td className="px-2 py-2">
-                                                <div className="flex items-center space-x-1">
-                                                    <button onClick={() => { setItemToManage(item); setModalMode('view'); }} className="text-gray-400 hover:text-blue-600 p-1" title="View"><ViewIcon /></button>
-                                                    <button onClick={() => { setItemToManage(item); setModalMode('edit'); }} className="text-gray-400 hover:text-green-600 p-1" title="Edit"><UpdateIcon /></button>
-                                                    <button onClick={() => handleViewHistory(item)} className="text-gray-400 hover:text-orange-600 p-1" title="View History"><HistoryIcon /></button>
-                                                </div>
-                                            </td>
-                                        </tr>
+                                        (() => {
+                                            const expiryStatus = getExpiryStatus(item.expiry_date);
+                                            const needsReorder = needsReordering(item.quantity, item.min_stock_level);
+                                            const rowClass = `text-gray-600 hover:bg-gray-50 ${expiryStatus.status === 'expired' || expiryStatus.status === 'expiring-soon' ? 'bg-red-50' : needsReorder ? 'bg-yellow-50' : ''}`;
+
+                                            return (
+                                                <tr key={item.id} className={rowClass}>
+                                                    <td className="px-2 py-2 font-medium">{item.item_name}</td>
+                                                    <td className="px-2 py-2">{item.category}</td>
+                                                    <td className="px-2 py-2">
+                                                        <div className="flex items-center gap-1">
+                                                            {item.quantity}
+                                                            {needsReorder && <span className="text-xs text-red-600 font-bold" title="Low stock warning">⚠️</span>}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-2 py-2">{item.unit}</td>
+                                                    <td className="px-2 py-2">
+                                                        <div className="text-xs">
+                                                            <div className={`font-semibold ${expiryStatus.color === 'red' ? 'text-red-600' : expiryStatus.color === 'yellow' ? 'text-yellow-600' : 'text-green-600'}`}>
+                                                                {item.expiry_date ? new Date(item.expiry_date).toLocaleDateString() : '---'}
+                                                            </div>
+                                                            <div className={`text-[10px] ${expiryStatus.color === 'red' ? 'text-red-500' : expiryStatus.color === 'yellow' ? 'text-yellow-500' : 'text-green-500'}`}>
+                                                                {expiryStatus.message}
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-2 py-2"><StatusBadge status={item.status} /></td>
+                                                    <td className="px-2 py-2">
+                                                        <div className="flex items-center gap-2">
+                                                            {expiryStatus.status === 'expired' && <span title="Expired">🔴</span>}
+                                                            {expiryStatus.status === 'expiring-soon' && <span title="Expiring Soon">🟠</span>}
+                                                            {expiryStatus.status === 'expiring' && <span title="Expiring in 30 days">🟡</span>}
+                                                            {needsReorder && item.quantity <= 5 && <span title="Critical Stock">⛔</span>}
+                                                            {needsReorder && item.quantity > 5 && <span title="Low Stock">⚠️</span>}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-2 py-2">
+                                                        <div className="flex items-center space-x-1">
+                                                            <button onClick={() => { setItemToManage(item); setModalMode('view'); }} className="text-gray-400 hover:text-blue-600 p-1" title="View"><ViewIcon /></button>
+                                                            <button onClick={() => { setItemToManage(item); setModalMode('edit'); }} className="text-gray-400 hover:text-green-600 p-1" title="Edit"><UpdateIcon /></button>
+                                                            <button onClick={() => handleViewHistory(item)} className="text-gray-400 hover:text-orange-600 p-1" title="View History"><HistoryIcon /></button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })()
                                     ))
                                 )}
                             </tbody>

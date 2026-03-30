@@ -268,6 +268,7 @@ const PrescriptionModal = ({ patient, onClose, onSave, isOpen }) => {
   const [prescriptionHistory, setPrescriptionHistory] = useState([]);
   const { addNotification } = useNotification();
   const { profile } = useAuth();
+  const canPrescribe = profile?.role === 'Midwife';
   const [searchInputs, setSearchInputs] = useState({});
   const [filteredInventories, setFilteredInventories] = useState({});
 
@@ -2183,8 +2184,9 @@ export default function MaternityManagement() {
   const [modalMode, setModalMode] = useState(null);
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [patientToDelete, setPatientToDelete] = useState(null);
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { addNotification } = useNotification();
+  const canPrescribe = profile?.role === 'Midwife';
   const [patientForQR, setPatientForQR] = useState(null); 
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -2464,6 +2466,7 @@ export default function MaternityManagement() {
   };
 
   const handlePrescribe = (patient) => {
+      if (!canPrescribe) return;
       setSelectedPatient(patient);
       setIsPrescriptionModalOpen(true);
   };
@@ -2726,9 +2729,11 @@ export default function MaternityManagement() {
                       </td>
                       <td className="px-2 py-2">
                         <div className="flex space-x-1">
-                          <button onClick={() => handlePrescribe(p)} className="text-purple-500 hover:text-purple-700 p-1 bg-purple-50 rounded" title="Prescribe Medicine">
-                             <PillIcon />
-                          </button>
+                          {canPrescribe && (
+                            <button onClick={() => handlePrescribe(p)} className="text-purple-500 hover:text-purple-700 p-1 bg-purple-50 rounded" title="Prescribe Medicine">
+                               <PillIcon />
+                            </button>
+                          )}
                           <button
                             onClick={() => handleView(p)}
                             className="text-gray-400 hover:text-blue-600 p-1"

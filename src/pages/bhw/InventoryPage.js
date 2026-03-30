@@ -684,10 +684,10 @@ export default function InventoryPage() {
                                                     <td className="p-3"><StatusBadge status={item.status.toLowerCase()} /></td>
                                                     <td className="p-3">
                                                         <div className="text-xs">
-                                                            <div className={`font-semibold ${expiryStatus.color === 'red' ? 'text-red-600' : expiryStatus.color === 'yellow' ? 'text-yellow-600' : 'text-gray-600'}`}>
+                                                            <div className={`font-semibold ${expiryStatus.color === 'red' ? 'text-red-600' : expiryStatus.color === 'yellow' ? 'text-yellow-600' : 'text-green-600'}`}>
                                                                 {item.expiry_date ? new Date(item.expiry_date).toLocaleDateString() : '---'}
                                                             </div>
-                                                            <div className={`text-[10px] ${expiryStatus.color === 'red' ? 'text-red-500' : expiryStatus.color === 'yellow' ? 'text-yellow-500' : 'text-gray-500'}`}>
+                                                            <div className={`text-[10px] ${expiryStatus.color === 'red' ? 'text-red-500' : expiryStatus.color === 'yellow' ? 'text-yellow-500' : 'text-green-500'}`}>
                                                                 {expiryStatus.message}
                                                             </div>
                                                         </div>
