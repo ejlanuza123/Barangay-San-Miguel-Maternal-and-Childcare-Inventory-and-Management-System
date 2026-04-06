@@ -218,7 +218,11 @@ const PrescriptionModal = ({ child, onClose, onSave, isOpen }) => {
         .select('*')
         .gt('quantity', 0)
         .eq('owner_role', 'BNS');
-      setInventoryItems(data || []);
+      const medicineItems = (data || []).filter(item => {
+        const category = (item.category || '').trim().toLowerCase();
+        return category === 'medicines' || category === 'medicine';
+      });
+      setInventoryItems(medicineItems);
     };
     fetchInventory();
   }, []);
