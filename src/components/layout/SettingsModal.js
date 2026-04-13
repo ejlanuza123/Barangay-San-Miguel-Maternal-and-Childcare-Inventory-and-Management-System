@@ -5,6 +5,11 @@ import { supabase } from "../../services/supabase";
 import { useAuth } from "../../context/AuthContext";
 import { motion } from "framer-motion";
 import PrivacyPolicy from "../auth/PrivacyPolicy";
+import {
+  disablePushSubscription,
+  isPushNotificationSupported,
+  requestAndStorePushSubscription,
+} from "../../services/pushNotificationService";
 // --- 1. IMPORT HELPSECTION ---
 import HelpSection from "./HelpSection";
 
@@ -130,7 +135,7 @@ const CameraIcon = () => (
   </svg>
 );
 // --- REUSABLE TOGGLE SWITCH ---
-const ToggleSwitch = ({ label, description, isEnabled, onToggle }) => (
+const ToggleSwitch = ({ label, description, isEnabled, onToggle, disabled = false }) => (
   <div className="flex justify-between items-center py-2">
     <div>
       <h4 className="font-semibold text-gray-800">{label}</h4>
@@ -138,7 +143,8 @@ const ToggleSwitch = ({ label, description, isEnabled, onToggle }) => (
     </div>
     <button
       onClick={onToggle}
-      className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors ${
+      disabled={disabled}
+      className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
         isEnabled ? "bg-blue-600" : "bg-gray-300"
       }`}
     >
@@ -242,17 +248,22 @@ const MyProfile = ({ profile, onProfileUpdate }) => {
   };
 
   return (
-    <div>
-      <h2 className="text-2xl font-bold text-gray-800">My Profile</h2>
-      <p className="text-gray-500 mb-8">Manage your profile details</p>
+    <div className="space-y-6">
+      <div className="rounded-2xl border border-slate-200 bg-gradient-to-r from-sky-50 via-blue-50 to-cyan-50 p-5">
+        <h2 className="text-2xl font-bold text-slate-800">My Profile</h2>
+        <p className="text-slate-600 mt-1">Manage your profile details</p>
+      </div>
 
-      <form onSubmit={handleUpdate} className="space-y-6">
-        <div>
-          <label className="text-sm font-medium text-gray-700 block mb-2">
+      <form
+        onSubmit={handleUpdate}
+        className="space-y-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+      >
+        <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+          <label className="text-sm font-semibold text-slate-700 block mb-3">
             Profile Picture
           </label>
           <div className="relative w-24 h-24">
-            <div className="w-24 h-24 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
+            <div className="w-24 h-24 bg-white rounded-xl border border-slate-200 flex items-center justify-center overflow-hidden shadow-sm">
               {avatarUrl ? (
                 <img
                   src={avatarUrl}
@@ -267,7 +278,7 @@ const MyProfile = ({ profile, onProfileUpdate }) => {
               type="button"
               onClick={() => fileInputRef.current.click()}
               disabled={uploading}
-              className="absolute -bottom-2 -right-2 bg-blue-600 text-white p-2 rounded-full border-2 border-white shadow-md hover:bg-blue-700 transition-colors"
+              className="absolute -bottom-2 -right-2 bg-sky-600 text-white p-2 rounded-full border-2 border-white shadow-md hover:bg-sky-700 transition-colors"
               aria-label="Upload new profile picture"
             >
               <CameraIcon />
@@ -282,13 +293,13 @@ const MyProfile = ({ profile, onProfileUpdate }) => {
             />
           </div>
           {uploading && (
-            <p className="text-sm text-gray-500 mt-2">Uploading...</p>
+            <p className="text-sm text-slate-500 mt-2">Uploading...</p>
           )}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
           <div className="sm:col-span-2">
-            <label className="text-sm font-medium text-gray-700">
+            <label className="text-sm font-semibold text-slate-700">
               First Name
             </label>
             <input
@@ -296,11 +307,11 @@ const MyProfile = ({ profile, onProfileUpdate }) => {
               name="first_name"
               value={formData.first_name}
               onChange={handleChange}
-              className="w-full p-3 border bg-gray-50 rounded-md mt-2"
+              className="w-full p-3 border border-slate-200 bg-slate-50 rounded-lg mt-2 focus:outline-none focus:ring-2 focus:ring-sky-200 focus:border-sky-400"
             />
           </div>
           <div className="sm:col-span-2">
-            <label className="text-sm font-medium text-gray-700">
+            <label className="text-sm font-semibold text-slate-700">
               Last Name
             </label>
             <input
@@ -308,11 +319,11 @@ const MyProfile = ({ profile, onProfileUpdate }) => {
               name="last_name"
               value={formData.last_name}
               onChange={handleChange}
-              className="w-full p-3 border bg-gray-50 rounded-md mt-2"
+              className="w-full p-3 border border-slate-200 bg-slate-50 rounded-lg mt-2 focus:outline-none focus:ring-2 focus:ring-sky-200 focus:border-sky-400"
             />
           </div>
           <div className="sm:col-span-1">
-            <label className="text-sm font-medium text-gray-700">
+            <label className="text-sm font-semibold text-slate-700">
               Middle Initial
             </label>
             <input
@@ -321,13 +332,13 @@ const MyProfile = ({ profile, onProfileUpdate }) => {
               maxLength="2"
               value={formData.middle_initial}
               onChange={handleChange}
-              className="w-full p-3 border bg-gray-50 rounded-md mt-2"
+              className="w-full p-3 border border-slate-200 bg-slate-50 rounded-lg mt-2 focus:outline-none focus:ring-2 focus:ring-sky-200 focus:border-sky-400"
             />
           </div>
         </div>
 
         <div>
-          <label className="text-sm font-medium text-gray-700 block mb-2">
+          <label className="text-sm font-semibold text-slate-700 block mb-2">
             Birth Date
           </label>
           <input
@@ -335,13 +346,13 @@ const MyProfile = ({ profile, onProfileUpdate }) => {
             name="birth_date"
             value={formData.birth_date}
             onChange={handleChange}
-            className="w-full sm:w-1/2 p-3 border bg-gray-50 rounded-md"
+            className="w-full sm:w-1/2 p-3 border border-slate-200 bg-slate-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-200 focus:border-sky-400"
           />
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="text-sm font-medium text-gray-700">
+            <label className="text-sm font-semibold text-slate-700">
               Contact No.
             </label>
             <input
@@ -349,19 +360,19 @@ const MyProfile = ({ profile, onProfileUpdate }) => {
               name="contact_no"
               value={formData.contact_no}
               onChange={handleChange}
-              className="w-full p-3 border bg-gray-50 rounded-md mt-2"
+              className="w-full p-3 border border-slate-200 bg-slate-50 rounded-lg mt-2 focus:outline-none focus:ring-2 focus:ring-sky-200 focus:border-sky-400"
             />
           </div>
           {(profile?.role === "BHW" || profile?.role === "BNS") && (
             <div>
-              <label className="text-sm font-medium text-gray-700">
+              <label className="text-sm font-semibold text-slate-700">
                 Assigned Purok
               </label>
               <select
                 name="assigned_purok"
                 value={formData.assigned_purok}
                 onChange={handleChange}
-                className="w-full p-3 border bg-gray-50 rounded-md mt-2"
+                className="w-full p-3 border border-slate-200 bg-slate-50 rounded-lg mt-2 focus:outline-none focus:ring-2 focus:ring-sky-200 focus:border-sky-400"
               >
                 <option value="">Select Purok</option>
                 <option value="Purok Bagong Silang Zone 1">
@@ -401,12 +412,12 @@ const MyProfile = ({ profile, onProfileUpdate }) => {
         </div>
 
         <div>
-          <label className="text-sm font-medium text-gray-700">Email</label>
+          <label className="text-sm font-semibold text-slate-700">Email</label>
           <input
             type="email"
             value={user?.email}
             disabled
-            className="w-full p-3 border bg-gray-100 rounded-md mt-2 cursor-not-allowed"
+            className="w-full p-3 border border-slate-200 bg-slate-100 text-slate-500 rounded-lg mt-2 cursor-not-allowed"
           />
         </div>
 
@@ -420,10 +431,10 @@ const MyProfile = ({ profile, onProfileUpdate }) => {
           </p>
         )}
 
-        <div className="pt-4">
+        <div className="pt-2">
           <button
             type="submit"
-            className="bg-blue-600 text-white font-semibold py-2.5 px-8 rounded-lg shadow-sm hover:bg-blue-700"
+            className="bg-gradient-to-r from-sky-600 to-blue-600 text-white font-semibold py-2.5 px-8 rounded-xl shadow-sm hover:from-sky-500 hover:to-blue-500 transition-all"
           >
             Update
           </button>
@@ -434,20 +445,91 @@ const MyProfile = ({ profile, onProfileUpdate }) => {
 };
 const NotificationSettings = ({ initialPrefs, onUpdate }) => {
   const [prefs, setPrefs] = useState(
-    initialPrefs || {
-      appointment_reminders: true,
-      inventory_alerts: true,
-      patient_followups: true,
-      in_app_notifications: true,
-      sms_notifications: true,
-      email_notifications: false,
+    () => {
+      const defaultPrefs = {
+        follow_up_visits: true,
+        inventory_alerts: true,
+        in_app_notifications: true,
+        push_notifications: false,
+        email_notifications: false,
+      };
+
+      const mergedPrefs = {
+        ...defaultPrefs,
+        ...(initialPrefs || {}),
+      };
+
+      // Backward compatibility for older saved key name.
+      if (
+        typeof mergedPrefs.follow_up_visits === "undefined" &&
+        typeof initialPrefs?.appointment_reminders !== "undefined"
+      ) {
+        mergedPrefs.follow_up_visits = initialPrefs.appointment_reminders;
+      }
+
+      return mergedPrefs;
     }
   );
+  const [message, setMessage] = useState({ type: "", text: "" });
+  const [isPushPending, setIsPushPending] = useState(false);
 
-  const handleToggle = (key) => {
+  const pushSupported = isPushNotificationSupported();
+
+  const handleToggle = async (key) => {
+    setMessage({ type: "", text: "" });
+
+    if (key === "push_notifications") {
+      if (!pushSupported) {
+        setMessage({
+          type: "error",
+          text: "Push notifications are not supported in this browser.",
+        });
+        return;
+      }
+
+      setIsPushPending(true);
+
+      if (!prefs.push_notifications) {
+        try {
+          await requestAndStorePushSubscription();
+          const newPrefs = { ...prefs, push_notifications: true };
+          setPrefs(newPrefs);
+          await onUpdate(newPrefs);
+          setMessage({
+            type: "success",
+            text: "Push notifications enabled for this browser.",
+          });
+        } catch (error) {
+          setMessage({
+            type: "error",
+            text: error.message || "Failed to enable push notifications.",
+          });
+        } finally {
+          setIsPushPending(false);
+        }
+        return;
+      }
+
+      try {
+        await disablePushSubscription();
+      } catch (error) {
+        console.error("Failed to unsubscribe push:", error);
+      } finally {
+        const newPrefs = { ...prefs, push_notifications: false };
+        setPrefs(newPrefs);
+        await onUpdate(newPrefs);
+        setMessage({
+          type: "success",
+          text: "Push notifications disabled for this browser.",
+        });
+        setIsPushPending(false);
+      }
+      return;
+    }
+
     const newPrefs = { ...prefs, [key]: !prefs[key] };
     setPrefs(newPrefs);
-    onUpdate(newPrefs);
+    await onUpdate(newPrefs);
   };
 
   return (
@@ -457,7 +539,7 @@ const NotificationSettings = ({ initialPrefs, onUpdate }) => {
       </h2>
       <p className="text-gray-500 mb-8">
         Manage how you receive important reminders and updates about
-        appointments, inventory, and announcements. Choose your preferred
+        follow-up visits, inventory, and announcements. Choose your preferred
         channels and customize your notification experience.
       </p>
       <div className="space-y-8">
@@ -467,22 +549,16 @@ const NotificationSettings = ({ initialPrefs, onUpdate }) => {
           </h3>
           <div className="space-y-3">
             <ToggleSwitch
-              label="Appointment Reminders"
-              description="Alerts for upcoming prenatal check-ups, postnatal visits, and child immunizations."
-              isEnabled={prefs.appointment_reminders}
-              onToggle={() => handleToggle("appointment_reminders")}
+              label="Follow-up Visits"
+              description="Notify when your dedicated follow-up visit is due today or tomorrow."
+              isEnabled={prefs.follow_up_visits}
+              onToggle={() => handleToggle("follow_up_visits")}
             />
             <ToggleSwitch
               label="Inventory Alerts"
               description="Notifications about low stock or expiring medical supplies."
               isEnabled={prefs.inventory_alerts}
               onToggle={() => handleToggle("inventory_alerts")}
-            />
-            <ToggleSwitch
-              label="Patient Follow-ups"
-              description="Reminders for overdue check-ups, missed appointments, or follow-up actions."
-              isEnabled={prefs.patient_followups}
-              onToggle={() => handleToggle("patient_followups")}
             />
           </div>
         </div>
@@ -498,10 +574,15 @@ const NotificationSettings = ({ initialPrefs, onUpdate }) => {
               onToggle={() => handleToggle("in_app_notifications")}
             />
             <ToggleSwitch
-              label="SMS Notifications"
-              description="Text message reminders for users with limited internet access."
-              isEnabled={prefs.sms_notifications}
-              onToggle={() => handleToggle("sms_notifications")}
+              label="Push Notifications"
+              description={
+                pushSupported
+                  ? "Browser alerts while using the web app in this browser."
+                  : "Push notifications are not supported on this browser."
+              }
+              isEnabled={prefs.push_notifications}
+              onToggle={() => handleToggle("push_notifications")}
+              disabled={isPushPending || !pushSupported}
             />
             <ToggleSwitch
               label="Email Notifications"
@@ -512,6 +593,15 @@ const NotificationSettings = ({ initialPrefs, onUpdate }) => {
           </div>
         </div>
       </div>
+      {message.text && (
+        <p
+          className={`mt-5 text-sm font-semibold ${
+            message.type === "error" ? "text-red-600" : "text-green-600"
+          }`}
+        >
+          {message.text}
+        </p>
+      )}
     </div>
   );
 };

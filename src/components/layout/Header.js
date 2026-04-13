@@ -5,6 +5,11 @@ import { supabase } from "../../services/supabase";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../../context/AuthContext";
 import { useNotification } from "../../context/NotificationContext";
+import { showLocalNotification } from "../../services/pushNotificationService";
+import {
+  isEmailNotificationConfigured,
+  sendEmailNotification,
+} from "../../services/emailNotificationService";
 
 // --- SVG Icons ---
 const SearchIcon = () => (
@@ -90,9 +95,49 @@ const TrashIcon = () => (
   </svg>
 );
 
-const ProfileDropdown = ({ profile, user }) => {
-  const { signOut } = useAuth();
-  const navigate = useNavigate(); // <-- 1. Get the navigate function
+const getProfileThemeByRole = (role) => {
+  switch (role) {
+    case "BHW":
+      return {
+        topBand: "bg-gradient-to-r from-blue-500 via-blue-600 to-sky-500",
+        statusBadge: "text-blue-700 bg-blue-50 border-blue-100",
+        button: "bg-gradient-to-r from-blue-600 to-sky-600 hover:from-blue-500 hover:to-sky-500",
+      };
+    case "BNS":
+      return {
+        topBand: "bg-gradient-to-r from-emerald-500 via-green-600 to-lime-500",
+        statusBadge: "text-emerald-700 bg-emerald-50 border-emerald-100",
+        button: "bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500",
+      };
+    case "Midwife":
+      return {
+        topBand: "bg-gradient-to-r from-rose-500 via-pink-600 to-fuchsia-500",
+        statusBadge: "text-pink-700 bg-pink-50 border-pink-100",
+        button: "bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500",
+      };
+    case "Admin":
+      return {
+        topBand: "bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600",
+        statusBadge: "text-indigo-700 bg-indigo-50 border-indigo-100",
+        button: "bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500",
+      };
+    case "USER/MOTHER/GUARDIAN":
+      return {
+        topBand: "bg-gradient-to-r from-amber-500 via-orange-500 to-yellow-500",
+        statusBadge: "text-amber-700 bg-amber-50 border-amber-100",
+        button: "bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500",
+      };
+    default:
+      return {
+        topBand: "bg-gradient-to-r from-sky-500 via-blue-500 to-cyan-500",
+        statusBadge: "text-emerald-700 bg-emerald-50 border-emerald-100",
+        button: "bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500",
+      };
+  }
+};
+
+const ProfileDropdown = ({ profile, user, onViewProfile }) => {
+  const theme = getProfileThemeByRole(profile?.role);
 
   const formatDate = (dateString) => {
     if (!dateString) return "N/A";
@@ -103,10 +148,8 @@ const ProfileDropdown = ({ profile, user }) => {
     });
   };
 
-  // --- 2. Create a handler that signs out AND navigates ---
-  const handleSignOut = async () => {
-    await signOut();
-    navigate("/login", { replace: true });
+  const handleViewProfile = () => {
+    onViewProfile();
   };
 
   return (
@@ -115,9 +158,12 @@ const ProfileDropdown = ({ profile, user }) => {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}
       transition={{ duration: 0.15 }}
-      className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-xl border z-30"
+      className="absolute right-0 mt-2 w-80 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl z-30"
     >
-      <div className="p-4 border-b flex items-center space-x-4">
+      <div className={`h-10 ${theme.topBand}`} />
+
+      <div className="px-4 pb-4 -mt-6 border-b border-slate-100 flex items-end justify-between gap-3">
+        <div className="flex items-center space-x-3 min-w-0">
         <img
           src={
             profile?.avatar_url ||
@@ -126,41 +172,58 @@ const ProfileDropdown = ({ profile, user }) => {
             }&background=random`
           }
           alt="User Avatar"
-          className="w-16 h-16 rounded-full border-2 border-blue-200"
+          className="w-14 h-14 rounded-full border-4 border-white shadow-md"
         />
-        <div>
-          <h3 className="font-bold text-gray-800">{`${
+          <div className="min-w-0">
+          <h3 className="font-bold text-slate-800 leading-tight truncate">{`${
             profile?.first_name || ""
           } ${profile?.last_name || ""}`}</h3>
-          <p className="text-sm text-gray-500">{profile?.role}</p>
-          <p className="text-xs text-gray-400 truncate" title={user?.email}>
+            <p className="text-sm text-slate-500 truncate">{profile?.role}</p>
+          <p className="text-xs text-slate-400 truncate max-w-[180px]" title={user?.email}>
             {user?.email}
           </p>
+            </div>
+        </div>
+
+        <span className={`text-[10px] font-bold uppercase tracking-wide border px-2 py-1 rounded-full whitespace-nowrap ${theme.statusBadge}`}>
+          Active
+        </span>
+        </div>
+
+      <div className="p-4 space-y-2.5 text-sm">
+        <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
+          <span className="font-semibold text-slate-600">Assigned Purok</span>
+          <span className="font-semibold text-slate-800">{profile?.assigned_purok || "N/A"}</span>
+        </div>
+        <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
+          <span className="font-semibold text-slate-600">Birthday</span>
+          <span className="font-semibold text-slate-800">{formatDate(profile?.birth_date)}</span>
+        </div>
+        <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
+          <span className="font-semibold text-slate-600">Contact No.</span>
+          <span className="font-semibold text-slate-800">{profile?.contact_no || "N/A"}</span>
         </div>
       </div>
 
-      <div className="p-4 text-sm text-gray-700 space-y-3">
-        <div className="flex justify-between">
-          <span className="font-semibold">Assigned Purok:</span>
-          <span>{profile?.assigned_purok || "N/A"}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="font-semibold">Birthday:</span>
-          <span>{formatDate(profile?.birth_date)}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="font-semibold">Contact No:</span>
-          <span>{profile?.contact_no || "N/A"}</span>
-        </div>
-      </div>
-
-      <div className="p-2 border-t">
-        {/* --- 3. Update the onClick handler --- */}
+      <div className="p-3 border-t border-slate-100 bg-slate-50/70">
         <button
-          onClick={handleSignOut}
-          className="w-full text-left text-sm text-gray-700 px-3 py-2 rounded-md hover:bg-gray-100"
+          onClick={handleViewProfile}
+          className={`w-full flex items-center justify-center gap-2 text-sm font-semibold text-white px-3 py-2.5 rounded-xl shadow-sm transition-all ${theme.button}`}
         >
-          Sign Out
+          <svg
+            className="w-4 h-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              d="M5.121 17.804A9 9 0 1112 21a8.958 8.958 0 01-6.879-3.196zM15 11a3 3 0 11-6 0 3 3 0 016 0z"
+            />
+          </svg>
+          View Profile
         </button>
       </div>
     </motion.div>
@@ -168,9 +231,10 @@ const ProfileDropdown = ({ profile, user }) => {
 };
 
 export default function Header() {
-  const { profile, user, signOut } = useAuth();
+  const { profile, user } = useAuth();
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [settingsInitialTab, setSettingsInitialTab] = useState("My Profile");
   const [activities, setActivities] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -179,6 +243,40 @@ export default function Header() {
   const prevUnreadCount = useRef(0);
   const isInitialLoad = useRef(true);
   const { addNotification } = useNotification();
+
+  const formatLocalYmd = (date = new Date()) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  const toReadableDate = (dateString) =>
+    new Date(`${dateString}T00:00:00`).toLocaleDateString("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+
+  const maybeNotifyByEmail = async (subject, message) => {
+    if (!profile?.preferences?.email_notifications) return;
+    if (!isEmailNotificationConfigured()) {
+      console.warn("Email notification skipped: EmailJS is not configured.");
+      return;
+    }
+
+    try {
+      await sendEmailNotification({
+        toEmail: user?.email,
+        toName: profile?.first_name,
+        subject,
+        message,
+      });
+    } catch (error) {
+      console.error("Failed to send email notification:", error);
+    }
+  };
   const handleMarkOneRead = async (e, notificationId) => {
     e.stopPropagation(); // Prevent navigation when clicking the button
 
@@ -314,12 +412,76 @@ export default function Header() {
                 "New user request submitted for approval.",
                 "warning"
               );
+
+              if (profile?.preferences?.push_notifications) {
+                showLocalNotification("New User Request", {
+                  body: "A new request was submitted for approval.",
+                });
+              }
+
+              if (profile?.preferences?.email_notifications) {
+                maybeNotifyByEmail(
+                  "New User Request",
+                  "A new request was submitted and is waiting for your approval."
+                );
+              }
             }
           }
         )
         .subscribe();
     } else {
       // BHW/BNS logic remains the same
+      const checkFollowUpVisitReminders = async () => {
+        if (!profile?.preferences?.follow_up_visits) return;
+
+        const today = new Date();
+        const tomorrow = new Date(today);
+        tomorrow.setDate(today.getDate() + 1);
+
+        const todayYmd = formatLocalYmd(today);
+        const tomorrowYmd = formatLocalYmd(tomorrow);
+
+        const { data, error } = await supabase
+          .from("follow_up_visit")
+          .select("id, date, time, reason, patient_display_id")
+          .eq("confirmed_by", profile.id)
+          .in("date", [todayYmd, tomorrowYmd]);
+
+        if (error) {
+          console.error("Error fetching follow-up visit reminders:", error);
+          return;
+        }
+
+        (data || []).forEach((visit) => {
+          const reminderKey = `follow-up-reminder:${user.id}:${visit.id}:${visit.date}`;
+          if (localStorage.getItem(reminderKey)) return;
+
+          const dayLabel = visit.date === todayYmd ? "today" : "tomorrow";
+          const timeText = visit.time ? ` at ${visit.time}` : "";
+          const patientText = visit.patient_display_id
+            ? ` for ${visit.patient_display_id}`
+            : "";
+
+          const message = `Follow-up visit${patientText} is scheduled ${dayLabel}${timeText}.`;
+          addNotification(message, "info");
+
+          if (profile?.preferences?.push_notifications) {
+            showLocalNotification("Follow-up Visit Reminder", {
+              body: message,
+            });
+          }
+
+          maybeNotifyByEmail(
+            "Follow-up Visit Reminder",
+            `${message} Date: ${toReadableDate(visit.date)}.`
+          );
+
+          localStorage.setItem(reminderKey, new Date().toISOString());
+        });
+      };
+
+      checkFollowUpVisitReminders();
+
       const fetchStandardNotifications = async () => {
         const { data, error } = await supabase
           .from("notifications")
@@ -337,6 +499,20 @@ export default function Header() {
         ) {
           const audio = new Audio("/notification.mp3");
           audio.play().catch((e) => console.error("Audio play failed:", e));
+
+          const newestUnread = (data || []).find((n) => !n.is_read);
+
+          if (profile?.preferences?.push_notifications) {
+            if (newestUnread) {
+              showLocalNotification("New Notification", {
+                body: newestUnread.message,
+              });
+            }
+          }
+
+          if (newestUnread && profile?.preferences?.email_notifications) {
+            maybeNotifyByEmail("New Notification", newestUnread.message);
+          }
         }
         setNotifications(data || []);
         setUnreadCount(newUnreadCount);
@@ -394,7 +570,10 @@ export default function Header() {
       {/* Settings Modal */}
       <AnimatePresence>
         {isSettingsOpen && (
-          <SettingsModal onClose={() => setIsSettingsOpen(false)} />
+          <SettingsModal
+            onClose={() => setIsSettingsOpen(false)}
+            initialTab={settingsInitialTab}
+          />
         )}
       </AnimatePresence>
 
@@ -542,7 +721,11 @@ export default function Header() {
                 <ProfileDropdown
                   profile={profile}
                   user={user}
-                  signOut={signOut}
+                  onViewProfile={() => {
+                    setSettingsInitialTab("My Profile");
+                    setIsSettingsOpen(true);
+                    setIsProfileOpen(false);
+                  }}
                 />
               )}
             </AnimatePresence>
