@@ -236,6 +236,7 @@ const ViewItemDetailsModal = ({ item, onClose }) => {
 
 export default function AdminInventoryPage() {
     const { profile } = useAuth();
+    const isAdmin = profile?.role === 'Admin';
     const [allItems, setAllItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -324,17 +325,39 @@ export default function AdminInventoryPage() {
                     <EnhancedRefillModal 
                         initialItem={selectedItem} 
                         onClose={() => { setSelectedItem(null); setModalMode(null); }} 
-                        onSave={fetchInventories} 
+                        onSave={fetchInventories}
+                        submitAsRequest={isAdmin}
+                        requesterId={profile?.id}
                     />
                 )}
                 {(modalMode === 'edit-bhw') && selectedItem && (
-                    <AddInventoryModal mode="edit" initialData={selectedItem} onClose={() => { setSelectedItem(null); setModalMode(null); }} onSave={fetchInventories} />
+                    <AddInventoryModal
+                        mode="edit"
+                        initialData={selectedItem}
+                        onClose={() => { setSelectedItem(null); setModalMode(null); }}
+                        onSave={fetchInventories}
+                        submitAsRequest={isAdmin}
+                        requesterId={profile?.id}
+                    />
                 )}
                 {(modalMode === 'edit-bns') && selectedItem && (
-                    <AddBnsInventoryModal mode="edit" initialData={selectedItem} onClose={() => { setSelectedItem(null); setModalMode(null); }} onSave={fetchInventories} />
+                    <AddBnsInventoryModal
+                        mode="edit"
+                        initialData={selectedItem}
+                        onClose={() => { setSelectedItem(null); setModalMode(null); }}
+                        onSave={fetchInventories}
+                        submitAsRequest={isAdmin}
+                        requesterId={profile?.id}
+                    />
                 )}
                 {modalMode === 'add' && (
-                    <AddInventoryModal mode="add" onClose={() => setModalMode(null)} onSave={fetchInventories} />
+                    <AddInventoryModal
+                        mode="add"
+                        onClose={() => setModalMode(null)}
+                        onSave={fetchInventories}
+                        submitAsRequest={isAdmin}
+                        requesterId={profile?.id}
+                    />
                 )}
             </AnimatePresence>
 

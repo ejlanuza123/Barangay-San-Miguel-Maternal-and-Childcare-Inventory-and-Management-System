@@ -7,7 +7,7 @@ import { logActivity } from '../../services/activityLogger';
 import { refillInventoryItem, getItemBatches } from '../../services/inventoryService';
 import { useAuth } from '../../context/AuthContext';
 
-export default function EnhancedRefillModal({ initialItem, onClose, onSave }) {
+export default function EnhancedRefillModal({ initialItem, onClose, onSave, submitAsRequest = false, requesterId = null }) {
   const [selectedBatch, setSelectedBatch] = useState(initialItem);
   const [batches, setBatches] = useState([]);
   const [addQty, setAddQty] = useState('');
@@ -42,6 +42,48 @@ export default function EnhancedRefillModal({ initialItem, onClose, onSave }) {
     }
 
     setLoading(true);
+
+    if (submitAsRequest) {
+      if (!requesterId) {
+        addNotification('Unable to submit request: missing requester account.', 'error');
+        setLoading(false);
+        return;
+      }
+
+      const quantityToAdd = parseInt(addQty, 10);
+      const nextQuantity = (selectedBatch.quantity || 0) + quantityToAdd;
+      const requestPayload = {
+        worker_id: requesterId,
+        request_type: 'Update',
+        target_table: 'inventory',
+        target_record_id: selectedBatch.id,
+        request_data: {
+          quantity: nextQuantity,
+          updated_at: new Date().toISOString(),
+        },
+        status: 'Pending',
+      };
+
+      const { error: requestError } = await supabase
+        .from('requestions')
+        .insert([requestPayload]);
+
+      if (requestError) {
+        addNotification(`Error: ${requestError.message}`, 'error');
+        setLoading(false);
+        return;
+      }
+
+      await logActivity(
+        'Inventory Refill Request',
+        `Submitted refill request for ${selectedBatch.item_name} (+${quantityToAdd}).`
+      );
+      addNotification('Refill request submitted for approval.', 'success');
+      onSave();
+      onClose();
+      setLoading(false);
+      return;
+    }
 
     const result = await refillInventoryItem(
       selectedBatch.id,

@@ -10,6 +10,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { logActivity } from "../../services/activityLogger";
 import { useNotification } from "../../context/NotificationContext";
 import { useAuth } from "../../context/AuthContext";
+import { useLocation } from "react-router-dom";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import PatientQRCodeModal from "../../components/reusables/PatientQRCodeModal";
@@ -1327,7 +1328,8 @@ const MaternityManagementTab = () => {
   };
 
   const handleEdit = (patient) => {
-    addNotification("Admins can only view records from this page.", "info");
+    setSelectedPatient(patient);
+    setModalMode("edit");
   };
 
   const handleDelete = async () => {
@@ -1457,6 +1459,8 @@ const MaternityManagementTab = () => {
           <AddPatientModal
             mode={modalMode}
             initialData={selectedPatient}
+            submitAsRequest={true}
+            requesterId={user?.id}
             onClose={() => setModalMode(null)}
             onSave={fetchPageData}
           />
@@ -1618,6 +1622,15 @@ const MaternityManagementTab = () => {
                     )}
                   </AnimatePresence>
                 </div>
+                <button
+                  onClick={() => {
+                    setSelectedPatient(null);
+                    setModalMode("add");
+                  }}
+                  className="px-3 py-1.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 font-semibold"
+                >
+                  + Request Add Patient
+                </button>
               </div>
             </div>
 
@@ -1633,6 +1646,7 @@ const MaternityManagementTab = () => {
                       "Weeks",
                       "Last Visit",
                       "Risk",
+                      "Request",
                     ].map((header) => (
                       <th key={header} className="px-2 py-2">
                         {header}
@@ -1643,13 +1657,13 @@ const MaternityManagementTab = () => {
                 <tbody className="divide-y">
                   {loading ? (
                     <tr>
-                      <td colSpan="7" className="text-center p-6">
+                      <td colSpan="8" className="text-center p-6">
                         Loading patients...
                       </td>
                     </tr>
                   ) : allPatients.length === 0 ? (
                     <tr>
-                      <td colSpan="7" className="text-center p-6 text-gray-500">
+                      <td colSpan="8" className="text-center p-6 text-gray-500">
                         No patients found
                       </td>
                     </tr>
@@ -1670,6 +1684,17 @@ const MaternityManagementTab = () => {
                         <td className="px-2 py-2">{p.last_visit}</td>
                         <td className="px-2 py-2">
                           <RiskLevelBadge level={p.risk_level} />
+                        </td>
+                        <td className="px-2 py-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEdit(p);
+                            }}
+                            className="text-blue-600 hover:text-blue-800 font-semibold text-xs"
+                          >
+                            Request Update
+                          </button>
                         </td>
                       </tr>
                     ))
@@ -1792,8 +1817,9 @@ const ChildHealthRecordsTab = () => {
     setModalMode("view");
   };
 
-  const handleEdit = () => {
-    addNotification("Admins can only view records from this page.", "info");
+  const handleEdit = (record) => {
+    setSelectedChild(record);
+    setModalMode("edit");
   };
 
   const handleDelete = async () => {
@@ -1936,6 +1962,8 @@ const ChildHealthRecordsTab = () => {
           <AddChildModal
             mode={modalMode}
             initialData={selectedChild}
+            submitAsRequest={true}
+            requesterId={user?.id}
             onClose={() => setModalMode(null)}
             onSave={() => {
               setModalMode(null);
@@ -2086,6 +2114,15 @@ const ChildHealthRecordsTab = () => {
                     )}
                   </AnimatePresence>
                 </div>
+                <button
+                  onClick={() => {
+                    setSelectedChild(null);
+                    setModalMode("add");
+                  }}
+                  className="px-3 py-1.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 font-semibold"
+                >
+                  + Request Add Child
+                </button>
               </div>
               {/* Add New Patient Button Removed as requested */}
             </div>
@@ -2103,7 +2140,7 @@ const ChildHealthRecordsTab = () => {
                       "BMI",
                       "Nutrition Status",
                       "Last Check up",
-                      // "Actions", // Header removed as requested
+                      "Request",
                     ].map((h) => (
                       <th key={h} className="px-2 py-2">
                         {h}
@@ -2114,13 +2151,13 @@ const ChildHealthRecordsTab = () => {
                 <tbody className="divide-y">
                   {loading ? (
                     <tr>
-                      <td colSpan="9" className="text-center p-4">
+                      <td colSpan="10" className="text-center p-4">
                         Loading records...
                       </td>
                     </tr>
                   ) : childRecords.length === 0 ? (
                     <tr>
-                      <td colSpan="9" className="text-center p-4 text-gray-500">
+                      <td colSpan="10" className="text-center p-4 text-gray-500">
                         No child records found
                       </td>
                     </tr>
@@ -2146,7 +2183,17 @@ const ChildHealthRecordsTab = () => {
                           <StatusBadge status={record.nutrition_status} />
                         </td>
                         <td className="px-2 py-2">{record.last_checkup}</td>
-                        {/* Actions column removed as requested */}
+                        <td className="px-2 py-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEdit(record);
+                            }}
+                            className="text-blue-600 hover:text-blue-800 font-semibold text-xs"
+                          >
+                            Request Update
+                          </button>
+                        </td>
                       </tr>
                     ))
                   )}
@@ -2173,7 +2220,16 @@ const ChildHealthRecordsTab = () => {
 // --- Main PatientRecordsPage Component (Wrapper) ---
 // ==================================================================
 const PatientRecordsPage = () => {
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState("maternal"); // 'maternal' or 'child'
+
+  useEffect(() => {
+    if (location.pathname.includes("/admin/child-records")) {
+      setActiveTab("child");
+    } else if (location.pathname.includes("/admin/maternity-records")) {
+      setActiveTab("maternal");
+    }
+  }, [location.pathname]);
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">

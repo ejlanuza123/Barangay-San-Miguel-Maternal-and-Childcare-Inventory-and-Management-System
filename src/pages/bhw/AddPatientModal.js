@@ -1119,6 +1119,8 @@ export default function AddPatientModal({
   onSave,
   mode = "add",
   initialData = null,
+  submitAsRequest = false,
+  requesterId = null,
 }) {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -1450,7 +1452,7 @@ export default function AddPatientModal({
     setError("");
     
     try {
-      if (deductionQueue.length > 0) {
+      if (!submitAsRequest && deductionQueue.length > 0) {
         for (const item of deductionQueue) {
           const { data: currentItem, error: fetchError } = await supabase
             .from('inventory')
@@ -1504,6 +1506,46 @@ export default function AddPatientModal({
         allergy_history: formData.allergy_history || null,
         family_planning_history: formData.family_planning_history || null,
       };
+
+      if (submitAsRequest) {
+        const requesterAccountId = requesterId || profile?.id || currentUser?.id;
+        if (!requesterAccountId) {
+          throw new Error("Unable to submit request: missing requester account.");
+        }
+
+        const requestPayload = {
+          worker_id: requesterAccountId,
+          request_type: mode === "edit" ? "Update" : "Add",
+          target_table: "mother_records",
+          target_record_id: mode === "edit" ? initialData.id : requesterAccountId,
+          request_data: patientData,
+          status: "Pending",
+        };
+
+        const { error: requestError } = await supabase
+          .from("requestions")
+          .insert([requestPayload]);
+
+        if (requestError) {
+          throw requestError;
+        }
+
+        addNotification(
+          mode === "edit"
+            ? "Patient update request submitted for approval."
+            : "New patient request submitted for approval.",
+          "success"
+        );
+
+        await logActivity(
+          mode === "edit" ? "Patient Update Request" : "Patient Add Request",
+          `${mode === "edit" ? "Requested update" : "Requested add"} for patient ${formData.first_name || ""} ${formData.last_name || ""} (${patientId})`
+        );
+
+        onSave();
+        onClose();
+        return;
+      }
 
       let patientRecordId;
       

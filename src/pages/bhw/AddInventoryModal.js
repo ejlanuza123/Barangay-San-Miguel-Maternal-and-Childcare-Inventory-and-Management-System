@@ -137,6 +137,7 @@ export default function AddInventoryModal({ onClose, onSave, mode = "add", initi
             worker_id: requesterId,
             request_type: "Add",
             target_table: "inventory",
+            target_record_id: requesterId,
             request_data: item,
             status: "Pending",
           }));
@@ -187,7 +188,7 @@ export default function AddInventoryModal({ onClose, onSave, mode = "add", initi
             worker_id: requesterId,
             request_type: mode === "edit" ? "Update" : "Add",
             target_table: "inventory",
-            target_record_id: mode === "edit" ? initialData.id : null,
+            target_record_id: mode === "edit" ? initialData.id : requesterId,
             request_data: dataPayload,
             status: "Pending",
           };

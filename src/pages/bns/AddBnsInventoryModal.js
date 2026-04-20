@@ -124,6 +124,7 @@ export default function AddBnsInventoryModal({ onClose, onSave, mode = "add", in
             worker_id: requesterId,
             request_type: "Add",
             target_table: "inventory",
+            target_record_id: requesterId,
             request_data: {
               item_name: item.item_name,
               category: item.category,
@@ -189,7 +190,7 @@ export default function AddBnsInventoryModal({ onClose, onSave, mode = "add", in
             worker_id: requesterId,
             request_type: mode === "edit" ? "Update" : "Add",
             target_table: "inventory",
-            target_record_id: mode === "edit" ? initialData.id : null,
+            target_record_id: mode === "edit" ? initialData.id : requesterId,
             request_data: dataPayload,
             status: "Pending",
           };

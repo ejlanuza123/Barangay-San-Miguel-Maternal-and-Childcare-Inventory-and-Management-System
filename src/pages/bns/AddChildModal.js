@@ -987,7 +987,7 @@ const getNutritionStatus = (bmi) => {
     return null;
 };
 
-export default function AddChildModal({ onClose, onSave, mode = 'add', initialData = null }) {
+export default function AddChildModal({ onClose, onSave, mode = 'add', initialData = null, submitAsRequest = false, requesterId = null }) {
     const [step, setStep] = useState(1);
     const [loading, setLoading] = useState(false);
     const [formData, setFormData] = useState({});
@@ -1252,6 +1252,44 @@ export default function AddChildModal({ onClose, onSave, mode = 'add', initialDa
                 vitamin_a_date: sanitizeValue(formData.vitamin_a_date),
                 vitamin_a_amount: formData.vitamin_a_amount
             };
+
+            if (submitAsRequest) {
+                const requesterAccountId = requesterId || user?.id || profile?.id;
+                if (!requesterAccountId) {
+                    throw new Error("Unable to submit request: missing requester account.");
+                }
+
+                const requestPayload = {
+                    worker_id: requesterAccountId,
+                    request_type: mode === 'edit' ? 'Update' : 'Add',
+                    target_table: 'child_records',
+                    target_record_id: mode === 'edit' ? initialData.id : requesterAccountId,
+                    request_data: recordData,
+                    status: 'Pending',
+                };
+
+                const { error: requestError } = await supabase
+                    .from('requestions')
+                    .insert([requestPayload]);
+
+                if (requestError) throw requestError;
+
+                addNotification(
+                    mode === 'edit'
+                        ? 'Child record update request submitted for approval.'
+                        : 'New child record request submitted for approval.',
+                    'success'
+                );
+
+                await logActivity(
+                    mode === 'edit' ? 'Child Update Request' : 'Child Add Request',
+                    `${mode === 'edit' ? 'Requested update' : 'Requested add'} for child ${formData.first_name || ''} ${formData.last_name || ''}`
+                );
+
+                onSave();
+                onClose();
+                return;
+            }
 
             let childRecordId;
             

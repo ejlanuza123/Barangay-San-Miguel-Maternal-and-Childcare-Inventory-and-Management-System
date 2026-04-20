@@ -4,6 +4,7 @@ import { supabase } from "../../services/supabase";
 import { useNotification } from "../../context/NotificationContext";
 import { logActivity } from "../../services/activityLogger";
 import { motion, AnimatePresence } from "framer-motion";
+import { useAuth } from "../../context/AuthContext";
 
 // --- Enhanced Helper Components ---
 const StatusBadge = ({ status }) => {
@@ -163,15 +164,24 @@ const RequestTypeBadge = ({ type, table }) => {
 
 // --- Main Page Component ---
 export default function RequestionsPage() {
+  const { profile } = useAuth();
+  const isMidwife = profile?.role === "Midwife";
+  const visibleRoleTabs = isMidwife ? ["BHW", "BNS", "Admin"] : ["BHW", "BNS"];
   const [activeTab, setActiveTab] = useState("BHW");
   const [statusFilter, setStatusFilter] = useState("Pending");
   const [requestions, setRequestions] = useState([]);
   const [loading, setLoading] = useState(true);
   const { addNotification } = useNotification();
 
+  useEffect(() => {
+    if (!visibleRoleTabs.includes(activeTab)) {
+      setActiveTab(visibleRoleTabs[0]);
+    }
+  }, [activeTab, visibleRoleTabs]);
+
   const fetchRequestions = useCallback(async () => {
     setLoading(true);
-    const roleFilter = activeTab === "BHW" ? "BHW" : "BNS";
+    const roleFilter = activeTab;
 
     let query = supabase
       .from("requestions")
@@ -202,7 +212,12 @@ export default function RequestionsPage() {
 
   const handleApprove = async (request) => {
     let actionError = null;
-    if (request.request_type === "Update") {
+    if (request.request_type === "Add") {
+      const { error } = await supabase
+        .from(request.target_table)
+        .insert([request.request_data]);
+      actionError = error;
+    } else if (request.request_type === "Update") {
       const { error } = await supabase
         .from(request.target_table)
         .update(request.request_data)
@@ -239,7 +254,7 @@ export default function RequestionsPage() {
       addNotification(`Request has been approved.`, "success");
       logActivity(
         "Request Approved",
-        `Your ${request.request_type} request was approved by an Admin.`,
+        `Your ${request.request_type} request was approved by ${profile?.role || "authorized reviewer"}.`,
         request.worker_id
       );
     }
@@ -322,7 +337,7 @@ export default function RequestionsPage() {
         {/* Worker Type Tabs */}
         <div className="p-6 border-b border-teal-100">
           <div className="flex gap-2 mb-4">
-            {["BHW", "BNS"].map((role) => {
+            {visibleRoleTabs.map((role) => {
               const isActive = activeTab === role;
               const bgColor = role === "BHW" ? "bg-white-50" : "bg-white-50";
               const activeColor = role === "BHW" ? "bg-sky-100 border-sky-300 text-sky-800" : "bg-sky-100 border-sky-300 text-sky-800";
@@ -339,7 +354,11 @@ export default function RequestionsPage() {
                       : `${bgColor} border-teal-200 text-teal-700 hover:bg-teal-50`
                   }`}
                 >
-                  {role === "BHW" ? "🏥 BARANGAY HEALTH WORKER" : "🥗 BARANGAY NUTRITION SCHOLAR"}
+                  {role === "BHW"
+                    ? "🏥 BARANGAY HEALTH WORKER"
+                    : role === "BNS"
+                    ? "🥗 BARANGAY NUTRITION SCHOLAR"
+                    : "🏛️ BARANGAY OFFICIALS (ADMIN)"}
                 </motion.button>
               );
             })}

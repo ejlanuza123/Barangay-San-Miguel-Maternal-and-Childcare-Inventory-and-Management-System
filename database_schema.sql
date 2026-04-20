@@ -398,6 +398,7 @@ CREATE TABLE public.requestions (
   request_data jsonb,
   status text NOT NULL DEFAULT 'Pending'::text,
   target_record_id uuid NOT NULL,
+  role_source text DEFAULT 'BHW'::text,
   CONSTRAINT requestions_pkey PRIMARY KEY (id),
   CONSTRAINT requestions_worker_id_fkey FOREIGN KEY (worker_id) REFERENCES public.profiles(id)
 );
