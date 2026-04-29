@@ -385,12 +385,11 @@ export default function AddInventoryModal({ onClose, onSave, mode = "add", initi
                                   className="w-full p-2 border border-gray-300 rounded text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                 >
                                   <option value="">Select unit</option>
-                                  <option value="Box">Box</option>
-                                  <option value="Bottle">Bottle</option>
-                                  <option value="Tablet">Tablet</option>
-                                  <option value="Capsule">Capsule</option>
-                                  <option value="Pack">Pack</option>
-                                  <option value="Piece">Piece</option>
+                                  {UNIT_OPTIONS.map((unit) => (
+                                    <option key={unit} value={unit}>
+                                      {unit}
+                                    </option>
+                                  ))}
                                 </select>
                               </td>
                               <td className="p-3">
@@ -506,10 +505,11 @@ export default function AddInventoryModal({ onClose, onSave, mode = "add", initi
                                   className="w-full p-2 border border-gray-300 rounded text-sm"
                                 >
                                   <option value="">Select unit</option>
-                                  <option value="Box">Box</option>
-                                  <option value="Bottle">Bottle</option>
-                                  <option value="Tablet">Tablet</option>
-                                  <option value="Pack">Pack</option>
+                                  {UNIT_OPTIONS.map((unit) => (
+                                    <option key={unit} value={unit}>
+                                      {unit}
+                                    </option>
+                                  ))}
                                 </select>
                               </div>
                               <div>
