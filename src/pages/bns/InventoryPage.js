@@ -30,15 +30,58 @@ const StatusBadge = ({ status }) => {
 
 const StatusLegend = () => (
     <div className="bg-white p-4 rounded-lg shadow-sm border">
-        <h3 className="font-bold text-gray-700 text-sm mb-3">Status Legend of Stock</h3>
+        <h3 className="font-bold text-gray-700 text-sm mb-3">Status Legend</h3>
         <div className="space-y-2 text-sm">
-            <div className="flex items-center"><div className="w-4 h-4 rounded mr-2 bg-green-300 border border-green-400"></div><span>Normal</span></div>
-            <div className="flex items-center"><div className="w-4 h-4 rounded mr-2 bg-yellow-300 border border-yellow-400"></div><span>Low</span></div>
-            <div className="flex items-center"><div className="w-4 h-4 rounded mr-2 bg-red-300 border border-red-400"></div><span>Critical</span></div>
-            <div className="border-t my-2"></div>
-            <div className="flex items-center space-x-2 text-gray-700"><ViewIcon /><span>View</span></div>
-            <div className="flex items-center space-x-2 text-gray-700"><UpdateIcon /><span>Update</span></div>
-            <div className="flex items-center space-x-2 text-gray-700"><HistoryIcon /><span>Log/History</span></div>
+            <div className="border-b pb-2 mb-2">
+                <p className="font-semibold text-gray-700 text-xs">Stock Status</p>
+            </div>
+            <div className="flex items-center">
+                <div className="w-4 h-4 rounded mr-2 bg-green-300 border border-green-400"></div>
+                <span className="text-gray-600">Normal</span>
+            </div>
+            <div className="flex items-center">
+                <div className="w-4 h-4 rounded mr-2 bg-yellow-300 border border-yellow-400"></div>
+                <span className="text-gray-600">Low</span>
+            </div>
+            <div className="flex items-center">
+                <div className="w-4 h-4 rounded mr-2 bg-red-300 border border-red-400"></div>
+                <span className="text-gray-600">Critical</span>
+            </div>
+
+            <div className="border-b pb-2 my-2"></div>
+            <div className="border-b pb-2 mb-2">
+                <p className="font-semibold text-gray-700 text-xs">Expiry Alerts</p>
+            </div>
+            <div className="flex items-center">
+                <span className="mr-2">🔴</span>
+                <span className="text-gray-600">Expired</span>
+            </div>
+            <div className="flex items-center">
+                <span className="mr-2">🟠</span>
+                <span className="text-gray-600">Expiring Soon (7 days)</span>
+            </div>
+            <div className="flex items-center">
+                <span className="mr-2">🟡</span>
+                <span className="text-gray-600">Expiring in 30 days</span>
+            </div>
+
+            <div className="border-b pb-2 my-2"></div>
+            <div className="border-b pb-2 mb-2">
+                <p className="font-semibold text-gray-700 text-xs">Inventory Alerts</p>
+            </div>
+            <div className="flex items-center">
+                <span className="mr-2">⛔</span>
+                <span className="text-gray-600">Critical Stock (≤5)</span>
+            </div>
+            <div className="flex items-center">
+                <span className="mr-2">⚠️</span>
+                <span className="text-gray-600">Low Stock / Reorder</span>
+            </div>
+
+            <div className="border-b pb-2 my-2"></div>
+            <div className="flex items-center space-x-2 text-gray-700"><ViewIcon /><span className="text-xs">View Details</span></div>
+            <div className="flex items-center space-x-2 text-gray-700"><UpdateIcon /><span className="text-xs">Edit Item</span></div>
+            <div className="flex items-center space-x-2 text-gray-700"><HistoryIcon /><span className="text-xs">View Movements</span></div>
         </div>
     </div>
 );

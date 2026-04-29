@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../../services/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as XLSX from 'xlsx'; // Library for Excel export
-import { getExpiryStatus, needsReordering, getInventoryMovements } from '../../services/inventoryService';
+import { getExpiryStatus, needsReordering, getInventoryMovements, getUsageAnalytics } from '../../services/inventoryService';
 
 // --- ICONS ---
 const SearchIcon = () => <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>;
@@ -80,13 +80,17 @@ export default function AdminInventoryPage() {
 
     const fetchInventories = useCallback(async () => {
         setLoading(true);
-        const [bhwRes, bnsRes] = await Promise.all([
-            supabase.from('inventory').select('*')
+        const [bhwRes, bnsRes, usageAnalytics] = await Promise.all([
+            supabase.from('inventory').select('*'),
+            supabase.from('inventory').select('*'),
+            getUsageAnalytics(90)
         ]);
+
+        const usageMap = Object.fromEntries((usageAnalytics || []).map((item) => [item.id, item]));
         
         const combined = [
-            ...(bhwRes.data || []).map(item => ({...item, source: 'BHW'})),
-            ...(bnsRes.data || []).map(item => ({...item, source: 'BNS'}))
+            ...(bhwRes.data || []).map(item => ({...item, source: 'BHW', averageDailyUsage: usageMap[item.id]?.averageDailyUsage || 0})),
+            ...(bnsRes.data || []).map(item => ({...item, source: 'BNS', averageDailyUsage: usageMap[item.id]?.averageDailyUsage || 0}))
         ];
         
         setAllItems(combined.sort((a, b) => a.item_name.localeCompare(b.item_name)));
@@ -186,7 +190,7 @@ export default function AdminInventoryPage() {
                                     ) : paginatedItems.map((item, index) => {
                                         const stockNumber = (currentPage - 1) * itemsPerPage + index + 1;
                                         const expiryStatus = getExpiryStatus(item.expiry_date);
-                                        const needsReorder = needsReordering(item.quantity, item.min_stock_level);
+                                            const needsReorder = needsReordering(item.quantity, item.min_stock_level, item.averageDailyUsage || 0);
                                         const isStockCritical = item.quantity <= 5;
                                         
                                         return (

@@ -12,6 +12,15 @@ const UNIT_OPTIONS = [
   "Gram", "Kilogram", "Liter", "Milliliter", "Dozen", "Unit"
 ];
 
+const CATEGORY_OPTIONS = [
+  "Medicines",
+  "Nutrition and Feeding",
+  "Child Hygiene and Care",
+  "Medical Supplies",
+  "Vaccines",
+  "Equipment"
+];
+
 export default function AddBnsInventoryModal({ onClose, onSave, mode = "add", initialData = null, submitAsRequest = false, requesterId = null }) {
   const [formData, setFormData] = useState({
     item_name: "",
@@ -341,11 +350,11 @@ export default function AddBnsInventoryModal({ onClose, onSave, mode = "add", in
                                   className="w-full p-2 border border-gray-300 rounded text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                 >
                                   <option value="">Select category</option>
-                                  <option value="Medicines">Medicines</option>
-                                  <option value="Nutrition and Feeding">Nutrition</option>
-                                  <option value="Medical Supplies">Supplies</option>
-                                  <option value="Vaccines">Vaccines</option>
-                                  <option value="Equipment">Equipment</option>
+                                  {CATEGORY_OPTIONS.map((category) => (
+                                    <option key={category} value={category}>
+                                      {category}
+                                    </option>
+                                  ))}
                                 </select>
                               </td>
                               <td className="p-3">
@@ -455,9 +464,11 @@ export default function AddBnsInventoryModal({ onClose, onSave, mode = "add", in
                                   className="w-full p-2 border border-gray-300 rounded text-sm"
                                 >
                                   <option value="">Select...</option>
-                                  <option value="Medicines">Medicines</option>
-                                  <option value="Nutrition and Feeding">Nutrition</option>
-                                  <option value="Medical Supplies">Supplies</option>
+                                  {CATEGORY_OPTIONS.map((category) => (
+                                    <option key={category} value={category}>
+                                      {category}
+                                    </option>
+                                  ))}
                                 </select>
                               </div>
                               <div>
@@ -700,9 +711,11 @@ export default function AddBnsInventoryModal({ onClose, onSave, mode = "add", in
                   required
                 >
                   <option value="">Select...</option>
-                  <option value="Medicines">Medicines</option>
-                  <option value="Nutrition and Feeding">Nutrition</option>
-                  <option value="Child Hygiene and Care">Child Care</option>
+                  {CATEGORY_OPTIONS.map((category) => (
+                    <option key={category} value={category}>
+                      {category}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div>
