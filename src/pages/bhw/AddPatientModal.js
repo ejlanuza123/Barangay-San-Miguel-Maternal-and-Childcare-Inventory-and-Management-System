@@ -323,7 +323,7 @@ const Step1 = ({ formData, handleChange, handleDobChange, newPatientId }) => (
       </div>
       <div>
         <h3 className="font-semibold text-gray-700 mb-2">Obstetrical Score</h3>
-        <div className="grid grid-cols-6 gap-2">
+        <div className="grid grid-cols-6 gap-2 mb-3">
           <div>
             <label className="text-xs text-gray-500">G</label>
             <input
@@ -383,6 +383,17 @@ const Step1 = ({ formData, handleChange, handleDobChange, newPatientId }) => (
               onChange={handleChange}
               className="w-full p-2 border rounded-md text-sm"
             />
+          </div>
+        </div>
+        <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+          <p className="text-xs font-semibold text-blue-900 mb-2">Obstetrical Score Legend:</p>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs text-blue-800">
+            <div><span className="font-semibold">G:</span> Gravida (total pregnancies)</div>
+            <div><span className="font-semibold">P:</span> Parity (number of deliveries)</div>
+            <div><span className="font-semibold">Term:</span> Deliveries at term (≥37 weeks)</div>
+            <div><span className="font-semibold">Preterm:</span> Deliveries before 37 weeks</div>
+            <div><span className="font-semibold">Abortion:</span> Abortions or miscarriages</div>
+            <div><span className="font-semibold">Living Children:</span> Number of living children</div>
           </div>
         </div>
       </div>
