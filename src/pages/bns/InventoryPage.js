@@ -5,7 +5,7 @@ import { useNotification } from '../../context/NotificationContext';
 import AddBnsInventoryModal from './AddBnsInventoryModal';
 import { logActivity } from '../../services/activityLogger';
 import { useAuth } from '../../context/AuthContext';
-import { getExpiryStatus, needsReordering } from '../../services/inventoryService';
+import { getExpiryStatus, needsReordering, getUsageAnalytics, getInventoryStockStatus } from '../../services/inventoryService';
  
 
 
@@ -334,16 +334,27 @@ export default function BnsInventoryPage() {
             if (error) throw error;
             
             if (data) {
-                const CRITICAL_THRESHOLD = 10;
-                const LOW_THRESHOLD = 20;
+                const usageAnalytics = await getUsageAnalytics(90);
+                const usageMap = Object.fromEntries((usageAnalytics || []).map((item) => [item.id, item]));
                 const updatePromises = [];
                 const headerNotificationPromises = [];
                 const popUpNotificationMessages = [];
 
-                data.forEach(item => {
-                    let newStatus = 'Normal';
-                    if (item.quantity <= CRITICAL_THRESHOLD) newStatus = 'Critical';
-                    else if (item.quantity <= LOW_THRESHOLD) newStatus = 'Low';
+                const inventoryWithUsage = data.map((item) => {
+                    const averageDailyUsage = usageMap[item.id]?.averageUsePerDispense || 0;
+                    const stockStatus = getInventoryStockStatus(item.quantity, item.min_stock_level, averageDailyUsage);
+
+                    return {
+                        ...item,
+                        averageDailyUsage,
+                        computedStatus: stockStatus.status,
+                        criticalThreshold: stockStatus.criticalThreshold,
+                        lowThreshold: stockStatus.lowThreshold
+                    };
+                });
+
+                inventoryWithUsage.forEach(item => {
+                    const newStatus = item.computedStatus;
                     
                     if (item.status !== newStatus) {
                         updatePromises.push(supabase.from('inventory').update({ status: newStatus }).eq('id', item.id));
@@ -364,7 +375,7 @@ export default function BnsInventoryPage() {
                 if (headerNotificationPromises.length > 0) await Promise.all(headerNotificationPromises);
                 if (popUpNotificationMessages.length > 0) setStockNotifications(prev => [...prev, ...popUpNotificationMessages]);
                 
-                setInventory(data);
+                setInventory(inventoryWithUsage);
             }
         } catch (error) {
             addNotification(`Error fetching inventory: ${error.message}`, 'error');
@@ -502,7 +513,7 @@ export default function BnsInventoryPage() {
                                     filteredInventory.map(item => (
                                         (() => {
                                             const expiryStatus = getExpiryStatus(item.expiry_date);
-                                            const needsReorder = needsReordering(item.quantity, item.min_stock_level);
+                                            const needsReorder = needsReordering(item.quantity, item.min_stock_level, item.averageDailyUsage || 0);
                                             const rowClass = `text-gray-600 hover:bg-gray-50 ${expiryStatus.status === 'expired' || expiryStatus.status === 'expiring-soon' ? 'bg-red-50' : needsReorder ? 'bg-yellow-50' : ''}`;
 
                                             return (

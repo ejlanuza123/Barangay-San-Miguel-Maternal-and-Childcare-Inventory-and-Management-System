@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../../services/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as XLSX from 'xlsx'; // Library for Excel export
-import { getExpiryStatus, needsReordering, getInventoryMovements, getUsageAnalytics } from '../../services/inventoryService';
+import { getExpiryStatus, needsReordering, getInventoryMovements, getUsageAnalytics, getInventoryStockStatus } from '../../services/inventoryService';
 
 // --- ICONS ---
 const SearchIcon = () => <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>;
@@ -190,8 +190,8 @@ export default function AdminInventoryPage() {
                                     ) : paginatedItems.map((item, index) => {
                                         const stockNumber = (currentPage - 1) * itemsPerPage + index + 1;
                                         const expiryStatus = getExpiryStatus(item.expiry_date);
-                                            const needsReorder = needsReordering(item.quantity, item.min_stock_level, item.averageDailyUsage || 0);
-                                        const isStockCritical = item.quantity <= 5;
+                                        const stockStatus = getInventoryStockStatus(item.quantity, item.min_stock_level, item.averageDailyUsage || 0);
+                                        const needsReorder = needsReordering(item.quantity, item.min_stock_level, item.averageDailyUsage || 0);
                                         
                                         return (
                                             <tr key={`${item.id}-${item.source}`} className="text-gray-700">
@@ -210,9 +210,9 @@ export default function AdminInventoryPage() {
                                                 </td>
                                                 <td className="p-2">
                                                     <div className="flex items-center gap-1">
-                                                        {isStockCritical && <span title="Critical Stock (≤5)">⛔</span>}
-                                                        {!isStockCritical && needsReorder && <span title="Reorder needed">⚠️</span>}
-                                                        {!isStockCritical && !needsReorder && <span className="text-green-600">✓</span>}
+                                                        {stockStatus.status === 'Critical' && <span title={`Critical Stock (≤${stockStatus.criticalThreshold})`}>⛔</span>}
+                                                        {stockStatus.status === 'Low' && <span title={`Low Stock (≤${stockStatus.lowThreshold})`}>⚠️</span>}
+                                                        {stockStatus.status === 'Normal' && <span className="text-green-600">✓</span>}
                                                     </div>
                                                 </td>
                                                 <td className="p-2">{item.supply_source || 'N/A'}</td>

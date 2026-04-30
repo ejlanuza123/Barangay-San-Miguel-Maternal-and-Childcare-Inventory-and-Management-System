@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import * as XLSX from 'xlsx'; 
 import { useNotification } from '../../context/NotificationContext';
 import { logActivity } from '../../services/activityLogger';
-import { getExpiryStatus, needsReordering, getInventoryMovements } from '../../services/inventoryService';
+import { getExpiryStatus, needsReordering, getInventoryMovements, getUsageAnalytics, getInventoryStockStatus } from '../../services/inventoryService';
 import AddInventoryModal from '../bhw/AddInventoryModal'; 
 import AddBnsInventoryModal from '../bns/AddBnsInventoryModal'; 
 import { useAuth } from '../../context/AuthContext';
@@ -258,12 +258,20 @@ export default function AdminInventoryPage() {
             .select('*')
             .order('item_name', { ascending: true });
         
+        // Fetch usage analytics
+        const usageAnalytics = await getUsageAnalytics(90);
+        const usageMap = Object.fromEntries((usageAnalytics || []).map((item) => [item.id, item]));
+        
         if (error) {
             console.error('Error fetching inventory:', error);
             addNotification('Error loading inventory', 'error');
         } else {
-            // DO NOT create a source field - just set the data directly
-            setAllItems(data || []);
+            // Add usage data to items
+            const itemsWithUsage = (data || []).map(item => ({
+                ...item,
+                averageDailyUsage: usageMap[item.id]?.averageDailyUsage || 0
+            }));
+            setAllItems(itemsWithUsage);
         }
         
         setLoading(false);
@@ -467,8 +475,8 @@ export default function AdminInventoryPage() {
                                             <tr><td colSpan="10" className="text-center p-6 text-gray-500">No items found.</td></tr>
                                         ) : paginatedItems.map((item) => {
                                             const expiryStatus = getExpiryStatus(item.expiry_date);
-                                            const needsReorder = needsReordering(item.quantity, item.min_stock_level);
-                                            const isStockCritical = item.quantity <= 5;
+                                            const stockStatus = getInventoryStockStatus(item.quantity, item.min_stock_level, item.averageDailyUsage || 0);
+                                            const needsReorder = needsReordering(item.quantity, item.min_stock_level, item.averageDailyUsage || 0);
                                             
                                             return (
                                                 <tr 
@@ -494,9 +502,9 @@ export default function AdminInventoryPage() {
                                                     </td>
                                                     <td className="p-3">
                                                         <div className="flex items-center gap-1">
-                                                            {isStockCritical && <span title="Critical Stock (≤5)">⛔</span>}
-                                                            {!isStockCritical && needsReorder && <span title="Reorder needed">⚠️</span>}
-                                                            {!isStockCritical && !needsReorder && <span className="text-green-600">✓</span>}
+                                                            {stockStatus.status === 'Critical' && <span title={`Critical Stock (≤${stockStatus.criticalThreshold})`}>⛔</span>}
+                                                            {stockStatus.status === 'Low' && <span title={`Low Stock (≤${stockStatus.lowThreshold})`}>⚠️</span>}
+                                                            {stockStatus.status === 'Normal' && <span className="text-green-600">✓</span>}
                                                         </div>
                                                     </td>
                                                     <td className="p-3">

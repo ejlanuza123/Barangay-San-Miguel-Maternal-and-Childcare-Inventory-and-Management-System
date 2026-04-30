@@ -5,7 +5,7 @@ import { motion,AnimatePresence } from 'framer-motion';
 import { logActivity } from '../../services/activityLogger';
 import { useNotification } from '../../context/NotificationContext'; 
 import { useAuth } from '../../context/AuthContext';
-import { getExpiryStatus, needsReordering, getInventoryMovements } from '../../services/inventoryService';
+import { getExpiryStatus, needsReordering, getInventoryMovements, getUsageAnalytics, getInventoryStockStatus } from '../../services/inventoryService';
 
 
 // --- ICONS ---
@@ -103,7 +103,6 @@ const DeleteConfirmationModal = ({ itemName, onConfirm, onCancel }) => (
 );
 
 const ViewItemModal = ({ item, onClose }) => {
-    // Add null check at the beginning
     if (!item) {
         return (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
@@ -113,8 +112,8 @@ const ViewItemModal = ({ item, onClose }) => {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 30 }}
                 >
-                    <h2 className="text-xl font-bold text-gray-800 mb-4">Error Loading Item</h2>
-                    <p className="text-sm text-gray-600 mb-4">Item data could not be loaded. Please try again.</p>
+                    <h2 className="text-xl font-bold text-gray-800 mb-4">Item Details</h2>
+                    <p className="text-sm text-gray-600">No item selected.</p>
                     <div className="flex justify-end mt-6">
                         <button onClick={onClose} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-semibold text-sm">Close</button>
                     </div>
@@ -122,7 +121,7 @@ const ViewItemModal = ({ item, onClose }) => {
             </div>
         );
     }
-    
+
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
             <motion.div
@@ -139,7 +138,7 @@ const ViewItemModal = ({ item, onClose }) => {
                     <p><span className="font-semibold text-gray-600">Status:</span> <StatusBadge status={item.status} /></p>
                     <p><span className="font-semibold text-gray-600">Batch/Lot No:</span> {item.batch_no || 'N/A'}</p>
                     <div className="grid grid-cols-2 gap-4">
-                        <p><span className="font-semibold text-gray-600">Expiation Date:</span><br/>{item.expiry_date || 'N/A'}</p>
+                        <p><span className="font-semibold text-gray-600">Expiration Date:</span><br/>{item.expiry_date || 'N/A'}</p>
                     </div>
                     <div className="mt-4 pt-4 border-t border-dashed">
                         <p><span className="font-semibold text-gray-600">Supply Source:</span> {item.supply_source || 'N/A'}</p>
@@ -501,18 +500,25 @@ export default function InventoryPage() {
             console.error("Error fetching inventory:", error);
             addNotification(`Error fetching inventory: ${error.message}`, 'error');
         } else if (data) {
+            const usageAnalytics = await getUsageAnalytics(90);
+            const usageMap = Object.fromEntries((usageAnalytics || []).map((item) => [item.id, item]));
             const updatePromises = [];
             const newNotifications = [];
+            const inventoryWithUsage = data.map((item) => {
+                const averageDailyUsage = usageMap[item.id]?.averageUsePerDispense || 0;
+                const stockStatus = getInventoryStockStatus(item.quantity, item.min_stock_level, averageDailyUsage);
 
-            data.forEach(item => {
-                let newStatus = item.status;
-                if (item.quantity <= CRITICAL_THRESHOLD) {
-                    newStatus = 'Critical';
-                } else if (item.quantity <= LOW_THRESHOLD) {
-                    newStatus = 'Low';
-                } else {
-                    newStatus = 'Normal';
-                }
+                return {
+                    ...item,
+                    averageDailyUsage,
+                    computedStatus: stockStatus.status,
+                    criticalThreshold: stockStatus.criticalThreshold,
+                    lowThreshold: stockStatus.lowThreshold
+                };
+            });
+
+            inventoryWithUsage.forEach(item => {
+                const newStatus = item.computedStatus;
 
                 if (item.status !== newStatus) {
                     updatePromises.push(
@@ -528,8 +534,8 @@ export default function InventoryPage() {
                 setNotifications(prev => [...prev, ...newNotifications]);
             }
 
-            setInventory(data);
-            setTotalItems(data.length);
+            setInventory(inventoryWithUsage);
+            setTotalItems(inventoryWithUsage.length);
         }
         setLoading(false);
     }, [searchTerm, filters.category]); // Add dependencies
@@ -670,7 +676,7 @@ export default function InventoryPage() {
                                         .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
                                         .map(item => {
                                             const expiryStatus = getExpiryStatus(item.expiry_date);
-                                            const needsReorder = needsReordering(item.quantity, item.min_stock_level);
+                                            const needsReorder = needsReordering(item.quantity, item.min_stock_level, item.averageDailyUsage || 0);
                                             return (
                                                 <tr key={item.id} className={`text-gray-700 ${expiryStatus.status === 'expired' || expiryStatus.status === 'expiring-soon' ? 'bg-red-50' : needsReorder ? 'bg-yellow-50' : ''}`}>
                                                     <td className="p-3 font-semibold">{item.item_name}</td>

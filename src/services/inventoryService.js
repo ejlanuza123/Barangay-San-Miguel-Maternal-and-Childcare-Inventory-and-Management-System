@@ -1,5 +1,36 @@
 import { supabase } from './supabase';
 
+const DEFAULT_MIN_STOCK_LEVEL = 10;
+const CRITICAL_COVERAGE_DAYS = 7;
+const REORDER_COVERAGE_DAYS = 14;
+
+const toNumber = (value, fallback = 0) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+export const getUsageAwareThreshold = (min_stock_level, averageDailyUsage = 0, coverageDays = REORDER_COVERAGE_DAYS) => {
+  const baseThreshold = toNumber(min_stock_level, DEFAULT_MIN_STOCK_LEVEL);
+  const usageThreshold = Math.ceil(toNumber(averageDailyUsage, 0) * coverageDays);
+  return Math.max(baseThreshold, usageThreshold || 0);
+};
+
+export const getInventoryStockStatus = (quantity, min_stock_level, averageDailyUsage = 0) => {
+  const stockQuantity = toNumber(quantity, 0);
+  const criticalThreshold = getUsageAwareThreshold(min_stock_level, averageDailyUsage, CRITICAL_COVERAGE_DAYS);
+  const lowThreshold = getUsageAwareThreshold(min_stock_level, averageDailyUsage, REORDER_COVERAGE_DAYS);
+
+  if (stockQuantity <= criticalThreshold) {
+    return { status: 'Critical', criticalThreshold, lowThreshold, needsReorder: true };
+  }
+
+  if (stockQuantity <= lowThreshold) {
+    return { status: 'Low', criticalThreshold, lowThreshold, needsReorder: true };
+  }
+
+  return { status: 'Normal', criticalThreshold, lowThreshold, needsReorder: false };
+};
+
 /**
  * Get expiry status for an item
  * @param {string} expiry_date - The expiry date
@@ -70,10 +101,11 @@ export const getExpiryStatus = (expiry_date) => {
  * Check if an item needs reordering
  * @param {number} quantity - Current quantity
  * @param {number} min_stock_level - Minimum stock level
+ * @param {number} averageDailyUsage - Average daily usage for the item
  * @returns {boolean}
  */
-export const needsReordering = (quantity, min_stock_level) => {
-  return quantity <= (min_stock_level || 10);
+export const needsReordering = (quantity, min_stock_level, averageDailyUsage = 0) => {
+  return toNumber(quantity, 0) <= getUsageAwareThreshold(min_stock_level, averageDailyUsage, REORDER_COVERAGE_DAYS);
 };
 
 /**
@@ -190,8 +222,10 @@ export const getInventorySummary = async () => {
         summary.isSoonExpiring.push(item);
       }
 
-      if (needsReordering(item.quantity, item.min_stock_level)) {
-        if (item.quantity <= 5) {
+      const stockStatus = getInventoryStockStatus(item.quantity, item.min_stock_level);
+
+      if (stockStatus.needsReorder) {
+        if (stockStatus.status === 'Critical') {
           summary.criticalStockItems.push(item);
         } else {
           summary.lowStockItems.push(item);
@@ -409,10 +443,9 @@ export const refillInventoryItem = async (itemId, quantityToAdd, remarks = '', u
 
     const newQuantity = (currentItem.quantity || 0) + quantityToAdd;
     
-    // Calculate new status
-    let newStatus = 'Normal';
-    if (newQuantity <= 10) newStatus = 'Critical';
-    else if (newQuantity <= 20) newStatus = 'Low';
+    const usageAnalytics = await getUsageAnalytics(90);
+    const averageDailyUsage = usageAnalytics.find((item) => item.id === itemId)?.averageUsePerDispense || 0;
+    const newStatus = getInventoryStockStatus(newQuantity, currentItem.min_stock_level, averageDailyUsage).status;
 
     // Update the inventory
     const { error: updateError } = await supabase

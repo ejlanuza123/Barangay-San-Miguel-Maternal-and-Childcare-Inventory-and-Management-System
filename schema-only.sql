@@ -1298,6 +1298,31 @@ $$;
 
 
 --
+-- Name: get_inventory_usage_threshold(uuid, integer, integer, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.get_inventory_usage_threshold(p_inventory_id uuid, p_days_back integer DEFAULT 90, p_coverage_days integer DEFAULT 7, p_min_stock_level integer DEFAULT 10) RETURNS integer
+        LANGUAGE plpgsql STABLE
+        AS $$
+declare
+    v_total_usage numeric;
+begin
+    select coalesce(sum(abs(quantity_change)), 0)
+    into v_total_usage
+    from public.inventory_movements
+    where inventory_id = p_inventory_id
+        and movement_type in ('OUT', 'WASTE')
+        and created_at >= (now() - make_interval(days => p_days_back));
+
+    return greatest(
+        coalesce(p_min_stock_level, 10),
+        ceil((coalesce(v_total_usage, 0) / greatest(p_days_back, 1)) * p_coverage_days)::integer
+    );
+end;
+$$;
+
+
+--
 -- Name: notify_inventory_alerts(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -1309,6 +1334,8 @@ declare
   v_role text;
   v_unit text;
   v_min integer;
+    v_critical_threshold integer;
+    v_low_threshold integer;
   v_is_critical boolean;
   v_is_low boolean;
   v_is_expired boolean;
@@ -1320,9 +1347,11 @@ begin
   v_unit := coalesce(new.unit, 'units');
   v_min := coalesce(new.min_stock_level, 10);
 
-  -- Rules (adjust thresholds here)
-  v_is_critical := coalesce(new.quantity, 0) <= 5;
-  v_is_low := coalesce(new.quantity, 0) <= v_min and not v_is_critical;
+    -- Rules (adjust thresholds here)
+    v_critical_threshold := public.get_inventory_usage_threshold(new.id, 90, 7, coalesce(new.min_stock_level, 10));
+    v_low_threshold := public.get_inventory_usage_threshold(new.id, 90, 14, coalesce(new.min_stock_level, 10));
+    v_is_critical := coalesce(new.quantity, 0) <= v_critical_threshold;
+    v_is_low := coalesce(new.quantity, 0) <= v_low_threshold and not v_is_critical;
   v_is_expired := new.expiry_date is not null and new.expiry_date < current_date;
   v_is_near_expiry := new.expiry_date is not null
                       and new.expiry_date >= current_date
@@ -1645,7 +1674,7 @@ begin
     p.id,
     'daily_inventory_summary',
     'Daily Inventory Alert: '
-    || stats.critical_count || ' critical, '
+        || stats.critical_count || ' critical, '
     || stats.low_count || ' low, '
     || stats.expired_count || ' expired, '
     || stats.expiring_soon_count || ' expiring in 7 days.',
@@ -1653,10 +1682,12 @@ begin
   from public.profiles p
   cross join lateral (
     select
-      count(*) filter (where coalesce(i.quantity,0) <= 5) as critical_count,
+            count(*) filter (
+                where coalesce(i.quantity,0) <= public.get_inventory_usage_threshold(i.id, 90, 7, coalesce(i.min_stock_level, 10))
+            ) as critical_count,
       count(*) filter (
-        where coalesce(i.quantity,0) > 5
-          and coalesce(i.quantity,0) <= coalesce(i.min_stock_level,10)
+                where coalesce(i.quantity,0) > public.get_inventory_usage_threshold(i.id, 90, 7, coalesce(i.min_stock_level, 10))
+                    and coalesce(i.quantity,0) <= public.get_inventory_usage_threshold(i.id, 90, 14, coalesce(i.min_stock_level, 10))
       ) as low_count,
       count(*) filter (where i.expiry_date is not null and i.expiry_date < current_date) as expired_count,
       count(*) filter (
