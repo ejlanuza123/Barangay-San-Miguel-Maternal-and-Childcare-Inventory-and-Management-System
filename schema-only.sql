@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict C2bCPALLhDUBCybhCSfqCfwwUlt0Fxn5KxvoKyHltTfZNF9BpIKScHga5yzjYzE
+\restrict MfawlmxnclIl9F2ijtRnArnUHs6KnsQyV32gmf3Oahs8wC9d9E4leQ2WOQDER4N
 
 -- Dumped from database version 17.4
 -- Dumped by pg_dump version 17.9
@@ -1235,6 +1235,31 @@ $$;
 
 
 --
+-- Name: get_inventory_usage_threshold(uuid, integer, integer, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.get_inventory_usage_threshold(p_inventory_id uuid, p_days_back integer DEFAULT 90, p_coverage_days integer DEFAULT 7, p_min_stock_level integer DEFAULT 10) RETURNS integer
+    LANGUAGE plpgsql STABLE
+    AS $$
+declare
+  v_total_usage numeric;
+begin
+  select coalesce(sum(abs(quantity_change)), 0)
+  into v_total_usage
+  from public.inventory_movements
+  where inventory_id = p_inventory_id
+    and movement_type in ('OUT', 'WASTE')
+    and created_at >= (now() - make_interval(days => p_days_back));
+
+  return greatest(
+    coalesce(p_min_stock_level, 10),
+    ceil((coalesce(v_total_usage, 0) / greatest(p_days_back, 1)) * p_coverage_days)::integer
+  );
+end;
+$$;
+
+
+--
 -- Name: get_my_role(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -1298,31 +1323,6 @@ $$;
 
 
 --
--- Name: get_inventory_usage_threshold(uuid, integer, integer, integer); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.get_inventory_usage_threshold(p_inventory_id uuid, p_days_back integer DEFAULT 90, p_coverage_days integer DEFAULT 7, p_min_stock_level integer DEFAULT 10) RETURNS integer
-        LANGUAGE plpgsql STABLE
-        AS $$
-declare
-    v_total_usage numeric;
-begin
-    select coalesce(sum(abs(quantity_change)), 0)
-    into v_total_usage
-    from public.inventory_movements
-    where inventory_id = p_inventory_id
-        and movement_type in ('OUT', 'WASTE')
-        and created_at >= (now() - make_interval(days => p_days_back));
-
-    return greatest(
-        coalesce(p_min_stock_level, 10),
-        ceil((coalesce(v_total_usage, 0) / greatest(p_days_back, 1)) * p_coverage_days)::integer
-    );
-end;
-$$;
-
-
---
 -- Name: notify_inventory_alerts(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -1334,8 +1334,8 @@ declare
   v_role text;
   v_unit text;
   v_min integer;
-    v_critical_threshold integer;
-    v_low_threshold integer;
+  v_critical_threshold integer;
+  v_low_threshold integer;
   v_is_critical boolean;
   v_is_low boolean;
   v_is_expired boolean;
@@ -1347,11 +1347,13 @@ begin
   v_unit := coalesce(new.unit, 'units');
   v_min := coalesce(new.min_stock_level, 10);
 
-    -- Rules (adjust thresholds here)
-    v_critical_threshold := public.get_inventory_usage_threshold(new.id, 90, 7, coalesce(new.min_stock_level, 10));
-    v_low_threshold := public.get_inventory_usage_threshold(new.id, 90, 14, coalesce(new.min_stock_level, 10));
-    v_is_critical := coalesce(new.quantity, 0) <= v_critical_threshold;
-    v_is_low := coalesce(new.quantity, 0) <= v_low_threshold and not v_is_critical;
+  -- Rules: compute thresholds based on usage frequency
+  -- Critical: 7 days of coverage at average daily usage
+  -- Low: 14 days of coverage at average daily usage
+  v_critical_threshold := public.get_inventory_usage_threshold(new.id, 90, 7, coalesce(new.min_stock_level, 10));
+  v_low_threshold := public.get_inventory_usage_threshold(new.id, 90, 14, coalesce(new.min_stock_level, 10));
+  v_is_critical := coalesce(new.quantity, 0) <= v_critical_threshold;
+  v_is_low := coalesce(new.quantity, 0) <= v_low_threshold and not v_is_critical;
   v_is_expired := new.expiry_date is not null and new.expiry_date < current_date;
   v_is_near_expiry := new.expiry_date is not null
                       and new.expiry_date >= current_date
@@ -1418,8 +1420,8 @@ begin
       );
   end if;
 
-  return new;
-end;
+  RETURN new;
+END;
 $$;
 
 
@@ -1674,7 +1676,7 @@ begin
     p.id,
     'daily_inventory_summary',
     'Daily Inventory Alert: '
-        || stats.critical_count || ' critical, '
+    || stats.critical_count || ' critical, '
     || stats.low_count || ' low, '
     || stats.expired_count || ' expired, '
     || stats.expiring_soon_count || ' expiring in 7 days.',
@@ -1682,12 +1684,12 @@ begin
   from public.profiles p
   cross join lateral (
     select
-            count(*) filter (
-                where coalesce(i.quantity,0) <= public.get_inventory_usage_threshold(i.id, 90, 7, coalesce(i.min_stock_level, 10))
-            ) as critical_count,
       count(*) filter (
-                where coalesce(i.quantity,0) > public.get_inventory_usage_threshold(i.id, 90, 7, coalesce(i.min_stock_level, 10))
-                    and coalesce(i.quantity,0) <= public.get_inventory_usage_threshold(i.id, 90, 14, coalesce(i.min_stock_level, 10))
+        where coalesce(i.quantity,0) <= public.get_inventory_usage_threshold(i.id, 90, 7, coalesce(i.min_stock_level, 10))
+      ) as critical_count,
+      count(*) filter (
+        where coalesce(i.quantity,0) > public.get_inventory_usage_threshold(i.id, 90, 7, coalesce(i.min_stock_level, 10))
+          and coalesce(i.quantity,0) <= public.get_inventory_usage_threshold(i.id, 90, 14, coalesce(i.min_stock_level, 10))
       ) as low_count,
       count(*) filter (where i.expiry_date is not null and i.expiry_date < current_date) as expired_count,
       count(*) filter (
@@ -4776,54 +4778,6 @@ PARTITION BY RANGE (inserted_at);
 
 
 --
--- Name: messages_2026_04_24; Type: TABLE; Schema: realtime; Owner: -
---
-
-CREATE TABLE realtime.messages_2026_04_24 (
-    topic text NOT NULL,
-    extension text NOT NULL,
-    payload jsonb,
-    event text,
-    private boolean DEFAULT false,
-    updated_at timestamp without time zone DEFAULT now() NOT NULL,
-    inserted_at timestamp without time zone DEFAULT now() NOT NULL,
-    id uuid DEFAULT gen_random_uuid() NOT NULL
-);
-
-
---
--- Name: messages_2026_04_25; Type: TABLE; Schema: realtime; Owner: -
---
-
-CREATE TABLE realtime.messages_2026_04_25 (
-    topic text NOT NULL,
-    extension text NOT NULL,
-    payload jsonb,
-    event text,
-    private boolean DEFAULT false,
-    updated_at timestamp without time zone DEFAULT now() NOT NULL,
-    inserted_at timestamp without time zone DEFAULT now() NOT NULL,
-    id uuid DEFAULT gen_random_uuid() NOT NULL
-);
-
-
---
--- Name: messages_2026_04_26; Type: TABLE; Schema: realtime; Owner: -
---
-
-CREATE TABLE realtime.messages_2026_04_26 (
-    topic text NOT NULL,
-    extension text NOT NULL,
-    payload jsonb,
-    event text,
-    private boolean DEFAULT false,
-    updated_at timestamp without time zone DEFAULT now() NOT NULL,
-    inserted_at timestamp without time zone DEFAULT now() NOT NULL,
-    id uuid DEFAULT gen_random_uuid() NOT NULL
-);
-
-
---
 -- Name: messages_2026_04_27; Type: TABLE; Schema: realtime; Owner: -
 --
 
@@ -4908,6 +4862,22 @@ CREATE TABLE realtime.messages_2026_05_01 (
 --
 
 CREATE TABLE realtime.messages_2026_05_02 (
+    topic text NOT NULL,
+    extension text NOT NULL,
+    payload jsonb,
+    event text,
+    private boolean DEFAULT false,
+    updated_at timestamp without time zone DEFAULT now() NOT NULL,
+    inserted_at timestamp without time zone DEFAULT now() NOT NULL,
+    id uuid DEFAULT gen_random_uuid() NOT NULL
+);
+
+
+--
+-- Name: messages_2026_05_03; Type: TABLE; Schema: realtime; Owner: -
+--
+
+CREATE TABLE realtime.messages_2026_05_03 (
     topic text NOT NULL,
     extension text NOT NULL,
     payload jsonb,
@@ -5127,27 +5097,6 @@ CREATE TABLE supabase_migrations.seed_files (
 
 
 --
--- Name: messages_2026_04_24; Type: TABLE ATTACH; Schema: realtime; Owner: -
---
-
-ALTER TABLE ONLY realtime.messages ATTACH PARTITION realtime.messages_2026_04_24 FOR VALUES FROM ('2026-04-24 00:00:00') TO ('2026-04-25 00:00:00');
-
-
---
--- Name: messages_2026_04_25; Type: TABLE ATTACH; Schema: realtime; Owner: -
---
-
-ALTER TABLE ONLY realtime.messages ATTACH PARTITION realtime.messages_2026_04_25 FOR VALUES FROM ('2026-04-25 00:00:00') TO ('2026-04-26 00:00:00');
-
-
---
--- Name: messages_2026_04_26; Type: TABLE ATTACH; Schema: realtime; Owner: -
---
-
-ALTER TABLE ONLY realtime.messages ATTACH PARTITION realtime.messages_2026_04_26 FOR VALUES FROM ('2026-04-26 00:00:00') TO ('2026-04-27 00:00:00');
-
-
---
 -- Name: messages_2026_04_27; Type: TABLE ATTACH; Schema: realtime; Owner: -
 --
 
@@ -5187,6 +5136,13 @@ ALTER TABLE ONLY realtime.messages ATTACH PARTITION realtime.messages_2026_05_01
 --
 
 ALTER TABLE ONLY realtime.messages ATTACH PARTITION realtime.messages_2026_05_02 FOR VALUES FROM ('2026-05-02 00:00:00') TO ('2026-05-03 00:00:00');
+
+
+--
+-- Name: messages_2026_05_03; Type: TABLE ATTACH; Schema: realtime; Owner: -
+--
+
+ALTER TABLE ONLY realtime.messages ATTACH PARTITION realtime.messages_2026_05_03 FOR VALUES FROM ('2026-05-03 00:00:00') TO ('2026-05-04 00:00:00');
 
 
 --
@@ -5709,30 +5665,6 @@ ALTER TABLE ONLY realtime.messages
 
 
 --
--- Name: messages_2026_04_24 messages_2026_04_24_pkey; Type: CONSTRAINT; Schema: realtime; Owner: -
---
-
-ALTER TABLE ONLY realtime.messages_2026_04_24
-    ADD CONSTRAINT messages_2026_04_24_pkey PRIMARY KEY (id, inserted_at);
-
-
---
--- Name: messages_2026_04_25 messages_2026_04_25_pkey; Type: CONSTRAINT; Schema: realtime; Owner: -
---
-
-ALTER TABLE ONLY realtime.messages_2026_04_25
-    ADD CONSTRAINT messages_2026_04_25_pkey PRIMARY KEY (id, inserted_at);
-
-
---
--- Name: messages_2026_04_26 messages_2026_04_26_pkey; Type: CONSTRAINT; Schema: realtime; Owner: -
---
-
-ALTER TABLE ONLY realtime.messages_2026_04_26
-    ADD CONSTRAINT messages_2026_04_26_pkey PRIMARY KEY (id, inserted_at);
-
-
---
 -- Name: messages_2026_04_27 messages_2026_04_27_pkey; Type: CONSTRAINT; Schema: realtime; Owner: -
 --
 
@@ -5778,6 +5710,14 @@ ALTER TABLE ONLY realtime.messages_2026_05_01
 
 ALTER TABLE ONLY realtime.messages_2026_05_02
     ADD CONSTRAINT messages_2026_05_02_pkey PRIMARY KEY (id, inserted_at);
+
+
+--
+-- Name: messages_2026_05_03 messages_2026_05_03_pkey; Type: CONSTRAINT; Schema: realtime; Owner: -
+--
+
+ALTER TABLE ONLY realtime.messages_2026_05_03
+    ADD CONSTRAINT messages_2026_05_03_pkey PRIMARY KEY (id, inserted_at);
 
 
 --
@@ -6417,27 +6357,6 @@ CREATE INDEX messages_inserted_at_topic_index ON ONLY realtime.messages USING bt
 
 
 --
--- Name: messages_2026_04_24_inserted_at_topic_idx; Type: INDEX; Schema: realtime; Owner: -
---
-
-CREATE INDEX messages_2026_04_24_inserted_at_topic_idx ON realtime.messages_2026_04_24 USING btree (inserted_at DESC, topic) WHERE ((extension = 'broadcast'::text) AND (private IS TRUE));
-
-
---
--- Name: messages_2026_04_25_inserted_at_topic_idx; Type: INDEX; Schema: realtime; Owner: -
---
-
-CREATE INDEX messages_2026_04_25_inserted_at_topic_idx ON realtime.messages_2026_04_25 USING btree (inserted_at DESC, topic) WHERE ((extension = 'broadcast'::text) AND (private IS TRUE));
-
-
---
--- Name: messages_2026_04_26_inserted_at_topic_idx; Type: INDEX; Schema: realtime; Owner: -
---
-
-CREATE INDEX messages_2026_04_26_inserted_at_topic_idx ON realtime.messages_2026_04_26 USING btree (inserted_at DESC, topic) WHERE ((extension = 'broadcast'::text) AND (private IS TRUE));
-
-
---
 -- Name: messages_2026_04_27_inserted_at_topic_idx; Type: INDEX; Schema: realtime; Owner: -
 --
 
@@ -6477,6 +6396,13 @@ CREATE INDEX messages_2026_05_01_inserted_at_topic_idx ON realtime.messages_2026
 --
 
 CREATE INDEX messages_2026_05_02_inserted_at_topic_idx ON realtime.messages_2026_05_02 USING btree (inserted_at DESC, topic) WHERE ((extension = 'broadcast'::text) AND (private IS TRUE));
+
+
+--
+-- Name: messages_2026_05_03_inserted_at_topic_idx; Type: INDEX; Schema: realtime; Owner: -
+--
+
+CREATE INDEX messages_2026_05_03_inserted_at_topic_idx ON realtime.messages_2026_05_03 USING btree (inserted_at DESC, topic) WHERE ((extension = 'broadcast'::text) AND (private IS TRUE));
 
 
 --
@@ -6540,48 +6466,6 @@ CREATE INDEX name_prefix_search ON storage.objects USING btree (name text_patter
 --
 
 CREATE UNIQUE INDEX vector_indexes_name_bucket_id_idx ON storage.vector_indexes USING btree (name, bucket_id);
-
-
---
--- Name: messages_2026_04_24_inserted_at_topic_idx; Type: INDEX ATTACH; Schema: realtime; Owner: -
---
-
-ALTER INDEX realtime.messages_inserted_at_topic_index ATTACH PARTITION realtime.messages_2026_04_24_inserted_at_topic_idx;
-
-
---
--- Name: messages_2026_04_24_pkey; Type: INDEX ATTACH; Schema: realtime; Owner: -
---
-
-ALTER INDEX realtime.messages_pkey ATTACH PARTITION realtime.messages_2026_04_24_pkey;
-
-
---
--- Name: messages_2026_04_25_inserted_at_topic_idx; Type: INDEX ATTACH; Schema: realtime; Owner: -
---
-
-ALTER INDEX realtime.messages_inserted_at_topic_index ATTACH PARTITION realtime.messages_2026_04_25_inserted_at_topic_idx;
-
-
---
--- Name: messages_2026_04_25_pkey; Type: INDEX ATTACH; Schema: realtime; Owner: -
---
-
-ALTER INDEX realtime.messages_pkey ATTACH PARTITION realtime.messages_2026_04_25_pkey;
-
-
---
--- Name: messages_2026_04_26_inserted_at_topic_idx; Type: INDEX ATTACH; Schema: realtime; Owner: -
---
-
-ALTER INDEX realtime.messages_inserted_at_topic_index ATTACH PARTITION realtime.messages_2026_04_26_inserted_at_topic_idx;
-
-
---
--- Name: messages_2026_04_26_pkey; Type: INDEX ATTACH; Schema: realtime; Owner: -
---
-
-ALTER INDEX realtime.messages_pkey ATTACH PARTITION realtime.messages_2026_04_26_pkey;
 
 
 --
@@ -6666,6 +6550,20 @@ ALTER INDEX realtime.messages_inserted_at_topic_index ATTACH PARTITION realtime.
 --
 
 ALTER INDEX realtime.messages_pkey ATTACH PARTITION realtime.messages_2026_05_02_pkey;
+
+
+--
+-- Name: messages_2026_05_03_inserted_at_topic_idx; Type: INDEX ATTACH; Schema: realtime; Owner: -
+--
+
+ALTER INDEX realtime.messages_inserted_at_topic_index ATTACH PARTITION realtime.messages_2026_05_03_inserted_at_topic_idx;
+
+
+--
+-- Name: messages_2026_05_03_pkey; Type: INDEX ATTACH; Schema: realtime; Owner: -
+--
+
+ALTER INDEX realtime.messages_pkey ATTACH PARTITION realtime.messages_2026_05_03_pkey;
 
 
 --
@@ -7865,5 +7763,5 @@ CREATE EVENT TRIGGER pgrst_drop_watch ON sql_drop
 -- PostgreSQL database dump complete
 --
 
-\unrestrict C2bCPALLhDUBCybhCSfqCfwwUlt0Fxn5KxvoKyHltTfZNF9BpIKScHga5yzjYzE
+\unrestrict MfawlmxnclIl9F2ijtRnArnUHs6KnsQyV32gmf3Oahs8wC9d9E4leQ2WOQDER4N
 
