@@ -4,6 +4,36 @@ import { useNotification } from "../../context/NotificationContext";
 import { logActivity } from "../../services/activityLogger";
 
 // --- Helper Components ---
+const sanitizeInventoryRequestData = (requestData = {}) => {
+  const allowedKeys = [
+    "item_name",
+    "category",
+    "quantity",
+    "unit",
+    "sku",
+    "batch_no",
+    "supply_source",
+    "expiry_date",
+    "min_stock_level",
+    "reorder_quantity",
+    "owner_role",
+    "updated_at",
+  ];
+
+  const sanitized = {};
+  allowedKeys.forEach((key) => {
+    if (requestData[key] !== undefined) {
+      sanitized[key] = requestData[key];
+    }
+  });
+
+  if (requestData.expiration_date && !sanitized.expiry_date) {
+    sanitized.expiry_date = requestData.expiration_date;
+  }
+
+  return sanitized;
+};
+
 const StatusBadge = ({ status }) => {
   const styles = {
     Pending: "bg-yellow-100 text-yellow-700",
@@ -106,9 +136,10 @@ export default function RequestionsPage() {
   const handleApprove = async (request) => {
     let actionError = null;
     if (request.request_type === "Update") {
+      const inventoryData = sanitizeInventoryRequestData(request.request_data);
       const { error } = await supabase
         .from(request.target_table)
-        .update(request.request_data)
+        .update(inventoryData)
         .eq("id", request.target_record_id);
       actionError = error;
     } else if (request.request_type === "Delete") {

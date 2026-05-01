@@ -9,15 +9,73 @@ import { QRCodeSVG } from 'qrcode.react';
 const ProfileIcon = () => ( <svg className="w-full h-full text-gray-300" fill="currentColor" viewBox="0 0 24 24"><path d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z" /></svg> );
 const BackIcon = () => ( <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg> );
 
+// Age-based Vitamin A dosage guidelines (WHO/pediatric standards)
+// 0-6 months: 50,000 IU (or may delay until 6 months)
+// 6-12 months: 100,000 IU
+// 1-5 years: 200,000 IU
+// 5+ years: 200,000 IU
+const getMaxVitaminADose = (childDob, supplementationDate) => {
+    if (!childDob || !supplementationDate) return 200000; // Safe default fallback
+    
+    try {
+        const dob = new Date(childDob);
+        const suppDate = new Date(supplementationDate);
+        
+        // Calculate age in months (using average month length)
+        const ageInMonths = (suppDate - dob) / (1000 * 60 * 60 * 24 * 30.44);
+        
+        // Return dosage based on age bracket
+        if (ageInMonths < 6) return 50000;      // <6 months
+        if (ageInMonths < 12) return 100000;    // 6-12 months
+        return 200000;                           // 12+ months (1-5+ years)
+    } catch (e) {
+        console.warn('Error calculating Vitamin A dosage:', e);
+        return 200000; // Safe default on error
+    }
+};
+
 // --- Inventory Input Component ---
-const InventoryInput = ({ label, fieldName, value, onChange, inventoryCategory, inventoryItems, onAddToQueue, amountFieldName, amountValue }) => {
+const InventoryInput = ({ label, fieldName, value, onChange, inventoryCategory, inventoryItems, onAddToQueue, amountFieldName, amountValue, amountMax = null, autoSelectPattern = null }) => {
   const [selectedItemId, setSelectedItemId] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
+  const [isChanging, setIsChanging] = useState(false);
   
   const filteredItems = inventoryItems.filter(
     item => item.category === inventoryCategory && item.quantity > 0
   );
+
+  // Get variant items if autoSelectPattern is provided (e.g., all Vitamin A variants)
+  const variantItems = autoSelectPattern 
+    ? filteredItems.filter(item => 
+        item.item_name.toLowerCase().includes(autoSelectPattern.toLowerCase())
+      )
+    : [];
+
+  // Auto-select item when date is set and a pattern is provided (e.g., for Vitamin A)
+  useEffect(() => {
+    if (value && autoSelectPattern && !selectedItemId) {
+      const matchingItem = filteredItems.find(item => 
+        item.item_name.toLowerCase().includes(autoSelectPattern.toLowerCase())
+      );
+      if (matchingItem) {
+        // Auto-select the matching item
+        setSelectedItemId(matchingItem.id);
+        setSearchTerm(matchingItem.item_name);
+        
+        // Auto-queue the deduction
+        const qtyToDeduct = amountMax ? 1 : (parseInt(amountValue) || 1);
+        onAddToQueue({
+            itemId: matchingItem.id,
+            itemName: matchingItem.item_name,
+            deductQty: qtyToDeduct, 
+            category: inventoryCategory,
+            dateGiven: value, 
+            fieldName: fieldName
+        });
+      }
+    }
+  }, [value, autoSelectPattern, selectedItemId, filteredItems, amountMax, amountValue, onAddToQueue, fieldName, inventoryCategory]);
 
   console.log('InventoryInput filtered items:', {
     inventoryCategory,
@@ -45,15 +103,19 @@ const InventoryInput = ({ label, fieldName, value, onChange, inventoryCategory, 
     setSelectedItemId(item.id);
     setSearchTerm(item.item_name);
     setShowDropdown(false);
+    setIsChanging(false);
     
-    const qtyToDeduct = parseInt(amountValue) || 1;
+    // For dosage fields (amountMax is set), always deduct 1 unit
+    // For non-dosage fields, use the amountValue as quantity
+    const qtyToDeduct = amountMax ? 1 : (parseInt(amountValue) || 1);
     console.log('Adding to deduction queue:', {
         itemId: item.id,
         itemName: item.item_name,
         deductQty: qtyToDeduct,
         category: inventoryCategory,
         dateGiven: value,
-        fieldName: fieldName
+        fieldName: fieldName,
+        isDosageField: !!amountMax
     });
 
     onAddToQueue({
@@ -64,6 +126,18 @@ const InventoryInput = ({ label, fieldName, value, onChange, inventoryCategory, 
         dateGiven: value, 
         fieldName: fieldName
     });
+  };
+
+  const handleStartChanging = () => {
+    setIsChanging(true);
+    setShowDropdown(true);
+  };
+
+  const handleClearSelection = () => {
+    setSelectedItemId("");
+    setSearchTerm("");
+    setShowDropdown(false);
+    setIsChanging(false);
   };
 
   const handleSearchChange = (e) => {
@@ -107,60 +181,116 @@ const InventoryInput = ({ label, fieldName, value, onChange, inventoryCategory, 
                 <label className="block text-[10px] text-gray-500 mb-0.5">Amount Given</label>
                 <input 
                     type="text" 
+                    inputMode={amountMax ? 'numeric' : undefined}
+                    pattern={amountMax ? '[0-9]*' : undefined}
                     name={amountFieldName}
                     value={amountValue || ''} 
-                    onChange={onChange}
-                    placeholder="e.g. 1 cap"
+                    onChange={(e) => {
+                        const nextValue = amountMax ? e.target.value.replace(/[^0-9]/g, '') : e.target.value;
+                        onChange({ target: { name: amountFieldName, value: nextValue } });
+                    }}
+                    placeholder={amountMax ? 'e.g. 200000' : 'e.g. 1 cap'}
                     className="w-full p-1 border rounded text-xs" 
                 />
+                {amountMax && (
+                    <p className="text-[10px] text-gray-500 mt-0.5">Maximum allowed: {amountMax.toLocaleString()} IU</p>
+                )}
             </div>
         )}
 
         {value && (
             <div className="relative">
-                <label className="block text-[10px] text-gray-500 mb-0.5">Search Medicine</label>
-                <input
-                    type="text"
-                    value={searchTerm}
-                    onChange={handleSearchChange}
-                    onFocus={handleSearchFocus}
-                    onBlur={handleSearchBlur}
-                    placeholder="Type to search medicine..."
-                    className="w-full p-1 border rounded text-xs bg-white"
-                />
-                {showDropdown && searchedItems.length > 0 && (
-                    <div className="absolute z-10 w-full bg-white border border-gray-300 rounded-b-md shadow-lg max-h-40 overflow-y-auto">
-                        {searchedItems.map(item => (
-                            <div
-                                key={item.id}
-                                className="p-2 hover:bg-gray-100 cursor-pointer text-xs border-b border-gray-100 last:border-b-0"
-                                onClick={() => handleItemSelect(item)}
+                <label className="block text-[10px] text-gray-500 mb-0.5">Medicine Selected</label>
+                {selectedItemId && !isChanging ? (
+                    // Locked-in state: show selected item with Change button (only for variants)
+                    <div className="w-full p-2 border-2 border-green-500 rounded text-xs bg-green-50 flex items-center justify-between">
+                        <div className="flex-1">
+                            <div className="font-bold text-green-800">{searchTerm}</div>
+                            <div className="text-[10px] text-green-700">✓ Item locked in</div>
+                        </div>
+                        {autoSelectPattern && variantItems.length > 1 && (
+                            <button
+                                type="button"
+                                onClick={handleStartChanging}
+                                className="ml-2 px-2 py-1 text-[10px] bg-green-200 hover:bg-green-300 text-green-800 rounded whitespace-nowrap font-semibold"
                             >
-                                <div className="font-medium">{item.item_name}</div>
-                                <div className="text-gray-500">Qty: {item.quantity}</div>
+                                Change
+                            </button>
+                        )}
+                    </div>
+                ) : isChanging && autoSelectPattern ? (
+                    // Variant changing mode: show variant options only
+                    <div className="relative">
+                        <label className="block text-[10px] text-gray-500 mb-1">Select a variant:</label>
+                        <div className="absolute z-10 w-full bg-white border-2 border-blue-400 rounded-md shadow-lg max-h-40 overflow-y-auto">
+                            {variantItems.map(item => (
+                                <div
+                                    key={item.id}
+                                    className={`p-2 cursor-pointer text-xs border-b border-gray-100 last:border-b-0 ${
+                                        item.id === selectedItemId ? 'bg-blue-100' : 'hover:bg-gray-100'
+                                    }`}
+                                    onClick={() => handleItemSelect(item)}
+                                >
+                                    <div className="font-medium">{item.item_name}</div>
+                                    <div className="text-gray-500">Qty: {item.quantity}</div>
+                                </div>
+                            ))}
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setIsChanging(false)}
+                            className="mt-1 w-full px-2 py-1 text-[10px] bg-gray-300 hover:bg-gray-400 text-gray-800 rounded font-semibold"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                ) : (
+                    // Unlocked state: search for items
+                    <>
+                        <input
+                            type="text"
+                            value={searchTerm}
+                            onChange={handleSearchChange}
+                            onFocus={handleSearchFocus}
+                            onBlur={handleSearchBlur}
+                            placeholder="Type to search medicine..."
+                            className="w-full p-1 border rounded text-xs bg-white"
+                        />
+                        {showDropdown && searchedItems.length > 0 && (
+                            <div className="absolute z-10 w-full bg-white border border-gray-300 rounded-b-md shadow-lg max-h-40 overflow-y-auto">
+                                {searchedItems.map(item => (
+                                    <div
+                                        key={item.id}
+                                        className="p-2 hover:bg-gray-100 cursor-pointer text-xs border-b border-gray-100 last:border-b-0"
+                                        onClick={() => handleItemSelect(item)}
+                                    >
+                                        <div className="font-medium">{item.item_name}</div>
+                                        <div className="text-gray-500">Qty: {item.quantity}</div>
+                                    </div>
+                                ))}
                             </div>
-                        ))}
-                    </div>
-                )}
-                {showDropdown && searchedItems.length === 0 && searchTerm && (
-                    <div className="absolute z-10 w-full bg-white border border-gray-300 rounded-b-md shadow-lg p-2 text-xs text-gray-500">
-                        No medicines found matching "{searchTerm}"
-                    </div>
-                )}
-                {showDropdown && searchedItems.length === 0 && !searchTerm && filteredItems.length > 0 && (
-                    <div className="absolute z-10 w-full bg-white border border-gray-300 rounded-b-md shadow-lg p-2 text-xs text-gray-500">
-                        Start typing to search medicines...
-                    </div>
-                )}
-                {filteredItems.length === 0 && (
-                    <p className="text-[10px] text-orange-600 mt-1">
-                        No {inventoryCategory.toLowerCase()} items available in inventory. Please add items to the Inventory first.
-                    </p>
-                )}
-                {filteredItems.length > 0 && (
-                    <p className="text-[10px] text-gray-500 mt-1">
-                        Selecting an item will auto-deduct from inventory upon save.
-                    </p>
+                        )}
+                        {showDropdown && searchedItems.length === 0 && searchTerm && (
+                            <div className="absolute z-10 w-full bg-white border border-gray-300 rounded-b-md shadow-lg p-2 text-xs text-gray-500">
+                                No medicines found matching "{searchTerm}"
+                            </div>
+                        )}
+                        {showDropdown && searchedItems.length === 0 && !searchTerm && filteredItems.length > 0 && (
+                            <div className="absolute z-10 w-full bg-white border border-gray-300 rounded-b-md shadow-lg p-2 text-xs text-gray-500">
+                                Start typing to search medicines...
+                            </div>
+                        )}
+                        {filteredItems.length === 0 && (
+                            <p className="text-[10px] text-orange-600 mt-1">
+                                No {inventoryCategory.toLowerCase()} items available in inventory. Please add items to the Inventory first.
+                            </p>
+                        )}
+                        {filteredItems.length > 0 && (
+                            <p className="text-[10px] text-gray-500 mt-1">
+                                Selecting an item will auto-deduct from inventory upon save.
+                            </p>
+                        )}
+                    </>
                 )}
             </div>
         )}
@@ -961,7 +1091,7 @@ const Step3 = ({ formData, handleChange, inventoryItems, onAddToQueue }) => {
             {/* Additional Medical Information */}
             <div className="mt-4">
                 <InventoryInput 
-                    label="Vitamin A Supplementation (200,000 IU)"
+                    label="Vitamin A Supplementation (age-based dosage)"
                     fieldName="vitamin_a_date"
                     value={formData.vitamin_a_date}
                     onChange={handleChange}
@@ -970,6 +1100,8 @@ const Step3 = ({ formData, handleChange, inventoryItems, onAddToQueue }) => {
                     onAddToQueue={onAddToQueue}
                     amountFieldName="vitamin_a_amount"
                     amountValue={formData.vitamin_a_amount}
+                    amountMax={getMaxVitaminADose(formData.dob, formData.vitamin_a_date)}
+                    autoSelectPattern="vitamin a"
                 />
             </div>
         </div>

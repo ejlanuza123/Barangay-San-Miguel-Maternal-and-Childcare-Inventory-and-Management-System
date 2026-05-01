@@ -40,6 +40,21 @@ export default function AddBnsInventoryModal({ onClose, onSave, mode = "add", in
   const [error, setError] = useState("");
   const { addNotification } = useNotification();
 
+  const buildInventoryPayload = (source) => ({
+    item_name: source.item_name,
+    category: source.category,
+    quantity: parseInt(source.quantity),
+    unit: source.unit,
+    sku: source.sku ? source.sku.toUpperCase() : null,
+    batch_no: source.batch_no || null,
+    supply_source: source.supply_source,
+    expiry_date: source.expiration_date || source.expiry_date || null,
+    min_stock_level: parseInt(source.min_stock_level) || 10,
+    reorder_quantity: parseInt(source.reorder_quantity) || 50,
+    owner_role: 'BNS',
+    updated_at: new Date().toISOString()
+  });
+
   if (submitAsRequest && !requesterId) {
     throw new Error('Unable to submit request: missing requester account.');
   }
@@ -47,10 +62,14 @@ export default function AddBnsInventoryModal({ onClose, onSave, mode = "add", in
   useEffect(() => {
     if (mode === "edit" && initialData) {
       setFormData({
-        ...initialData,
+        item_name: initialData.item_name || "",
+        category: initialData.category || "",
+        quantity: initialData.quantity || "",
+        unit: initialData.unit || "",
         sku: initialData.sku || "",
         batch_no: initialData.batch_no || "",
         supply_source: initialData.supply_source || initialData.supplier || "",
+        expiration_date: initialData.expiration_date || initialData.expiry_date || "",
         min_stock_level: initialData.min_stock_level || 10,
         reorder_quantity: initialData.reorder_quantity || 50
       });
@@ -178,17 +197,7 @@ export default function AddBnsInventoryModal({ onClose, onSave, mode = "add", in
         
       } else {
         // Single item save
-        const dataPayload = {
-          ...formData,
-          sku: formData.sku ? formData.sku.toUpperCase() : null,
-          supply_source: formData.supply_source,
-          batch_no: formData.batch_no || null,
-          expiry_date: formData.expiration_date || null,
-          min_stock_level: parseInt(formData.min_stock_level) || 10,
-          reorder_quantity: parseInt(formData.reorder_quantity) || 50,
-          owner_role: 'BNS',
-          updated_at: new Date().toISOString()
-        };
+        const dataPayload = buildInventoryPayload(formData);
         
         // Remove the expiration_date field since we're using expiry_date
         delete dataPayload.expiration_date;
@@ -220,7 +229,7 @@ export default function AddBnsInventoryModal({ onClose, onSave, mode = "add", in
             if (updateError) throw updateError;
             
             await logActivity("BNS Inventory Updated", `Updated item: ${formData.item_name}`);
-            addNotification("BNS item updated successfully.", "success");
+            addNotification("Inventory item updated successfully.", "success");
           } else {
             const { error: insertError } = await supabase
               .from("inventory")

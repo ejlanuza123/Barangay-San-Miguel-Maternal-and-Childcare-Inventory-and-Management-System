@@ -780,7 +780,7 @@ const ViewChildModal = ({ child, onClose, onViewQRCode }) => {
         ] = await Promise.all([
           supabase.from('child_mother_immunizations').select('*').eq('child_record_id', child.id),
           supabase.from('child_breastfeeding').select('*').eq('child_record_id', child.id),
-          supabase.from('child_immunizations').select('*').eq('child_record_id', child.id),
+          supabase.from('child_immunizations').select('*').eq('child_record_id', child.id).order('date_given', { ascending: true }),
           supabase.from('child_measurements').select('*').eq('child_record_id', child.id).order('measurement_date', { ascending: false }),
           supabase.from('maternal_supplementation').select('*').eq('mother_record_id', child.id)
         ]);
@@ -860,13 +860,15 @@ const ViewChildModal = ({ child, onClose, onViewQRCode }) => {
         imm.admitted_by || '-',
         imm.immunized_by || '-',
         imm.next_visit ? new Date(imm.next_visit).toLocaleDateString() : '-',
+          imm.admission_time || '-',
+          imm.departure_time || '-',
         imm.remarks || '-'
       ]);
 
       autoTable(doc, {
         startY: doc.lastAutoTable.finalY + 15,
         theme: "grid",
-        head: [["Immunization", "Date Given", "Age", "Weight", "Height", "Nutritional", "Admitted By", "Immunized By", "Next Visit", "Remarks"]],
+          head: [["Immunization", "Date Given", "Age", "Weight", "Height", "Nutritional", "Admitted By", "Immunized By", "Next Visit", "Admission Time", "Departure Time", "Remarks"]],
         body: immRows,
         styles: { fontSize: 6, cellPadding: 1 },
       });
@@ -1001,7 +1003,7 @@ const ViewChildModal = ({ child, onClose, onViewQRCode }) => {
           {/* Immunizations */}
           {medicalData.immunizations.length > 0 && (
             <>
-              <SectionHeader title="5. Immunization Schedule" />
+              <SectionHeader title="5. Immunization History" />
               <div className="overflow-x-auto border rounded-md max-h-60 overflow-y-auto mb-4">
                 <table className="min-w-full text-xs">
                   <thead className="bg-gray-100 sticky top-0">
@@ -1015,6 +1017,8 @@ const ViewChildModal = ({ child, onClose, onViewQRCode }) => {
                       <th className="p-1 border">Admitted By</th>
                       <th className="p-1 border">Immunized By</th>
                       <th className="p-1 border">Next Visit</th>
+                      <th className="p-1 border">Admission Time</th>
+                      <th className="p-1 border">Departure Time</th>
                       <th className="p-1 border">Remarks</th>
                     </tr>
                   </thead>
@@ -1030,6 +1034,8 @@ const ViewChildModal = ({ child, onClose, onViewQRCode }) => {
                         <td className="p-1 border">{imm.admitted_by || '-'}</td>
                         <td className="p-1 border">{imm.immunized_by || '-'}</td>
                         <td className="p-1 border">{imm.next_visit ? new Date(imm.next_visit).toLocaleDateString() : '-'}</td>
+                        <td className="p-1 border">{imm.admission_time || '-'}</td>
+                        <td className="p-1 border">{imm.departure_time || '-'}</td>
                         <td className="p-1 border">{imm.remarks || '-'}</td>
                       </tr>
                     ))}

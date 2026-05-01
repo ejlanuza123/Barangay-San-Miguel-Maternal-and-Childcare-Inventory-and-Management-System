@@ -17,12 +17,35 @@ const ProfileIcon = () => (
   </svg>
 );
 
-const InventoryInput = ({ label, fieldName, value, onChange, inventoryCategory, inventoryItems, onAddToQueue, amountFieldName, amountValue }) => {
+const InventoryInput = ({ label, fieldName, value, onChange, inventoryCategory, inventoryItems, onAddToQueue, amountFieldName, amountValue, amountMax = null, autoSelectPattern = null }) => {
   const [selectedItemId, setSelectedItemId] = useState("");
   
   const filteredItems = inventoryItems.filter(
     item => item.category === inventoryCategory && item.quantity > 0
   );
+
+  // Auto-select item when date is set and a pattern is provided (e.g., for Vitamin A)
+  useEffect(() => {
+    if (value && autoSelectPattern && !selectedItemId) {
+      const matchingItem = filteredItems.find(item => 
+        item.item_name.toLowerCase().includes(autoSelectPattern.toLowerCase())
+      );
+      if (matchingItem) {
+        setSelectedItemId(matchingItem.id);
+        
+        // Auto-queue the deduction
+        const qtyToDeduct = amountMax ? 1 : (parseInt(amountValue) || 1);
+        onAddToQueue({
+            itemId: matchingItem.id,
+            itemName: matchingItem.item_name,
+            deductQty: qtyToDeduct, 
+            category: inventoryCategory,
+            dateGiven: value, 
+            fieldName: fieldName
+        });
+      }
+    }
+  }, [value, autoSelectPattern, selectedItemId, filteredItems, amountMax, amountValue, onAddToQueue, fieldName, inventoryCategory]);
 
   const handleDateSet = (dateVal) => {
     onChange({ target: { name: fieldName, value: dateVal } });
@@ -38,7 +61,9 @@ const InventoryInput = ({ label, fieldName, value, onChange, inventoryCategory, 
     setSelectedItemId(itemId);
     
     const item = filteredItems.find(i => i.id === itemId);
-    const qtyToDeduct = parseInt(amountValue) || 1;
+    // For dosage fields (amountMax is set), always deduct 1 unit
+    // For non-dosage fields, use the amountValue as quantity
+    const qtyToDeduct = amountMax ? 1 : (parseInt(amountValue) || 1);
 
     if (item) {
         onAddToQueue({
@@ -1107,6 +1132,8 @@ const Step4 = ({
                 onAddToQueue={onAddToQueue}
                 amountFieldName="vitamin_a_amount"
                 amountValue={formData.vitamin_a_amount}
+                amountMax={200000}
+                autoSelectPattern="vitamin a"
             />
         </div>
       </div>
