@@ -89,8 +89,8 @@ export default function AdminInventoryPage() {
         const usageMap = Object.fromEntries((usageAnalytics || []).map((item) => [item.id, item]));
         
         const combined = [
-            ...(bhwRes.data || []).map(item => ({...item, source: 'BHW', averageDailyUsage: usageMap[item.id]?.averageDailyUsage || 0})),
-            ...(bnsRes.data || []).map(item => ({...item, source: 'BNS', averageDailyUsage: usageMap[item.id]?.averageDailyUsage || 0}))
+            ...(bhwRes.data || []).map(item => ({...item, source: 'BHW', averageDailyUsage: usageMap[item.id]?.averageUsePerDispense || 0})),
+            ...(bnsRes.data || []).map(item => ({...item, source: 'BNS', averageDailyUsage: usageMap[item.id]?.averageUsePerDispense || 0}))
         ];
         
         setAllItems(combined.sort((a, b) => a.item_name.localeCompare(b.item_name)));

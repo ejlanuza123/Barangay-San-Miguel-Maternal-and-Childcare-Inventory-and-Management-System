@@ -211,8 +211,7 @@ const StockWidget = ({ items, onSeeAll }) => {
     const getBarColor = (status) => {
         switch (status) {
             case 'Low': return 'bg-red-500';
-            case 'Moderate': return 'bg-yellow-400';
-            case 'High': return 'bg-green-500';
+            case 'Critical': return 'bg-yellow-400';
             case 'Normal': return 'bg-blue-500';
             default: return 'bg-gray-300';
         }
@@ -225,7 +224,7 @@ const StockWidget = ({ items, onSeeAll }) => {
     };
 
     const getStatusCounts = () => {
-        const counts = { High: 0, Moderate: 0, Low: 0, Normal: 0 };
+        const counts = { Critical: 0, Low: 0, Normal: 0 };
         items.forEach(item => {
             if (counts[item.status] !== undefined) {
                 counts[item.status]++;
@@ -512,7 +511,7 @@ const ViewAllStockModal = ({ items, onClose }) => {
                                 onChange={(e) => setStatusFilter(e.target.value)}
                                 className="w-full md:w-auto px-4 py-2.5 rounded-lg border border-gray-300 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
                             >
-                                {['All', 'High', 'Moderate', 'Low', 'Normal'].map(status => (
+                                {['All', 'Critical', 'Low', 'Normal'].map(status => (
                                     <option key={status} value={status}>{status}</option>
                                 ))}
                             </select>
@@ -556,7 +555,7 @@ const ViewAllStockModal = ({ items, onClose }) => {
                                         <td className="p-3">
                                             <StatusBadge status={item.status} />
                                         </td>
-                                        <td className="p-3 text-gray-600">{item.supplier || 'N/A'}</td>
+                                        <td className="p-3 text-gray-600">{item.supply_source || 'N/A'}</td>
                                         <td className="p-3 text-gray-600">
                                             {item.expiration_date || item.expiry_date || 'No expiry'}
                                         </td>
@@ -650,14 +649,14 @@ export default function AdminDashboard() {
                     .lt('created_at', todayEnd)
             ]);
 
-            // Combine inventory from both tables and calculate accurate status
+            // Split the shared inventory table by owner role for the dashboard cards
             const allInventory = [
-                ...(InventoryRes.data || []).map(item => ({
+                ...(InventoryRes.data || []).filter(item => item.owner_role === 'BHW').map(item => ({
                     ...item,
                     type: 'BHW',
                     status: calculateInventoryStatus(item.quantity)
                 })),
-                ...(InventoryRes.data || []).map(item => ({
+                ...(InventoryRes.data || []).filter(item => item.owner_role === 'BNS').map(item => ({
                     ...item,
                     type: 'BNS',
                     status: calculateInventoryStatus(item.quantity)
@@ -692,9 +691,8 @@ export default function AdminDashboard() {
         if (!quantity && quantity !== 0) return 'Normal';
         if (quantity === 0) return 'Low';
         if (quantity < 10) return 'Low';
-        if (quantity < 30) return 'Moderate';
-        if (quantity < 50) return 'Normal';
-        return 'High';
+        if (quantity < 30) return 'Critical';
+        return 'Normal';
     };
 
     useEffect(() => {

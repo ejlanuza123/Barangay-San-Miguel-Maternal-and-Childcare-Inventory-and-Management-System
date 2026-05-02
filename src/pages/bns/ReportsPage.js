@@ -984,7 +984,7 @@ export default function BnsReportsPage() {
             `${item.quantity || 0} ${item.unit || ''}`,
             item.status || '-',
             item.expiry_date ? new Date(item.expiry_date).toLocaleDateString() : '-',
-            item.supplier || '-',
+            item.supply_source || '-',
             item.owner_role || '-'
         ]);
 

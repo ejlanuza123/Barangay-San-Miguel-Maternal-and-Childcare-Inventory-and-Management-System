@@ -269,7 +269,7 @@ export default function AdminInventoryPage() {
             // Add usage data to items
             const itemsWithUsage = (data || []).map(item => ({
                 ...item,
-                averageDailyUsage: usageMap[item.id]?.averageDailyUsage || 0
+                averageDailyUsage: usageMap[item.id]?.averageUsePerDispense || 0
             }));
             setAllItems(itemsWithUsage);
         }
