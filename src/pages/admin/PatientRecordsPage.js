@@ -296,7 +296,66 @@ const MaternalStatusLegend = () => (
 const ViewPatientModal = ({ patient, onClose }) => {
   // Safely get the detailed records, or an empty object if it's null
   const [isQrModalVisible, setIsQrModalVisible] = useState(false);
+  const [children, setChildren] = useState([]);
+  const [loadingChildren, setLoadingChildren] = useState(false);
   const details = patient.medical_history || {};
+
+  useEffect(() => {
+    const fetchChildren = async () => {
+      if (!patient) return;
+
+      setLoadingChildren(true);
+      try {
+        const motherFullName = `${patient.first_name} ${patient.last_name}`;
+
+        const { data: exactMatch, error: exactError } = await supabase
+          .from('child_records')
+          .select('*')
+          .or(`mother_name.ilike.%${motherFullName}%`)
+          .order('dob', { ascending: false });
+
+        if (exactError) throw exactError;
+
+        let filteredChildren = exactMatch || [];
+
+        if (filteredChildren.length === 0) {
+          const { data: allChildren, error: allError } = await supabase
+            .from('child_records')
+            .select('*')
+            .order('dob', { ascending: false });
+
+          if (allError) throw allError;
+
+          filteredChildren = allChildren.filter((child) => {
+            const motherName = (child.mother_name || '').toLowerCase().trim();
+            const searchPatterns = [
+              motherFullName.toLowerCase().trim(),
+              `${patient.first_name} ${patient.last_name}`.toLowerCase().trim(),
+              details.middle_name ? `${patient.first_name} ${details.middle_name} ${patient.last_name}`.toLowerCase().trim() : '',
+            ].filter(Boolean);
+
+            for (const pattern of searchPatterns) {
+              if (motherName === pattern) return true;
+              if (pattern && motherName.startsWith(pattern)) return true;
+            }
+
+            const hasFirstName = motherName.includes((patient.first_name || '').toLowerCase());
+            const hasLastName = motherName.includes((patient.last_name || '').toLowerCase());
+            return hasFirstName && hasLastName;
+          });
+        }
+
+        setChildren(filteredChildren);
+      } catch (error) {
+        console.error('Error fetching children:', error);
+        setChildren([]);
+      } finally {
+        setLoadingChildren(false);
+      }
+    };
+
+    fetchChildren();
+  }, [patient, details.middle_name]);
   const handleDownloadPdf = () => {
     const doc = new jsPDF();
 
@@ -530,6 +589,10 @@ const ViewPatientModal = ({ patient, onClose }) => {
       <p className="font-semibold text-gray-800">{value || "N/A"}</p>
     </div>
   );
+
+  const NoDataMessage = () => (
+    <p className="text-sm text-gray-500 italic py-2">No data recorded yet.</p>
+  );
   const CheckboxDisplay = ({ label, isChecked }) => (
     <div className="flex items-center space-x-2">
       <div
@@ -554,6 +617,78 @@ const ViewPatientModal = ({ patient, onClose }) => {
         )}
       </div>
       <span className="text-sm">{label}</span>
+    </div>
+  );
+
+  const ChildrenSection = () => (
+    <div className="mt-6">
+      <div className="flex items-center justify-between mb-2">
+        <SectionHeader title="Children Records" />
+        {children.length > 0 && !loadingChildren && (
+          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+            {children.length} child{children.length !== 1 ? 'ren' : ''}
+          </span>
+        )}
+      </div>
+
+      {loadingChildren ? (
+        <div className="text-center py-4">
+          <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+          <p className="text-sm text-gray-500 mt-2">Loading children records...</p>
+        </div>
+      ) : children.length === 0 ? (
+        <div className="text-center py-4 bg-gray-50 rounded-md border border-dashed border-gray-200">
+          <svg className="w-12 h-12 mx-auto text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5 3.75a2.5 2.5 0 01-2.5 2.5H3.75a2.2 2.2 0 01-2.2-2.2V6.75a2.2 2.2 0 012.2-2.2h16.5a2.2 2.2 0 012.2 2.2v12.5z" />
+          </svg>
+          <p className="text-sm text-gray-500 mt-2">No children records found for this mother.</p>
+          <p className="text-xs text-gray-400 mt-1">
+            Mother's name: {patient.first_name} {patient.last_name}
+          </p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto border rounded-lg">
+          <table className="w-full text-xs">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="p-2 border text-left font-semibold text-gray-600">Child ID</th>
+                <th className="p-2 border text-left font-semibold text-gray-600">Child Name</th>
+                <th className="p-2 border text-left font-semibold text-gray-600">Mother's Name</th>
+                <th className="p-2 border text-left font-semibold text-gray-600">Date of Birth</th>
+                <th className="p-2 border text-left font-semibold text-gray-600">Sex</th>
+                <th className="p-2 border text-left font-semibold text-gray-600">Birth Weight</th>
+                <th className="p-2 border text-left font-semibold text-gray-600">Place of Birth</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {children.map((child) => (
+                <tr key={child.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="p-2 border font-medium text-blue-600">{child.child_id}</td>
+                  <td className="p-2 border font-medium">
+                    {child.child_name || `${child.first_name || ''} ${child.last_name || ''}`.trim() || 'N/A'}
+                  </td>
+                  <td className="p-2 border text-gray-500">{child.mother_name || 'N/A'}</td>
+                  <td className="p-2 border">{child.dob ? new Date(child.dob).toLocaleDateString() : 'N/A'}</td>
+                  <td className="p-2 border">
+                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                      child.sex === 'Male' ? 'bg-blue-100 text-blue-800' :
+                      child.sex === 'Female' ? 'bg-pink-100 text-pink-800' :
+                      'bg-gray-100 text-gray-800'
+                    }`}>
+                      {child.sex || 'N/A'}
+                    </span>
+                  </td>
+                  <td className="p-2 border">{child.birth_weight || 'N/A'}</td>
+                  <td className="p-2 border">{child.place_of_birth || 'N/A'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="bg-gray-50 px-3 py-2 border-t text-xs text-gray-500">
+            Showing {children.length} child{children.length !== 1 ? 'ren' : ''} registered under this mother
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -767,6 +902,8 @@ const ViewPatientModal = ({ patient, onClose }) => {
                 </div>
               </div>
             </div>
+
+            <ChildrenSection />
           </div>
 
           {/* Footer */}
@@ -1028,232 +1165,313 @@ const ChildPagination = ({ currentPage, totalPages, onPageChange }) => {
 };
 
 const ViewChildModal = ({ child, onClose, onViewQRCode }) => {
-  const details = child.health_details || {};
+  const [medicalData, setMedicalData] = useState({
+    motherImmunizations: [],
+    breastfeeding: [],
+    immunizations: [],
+    measurements: [],
+    supplements: [],
+  });
+
+  useEffect(() => {
+    const fetchMedicalData = async () => {
+      if (!child?.id) return;
+
+      try {
+        const [motherImmRes, breastfeedingRes, immunizationsRes, measurementsRes, supplementsRes] = await Promise.all([
+          supabase.from('child_mother_immunizations').select('*').eq('child_record_id', child.id),
+          supabase.from('child_breastfeeding').select('*').eq('child_record_id', child.id),
+          supabase.from('child_immunizations').select('*').eq('child_record_id', child.id).order('date_given', { ascending: true }),
+          supabase.from('child_measurements').select('*').eq('child_record_id', child.id).order('measurement_date', { ascending: false }),
+          supabase.from('maternal_supplementation').select('*').eq('mother_record_id', child.id),
+        ]);
+
+        setMedicalData({
+          motherImmunizations: motherImmRes.data || [],
+          breastfeeding: breastfeedingRes.data || [],
+          immunizations: immunizationsRes.data || [],
+          measurements: measurementsRes.data || [],
+          supplements: supplementsRes.data || [],
+        });
+      } catch (error) {
+        console.error('Error fetching medical data:', error);
+      }
+    };
+
+    fetchMedicalData();
+  }, [child]);
+
   const handleDownloadPdf = () => {
     const doc = new jsPDF();
     doc.setFontSize(10);
-    doc.text("Republic of the Philippines", 105, 10, { align: "center" });
-    doc.text("CITY HEALTH DEPARTMENT", 105, 15, { align: "center" });
-    doc.text("Nursing Services Division", 105, 20, { align: "center" });
-    doc.text("City of Puerto Princesa", 105, 25, { align: "center" });
+    doc.text('Republic of the Philippines', 105, 10, { align: 'center' });
+    doc.text('CITY HEALTH DEPARTMENT', 105, 15, { align: 'center' });
+    doc.text('Nursing Services Division', 105, 20, { align: 'center' });
+    doc.text('City of Puerto Princesa', 105, 25, { align: 'center' });
     doc.setFontSize(12);
-    doc.setFont(undefined, "bold");
-    doc.text("EXPANDED PROGRAM ON IMMUNIZATION", 105, 35, { align: "center" });
-    doc.text("INDIVIDUAL TREATMENT RECORD (ITR)", 105, 40, { align: "center" });
+    doc.setFont(undefined, 'bold');
+    doc.text('EXPANDED PROGRAM ON IMMUNIZATION', 105, 35, { align: 'center' });
+    doc.text('INDIVIDUAL TREATMENT RECORD (ITR)', 105, 40, { align: 'center' });
     doc.setFontSize(9);
-    doc.setFont(undefined, "normal");
+    doc.setFont(undefined, 'normal');
+
     autoTable(doc, {
       startY: 45,
-      theme: "plain",
+      theme: 'plain',
       body: [
-        [
-          `Name of BHS: ${details.bhs_name || "San Miguel"}`,
-          `NHTS No.: ${details.nhts_no || "N/A"}`,
-        ],
-        [
-          `Name of Child: ${child.first_name} ${child.last_name}`,
-          `PhilHealth No.: ${details.philhealth_no || "N/A"}`,
-        ],
-        [`Date of Birth: ${child.dob || "N/A"}`, `Sex: ${child.sex || "N/A"}`],
-        [
-          `Place of Birth: ${details.place_of_birth || "N/A"}`,
-          `Birth Weight: ${child.weight_kg || "N/A"} kg`,
-        ],
-        [
-          `Name of Mother: ${child.mother_name || "N/A"}`,
-          `Name of Father: ${details.father_name || "N/A"}`,
-        ],
-        [
-          `Name of Guardian: ${child.guardian_name || "N/A"}`,
-          `Relationship: ${details.guardian_relationship || "N/A"}`,
-        ],
+        [`Name of BHS: ${child.bhs_name || 'San Miguel'}`, `NHTS No.: ${child.nhts_no || 'N/A'}`],
+        [`Name of Child: ${child.first_name} ${child.last_name}`, `PhilHealth No.: ${child.philhealth_no || 'N/A'}`],
+        [`Date of Birth: ${child.dob || 'N/A'}`, `Sex: ${child.sex || 'N/A'}`],
+        [`Place of Birth: ${child.place_of_birth || 'N/A'}`, `Birth Weight: ${child.birth_weight || 'N/A'} kg`],
+        [`Name of Mother: ${child.mother_name || 'N/A'}`, `Name of Father: ${child.father_name || 'N/A'}`],
+        [`Name of Guardian: ${child.guardian_name || 'N/A'}`, `Relationship: ${child.guardian_relationship || 'N/A'}`],
       ],
-      styles: { fontSize: 9, cellPadding: 0.5 },
+      styles: { fontSize: 8, cellPadding: 1 },
     });
-    doc
-      .setFontSize(10)
-      .setFont(undefined, "bold")
-      .text("MOTHER'S IMMUNIZATION STATUS", 14, doc.lastAutoTable.finalY + 10);
-    autoTable(doc, {
-      startY: doc.lastAutoTable.finalY + 12,
-      theme: "grid",
-      head: [["Antigen", "Td1", "Td2", "Td3", "Td4", "Td5", "FIM"]],
-      body: [
-        [
-          "Date Given",
-          details.mother_immunization_Td1 || "",
-          details.mother_immunization_Td2 || "",
-          details.mother_immunization_Td3 || "",
-          details.mother_immunization_Td4 || "",
-          details.mother_immunization_Td5 || "",
-          details.mother_immunization_FIM || "",
-        ],
-      ],
-      styles: { fontSize: 8, halign: "center" },
-    });
+
+    if (medicalData.motherImmunizations.length > 0) {
+      doc.setFontSize(10).setFont(undefined, 'bold').text("MOTHER'S IMMUNIZATION STATUS", 14, doc.lastAutoTable.finalY + 10);
+
+      const motherImmRows = [[ 'Td1', 'Td2', 'Td3', 'Td4', 'Td5', 'FIM' ].map((type) => {
+        const record = medicalData.motherImmunizations.find((item) => item.immunization_type === type);
+        return record ? new Date(record.date_given).toLocaleDateString() : '-';
+      })];
+
+      autoTable(doc, {
+        startY: doc.lastAutoTable.finalY + 12,
+        theme: 'grid',
+        head: [[ 'Td1', 'Td2', 'Td3', 'Td4', 'Td5', 'FIM' ]],
+        body: motherImmRows,
+        styles: { fontSize: 8, halign: 'center' },
+      });
+    }
+
+    if (medicalData.immunizations.length > 0) {
+      const immRows = medicalData.immunizations.map((imm) => [
+        imm.immunization_type,
+        imm.date_given ? new Date(imm.date_given).toLocaleDateString() : '-',
+        imm.age || '-',
+        imm.weight_kg || '-',
+        imm.height_cm || '-',
+        imm.nutritional_status || '-',
+        imm.admitted_by || '-',
+        imm.immunized_by || '-',
+        imm.next_visit ? new Date(imm.next_visit).toLocaleDateString() : '-',
+        imm.remarks || '-',
+      ]);
+
+      autoTable(doc, {
+        startY: doc.lastAutoTable.finalY + 15,
+        theme: 'grid',
+        head: [[ 'Immunization', 'Date Given', 'Age', 'Weight', 'Height', 'Nutritional', 'Admitted By', 'Immunized By', 'Next Visit', 'Remarks' ]],
+        body: immRows,
+        styles: { fontSize: 6, cellPadding: 1 },
+      });
+    }
+
     doc.save(`ITR_${child.last_name}_${child.first_name}.pdf`);
-    logActivity(
-      "Downloaded PDF Record",
-      `Generated PDF for child: ${child.child_id}`
-    );
+    logActivity('Downloaded PDF Record', `Generated PDF for child: ${child.child_id}`);
   };
+
   const SectionHeader = ({ title }) => (
-    <h3 className="font-bold text-gray-700 text-sm mt-6 mb-2 pb-1 border-b">
-      {title}
-    </h3>
+    <h3 className="font-bold text-gray-700 text-sm mt-6 mb-3 pb-2 border-b">{title}</h3>
   );
+
   const Field = ({ label, value }) => (
-    <div>
+    <div className="mb-2">
       <p className="text-xs text-gray-500">{label}</p>
-      <p className="font-semibold text-gray-800">{value || "N/A"}</p>
+      <p className="font-semibold text-gray-800 text-sm">{value || 'N/A'}</p>
     </div>
   );
+
+  const NoDataMessage = () => <p className="text-sm text-gray-500 italic py-2">No data recorded yet.</p>;
+
   const CheckboxDisplay = ({ label, isChecked }) => (
     <div className="flex items-center space-x-2">
-      <div
-        className={`w-4 h-4 border-2 rounded ${
-          isChecked ? "bg-blue-500 border-blue-500" : "border-gray-300"
-        }`}
-      >
+      <div className={`w-4 h-4 border-2 rounded ${isChecked ? 'bg-blue-500 border-blue-500' : 'border-gray-300'}`}>
         {isChecked && (
-          <svg
-            className="w-full h-full text-white"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="3"
-              d="M5 13l4 4L19 7"
-            />
+          <svg className="w-full h-full text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
           </svg>
         )}
       </div>
       <span className="text-sm">{label}</span>
     </div>
   );
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
       <motion.div
-        className="bg-white rounded-lg shadow-2xl w-full max-w-3xl overflow-hidden"
+        className="bg-white rounded-lg shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col"
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
       >
-        <div className="p-4 bg-gray-50 border-b">
-          <h2 className="text-lg font-bold text-gray-800">
-            Child Immunization Record
-          </h2>
-          <p className="text-sm text-gray-600">
-            Viewing record for{" "}
-            <span className="font-semibold">
-              {child.first_name} {child.last_name}
-            </span>{" "}
-            (ID: {child.child_id})
-          </p>
-        </div>
-        <div className="p-6 overflow-y-auto max-h-[70vh]">
-          <SectionHeader title="Personal & Family Information" />
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-            <Field label="Date of Birth" value={child.dob} />
-            <Field label="Sex" value={child.sex} />
-            <Field label="Place of Birth" value={details.place_of_birth} />
-            <Field label="Mother's Name" value={child.mother_name} />
-            <Field label="Father's Name" value={details.father_name} />
-            <Field label="Guardian's Name" value={child.guardian_name} />
-          </div>
-          <SectionHeader title="Nutritional Measurements" />
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm items-center">
-            <Field label="Weight" value={`${child.weight_kg || "N/A"} kg`} />
-            <Field label="Height" value={`${child.height_cm || "N/A"} cm`} />
-            <Field label="Body Mass Index (BMI)" value={child.bmi} />
+        <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-b flex-shrink-0">
+          <div className="flex justify-between items-start">
             <div>
-              <p className="text-xs text-gray-500">Nutrition Status</p>
-              <div className="mt-1">
-                <StatusBadge status={child.nutrition_status} />
-              </div>
-            </div>
-          </div>
-          <SectionHeader title="ID Numbers" />
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-            <Field label="NHTS No." value={details.nhts_no} />
-            <Field label="PhilHealth No." value={details.philhealth_no} />
-          </div>
-          <SectionHeader title="Mother's Immunization Status" />
-          <div className="overflow-x-auto">
-            <table className="w-full text-center text-xs border">
-              <thead className="bg-gray-100 font-semibold">
-                <tr>
-                  {["Td1", "Td2", "Td3", "Td4", "Td5", "FIM"].map((antigen) => (
-                    <th key={antigen} className="p-2 border">
-                      {antigen}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  {["Td1", "Td2", "Td3", "Td4", "Td5", "FIM"].map((antigen) => (
-                    <td key={antigen} className="p-2 border">
-                      {details[`mother_immunization_${antigen}`] || "-"}
-                    </td>
-                  ))}
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <SectionHeader title="Additional Health Records" />
-          <div className="space-y-3">
-            <div>
-              <p className="text-xs text-gray-500 mb-1">
-                Exclusive Breastfeeding
+              <h2 className="text-xl font-bold text-gray-800">Child Immunization Record</h2>
+              <p className="text-sm text-gray-600">
+                Viewing record for <span className="font-semibold">{child.first_name} {child.last_name}</span> (ID: {child.child_id})
               </p>
-              <div className="flex flex-wrap gap-4">
-                {[
-                  "1st Month",
-                  "2nd Month",
-                  "3rd Month",
-                  "4th Month",
-                  "5th Month",
-                  "6th Month",
-                ].map((month) => (
-                  <CheckboxDisplay
-                    key={month}
-                    label={month}
-                    isChecked={
-                      details[`breastfeeding_${month.replace(" ", "_")}`]
-                    }
-                  />
-                ))}
-              </div>
             </div>
-            <Field
-              label="Vitamin A (Date Given)"
-              value={details.vitamin_a_date}
-            />
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-2 rounded-full">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
         </div>
-        <div className="p-4 bg-gray-50 border-t flex justify-end gap-3">
-          <button
-            onClick={() => onViewQRCode(child)} // This passes the child object up
-            className="px-4 py-2 bg-purple-600 text-white rounded-md font-semibold text-sm hover:bg-purple-700"
-          >
-            View QR Code
-          </button>
-          <button
-            onClick={handleDownloadPdf}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md font-semibold text-sm hover:bg-blue-700"
-          >
-            Download as PDF
-          </button>
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md font-semibold text-sm hover:bg-gray-300"
-          >
-            Close
-          </button>
+
+        <div className="flex-1 overflow-y-auto p-6">
+          <SectionHeader title="1. Personal & Family Information" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+            <Field label="Name of BHS" value={child.bhs_name || 'San Miguel'} />
+            <Field label="Family Number" value={child.family_number} />
+            <Field label="Child's Name" value={`${child.first_name} ${child.last_name}`} />
+            <Field label="Sex" value={child.sex} />
+            <Field label="Date of Birth" value={child.dob} />
+            <Field label="Place of Birth" value={child.place_of_birth} />
+            <Field label="Place of Delivery" value={child.place_of_delivery} />
+            <Field label="Birth Order" value={child.birth_order} />
+            <Field label="Type of Delivery" value={child.delivery_type} />
+          </div>
+
+          <div className="mb-4 p-3 border rounded-lg bg-gray-50">
+            <h4 className="font-semibold text-gray-700 mb-2 text-sm">ID Numbers</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Field label="NHTS No." value={child.nhts_no} />
+              <Field label="PhilHealth No." value={child.philhealth_no} />
+            </div>
+          </div>
+
+          <SectionHeader title="2. Parent/Guardian Information" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+            <Field label="Name of Mother" value={child.mother_name} />
+            <Field label="Name of Father" value={child.father_name} />
+            <Field label="Guardian's Name" value={child.guardian_name} />
+            <Field label="Relationship" value={child.guardian_relationship} />
+            <Field label="Contact Number" value={child.contact_no} />
+            <Field label="Address" value={child.address} />
+          </div>
+
+          <SectionHeader title="3. Mother's Immunization Status" />
+          {medicalData.motherImmunizations.length > 0 ? (
+            <div className="overflow-x-auto mb-6">
+              <table className="w-full text-center text-xs border">
+                <thead className="bg-gray-100 font-semibold">
+                  <tr>
+                    {['Td1', 'Td2', 'Td3', 'Td4', 'Td5', 'FIM'].map((antigen) => (
+                      <th key={antigen} className="p-2 border">{antigen}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    {['Td1', 'Td2', 'Td3', 'Td4', 'Td5', 'FIM'].map((antigen) => {
+                      const record = medicalData.motherImmunizations.find((item) => item.immunization_type === antigen);
+                      return <td key={antigen} className="p-2 border">{record ? new Date(record.date_given).toLocaleDateString() : '-'}</td>;
+                    })}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <NoDataMessage />
+          )}
+
+          <SectionHeader title="4. Exclusive Breastfeeding" />
+          {medicalData.breastfeeding.length > 0 ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 mb-6">
+              {[1, 2, 3, 4, 5, 6].map((month) => {
+                const record = medicalData.breastfeeding.find((entry) => entry.month_number === month);
+                return (
+                  <div key={month} className="text-center p-2 border rounded bg-gray-50">
+                    <p className="font-bold text-xs">{month}{month === 1 ? 'st' : month === 2 ? 'nd' : month === 3 ? 'rd' : 'th'} Month</p>
+                    <div className="flex items-center justify-center mt-1">
+                      <div className={`w-4 h-4 border-2 rounded ${record?.is_exclusive ? 'bg-blue-500' : 'bg-gray-100'}`} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <NoDataMessage />
+          )}
+
+          <SectionHeader title="5. Immunization Schedule" />
+          {medicalData.immunizations.length > 0 ? (
+            <div className="overflow-x-auto border rounded-md max-h-60 overflow-y-auto mb-4">
+              <table className="min-w-full text-xs">
+                <thead className="bg-gray-100 sticky top-0">
+                  <tr>
+                    <th className="p-1 border">Immunization</th>
+                    <th className="p-1 border">Date Given</th>
+                    <th className="p-1 border">Age</th>
+                    <th className="p-1 border">Weight</th>
+                    <th className="p-1 border">Height</th>
+                    <th className="p-1 border">Nutritional</th>
+                    <th className="p-1 border">Admitted By</th>
+                    <th className="p-1 border">Immunized By</th>
+                    <th className="p-1 border">Next Visit</th>
+                    <th className="p-1 border">Remarks</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {medicalData.immunizations.map((imm, idx) => (
+                    <tr key={idx} className="hover:bg-gray-50">
+                      <td className="p-1 border font-semibold">{imm.immunization_type}</td>
+                      <td className="p-1 border">{imm.date_given ? new Date(imm.date_given).toLocaleDateString() : '-'}</td>
+                      <td className="p-1 border">{imm.age || '-'}</td>
+                      <td className="p-1 border">{imm.weight_kg || '-'}</td>
+                      <td className="p-1 border">{imm.height_cm || '-'}</td>
+                      <td className="p-1 border">{imm.nutritional_status || '-'}</td>
+                      <td className="p-1 border">{imm.admitted_by || '-'}</td>
+                      <td className="p-1 border">{imm.immunized_by || '-'}</td>
+                      <td className="p-1 border">{imm.next_visit ? new Date(imm.next_visit).toLocaleDateString() : '-'}</td>
+                      <td className="p-1 border">{imm.remarks || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <NoDataMessage />
+          )}
+
+          <SectionHeader title="6. Current Measurements" />
+          {medicalData.measurements.length > 0 ? (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+              <Field label="Weight (kg)" value={medicalData.measurements[0]?.weight_kg} />
+              <Field label="Height (cm)" value={medicalData.measurements[0]?.height_cm} />
+              <Field label="BMI" value={medicalData.measurements[0]?.bmi} />
+              <div>
+                <p className="text-xs text-gray-500">Nutrition Status</p>
+                <div className="mt-1">
+                  <StatusBadge status={medicalData.measurements[0]?.nutrition_status || child.nutrition_status} />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <NoDataMessage />
+          )}
+        </div>
+
+        <div className="p-4 bg-gray-50 border-t flex justify-between items-center flex-shrink-0">
+          <div className="text-xs text-gray-500">
+            Last Updated: {new Date(child.updated_at || child.created_at).toLocaleDateString()}
+          </div>
+          <div className="flex gap-3">
+            <button onClick={() => onViewQRCode(child)} className="px-4 py-2 bg-purple-600 text-white rounded-md font-semibold text-sm">
+              View QR Code
+            </button>
+            <button onClick={handleDownloadPdf} className="px-4 py-2 bg-blue-600 text-white rounded-md font-semibold text-sm">
+              Download PDF
+            </button>
+            <button onClick={onClose} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md font-semibold text-sm">
+              Close
+            </button>
+          </div>
         </div>
       </motion.div>
     </div>

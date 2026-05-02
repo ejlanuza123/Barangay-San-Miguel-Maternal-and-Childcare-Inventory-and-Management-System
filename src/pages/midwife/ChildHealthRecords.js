@@ -893,6 +893,10 @@ const ViewChildModal = ({ child, onClose, onViewQRCode }) => {
     </div>
   );
 
+  const NoDataMessage = () => (
+    <p className="text-sm text-gray-500 italic py-2">No data recorded yet.</p>
+  );
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
       <motion.div
@@ -955,112 +959,112 @@ const ViewChildModal = ({ child, onClose, onViewQRCode }) => {
           </div>
 
           {/* Mother's Immunizations */}
-          {medicalData.motherImmunizations.length > 0 && (
-            <>
-              <SectionHeader title="3. Mother's Immunization Status" />
-              <div className="overflow-x-auto mb-6">
-                <table className="w-full text-center text-xs border">
-                  <thead className="bg-gray-100 font-semibold">
-                    <tr>
-                      {["Td1", "Td2", "Td3", "Td4", "Td5", "FIM"].map(antigen => (
-                        <th key={antigen} className="p-2 border">{antigen}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      {["Td1", "Td2", "Td3", "Td4", "Td5", "FIM"].map(antigen => {
-                        const record = medicalData.motherImmunizations.find(i => i.immunization_type === antigen);
-                        return (
-                          <td key={antigen} className="p-2 border">
-                            {record ? new Date(record.date_given).toLocaleDateString() : "-"}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </>
+          <SectionHeader title="3. Mother's Immunization Status" />
+          {medicalData.motherImmunizations.length > 0 ? (
+            <div className="overflow-x-auto mb-6">
+              <table className="w-full text-center text-xs border">
+                <thead className="bg-gray-100 font-semibold">
+                  <tr>
+                    {["Td1", "Td2", "Td3", "Td4", "Td5", "FIM"].map(antigen => (
+                      <th key={antigen} className="p-2 border">{antigen}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    {["Td1", "Td2", "Td3", "Td4", "Td5", "FIM"].map(antigen => {
+                      const record = medicalData.motherImmunizations.find(i => i.immunization_type === antigen);
+                      return (
+                        <td key={antigen} className="p-2 border">
+                          {record ? new Date(record.date_given).toLocaleDateString() : "-"}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <NoDataMessage />
           )}
 
           {/* Breastfeeding */}
-          {medicalData.breastfeeding.length > 0 && (
-            <>
-              <SectionHeader title="4. Exclusive Breastfeeding" />
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 mb-6">
-                {[1,2,3,4,5,6].map(month => {
-                  const record = medicalData.breastfeeding.find(b => b.month_number === month);
-                  return (
-                    <div key={month} className="text-center p-2 border rounded bg-gray-50">
-                      <p className="font-bold text-xs">{month}{month === 1 ? 'st' : month === 2 ? 'nd' : month === 3 ? 'rd' : 'th'} Month</p>
-                      <div className="flex items-center justify-center mt-1">
-                        <div className={`w-4 h-4 border-2 rounded ${record?.is_exclusive ? 'bg-blue-500' : 'bg-gray-100'}`} />
-                      </div>
+          <SectionHeader title="4. Exclusive Breastfeeding" />
+          {medicalData.breastfeeding.length > 0 ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 mb-6">
+              {[1,2,3,4,5,6].map(month => {
+                const record = medicalData.breastfeeding.find(b => b.month_number === month);
+                return (
+                  <div key={month} className="text-center p-2 border rounded bg-gray-50">
+                    <p className="font-bold text-xs">{month}{month === 1 ? 'st' : month === 2 ? 'nd' : month === 3 ? 'rd' : 'th'} Month</p>
+                    <div className="flex items-center justify-center mt-1">
+                      <div className={`w-4 h-4 border-2 rounded ${record?.is_exclusive ? 'bg-blue-500' : 'bg-gray-100'}`} />
                     </div>
-                  );
-                })}
-              </div>
-            </>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <NoDataMessage />
           )}
 
           {/* Immunizations */}
-          {medicalData.immunizations.length > 0 && (
-            <>
-              <SectionHeader title="5. Immunization Schedule" />
-              <div className="overflow-x-auto border rounded-md max-h-60 overflow-y-auto mb-4">
-                <table className="min-w-full text-xs">
-                  <thead className="bg-gray-100 sticky top-0">
-                    <tr>
-                      <th className="p-1 border">Immunization</th>
-                      <th className="p-1 border">Date Given</th>
-                      <th className="p-1 border">Age</th>
-                      <th className="p-1 border">Weight</th>
-                      <th className="p-1 border">Height</th>
-                      <th className="p-1 border">Nutritional</th>
-                      <th className="p-1 border">Admitted By</th>
-                      <th className="p-1 border">Immunized By</th>
-                      <th className="p-1 border">Next Visit</th>
-                      <th className="p-1 border">Remarks</th>
+          <SectionHeader title="5. Immunization Schedule" />
+          {medicalData.immunizations.length > 0 ? (
+            <div className="overflow-x-auto border rounded-md max-h-60 overflow-y-auto mb-4">
+              <table className="min-w-full text-xs">
+                <thead className="bg-gray-100 sticky top-0">
+                  <tr>
+                    <th className="p-1 border">Immunization</th>
+                    <th className="p-1 border">Date Given</th>
+                    <th className="p-1 border">Age</th>
+                    <th className="p-1 border">Weight</th>
+                    <th className="p-1 border">Height</th>
+                    <th className="p-1 border">Nutritional</th>
+                    <th className="p-1 border">Admitted By</th>
+                    <th className="p-1 border">Immunized By</th>
+                    <th className="p-1 border">Next Visit</th>
+                    <th className="p-1 border">Remarks</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {medicalData.immunizations.map((imm, idx) => (
+                    <tr key={idx} className="hover:bg-gray-50">
+                      <td className="p-1 border font-semibold">{imm.immunization_type}</td>
+                      <td className="p-1 border">{imm.date_given ? new Date(imm.date_given).toLocaleDateString() : '-'}</td>
+                      <td className="p-1 border">{imm.age || '-'}</td>
+                      <td className="p-1 border">{imm.weight_kg || '-'}</td>
+                      <td className="p-1 border">{imm.height_cm || '-'}</td>
+                      <td className="p-1 border">{imm.nutritional_status || '-'}</td>
+                      <td className="p-1 border">{imm.admitted_by || '-'}</td>
+                      <td className="p-1 border">{imm.immunized_by || '-'}</td>
+                      <td className="p-1 border">{imm.next_visit ? new Date(imm.next_visit).toLocaleDateString() : '-'}</td>
+                      <td className="p-1 border">{imm.remarks || '-'}</td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {medicalData.immunizations.map((imm, idx) => (
-                      <tr key={idx} className="hover:bg-gray-50">
-                        <td className="p-1 border font-semibold">{imm.immunization_type}</td>
-                        <td className="p-1 border">{imm.date_given ? new Date(imm.date_given).toLocaleDateString() : '-'}</td>
-                        <td className="p-1 border">{imm.age || '-'}</td>
-                        <td className="p-1 border">{imm.weight_kg || '-'}</td>
-                        <td className="p-1 border">{imm.height_cm || '-'}</td>
-                        <td className="p-1 border">{imm.nutritional_status || '-'}</td>
-                        <td className="p-1 border">{imm.admitted_by || '-'}</td>
-                        <td className="p-1 border">{imm.immunized_by || '-'}</td>
-                        <td className="p-1 border">{imm.next_visit ? new Date(imm.next_visit).toLocaleDateString() : '-'}</td>
-                        <td className="p-1 border">{imm.remarks || '-'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <NoDataMessage />
           )}
 
           {/* Current Measurements */}
-          {medicalData.measurements.length > 0 && (
-            <>
-              <SectionHeader title="6. Current Measurements" />
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                <Field label="Weight (kg)" value={medicalData.measurements[0]?.weight_kg} />
-                <Field label="Height (cm)" value={medicalData.measurements[0]?.height_cm} />
-                <Field label="BMI" value={medicalData.measurements[0]?.bmi} />
-                <div>
-                  <p className="text-xs text-gray-500">Nutrition Status</p>
-                  <div className="mt-1">
-                    <StatusBadge status={medicalData.measurements[0]?.nutrition_status || child.nutrition_status} />
-                  </div>
+          <SectionHeader title="6. Current Measurements" />
+          {medicalData.measurements.length > 0 ? (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+              <Field label="Weight (kg)" value={medicalData.measurements[0]?.weight_kg} />
+              <Field label="Height (cm)" value={medicalData.measurements[0]?.height_cm} />
+              <Field label="BMI" value={medicalData.measurements[0]?.bmi} />
+              <div>
+                <p className="text-xs text-gray-500">Nutrition Status</p>
+                <div className="mt-1">
+                  <StatusBadge status={medicalData.measurements[0]?.nutrition_status || child.nutrition_status} />
                 </div>
               </div>
-            </>
+            </div>
+          ) : (
+            <NoDataMessage />
           )}
         </div>
 
