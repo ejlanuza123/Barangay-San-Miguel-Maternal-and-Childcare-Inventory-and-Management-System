@@ -51,20 +51,58 @@ const StatusLegend = () => (
 );
 // --- NEW: Pagination helper component ---
 const Pagination = ({ currentPage, totalPages, onPageChange }) => {
-    const pageNumbers = [];
-    for (let i = 1; i <= totalPages; i++) {
-        pageNumbers.push(i);
-    }
     if (totalPages <= 1) return null;
+
+    const getPaginationItems = () => {
+        if (totalPages <= 7) {
+            return Array.from({ length: totalPages }, (_, i) => i + 1);
+        }
+
+        const delta = 1;
+        const left = currentPage - delta;
+        const right = currentPage + delta;
+        const range = [];
+        const rangeWithDots = [];
+        let l;
+
+        for (let i = 1; i <= totalPages; i++) {
+            if (i === 1 || i === totalPages || (i >= left && i <= right)) {
+                range.push(i);
+            }
+        }
+
+        for (const i of range) {
+            if (l) {
+                if (i - l === 2) {
+                    rangeWithDots.push(l + 1);
+                } else if (i - l !== 1) {
+                    rangeWithDots.push('...');
+                }
+            }
+            rangeWithDots.push(i);
+            l = i;
+        }
+
+        return rangeWithDots;
+    };
+
+    const paginationItems = getPaginationItems();
+
     return (
-        <nav className="flex items-center justify-center space-x-1 text-xs mt-4">
+        <nav className="mt-4 overflow-x-auto">
+            <div className="flex min-w-max items-center justify-center space-x-1 text-xs px-2">
             <button onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 1} className="px-2 py-1 rounded hover:bg-gray-100 disabled:opacity-50">&lt;</button>
-            {pageNumbers.map(number => (
-                <button key={number} onClick={() => onPageChange(number)} className={`px-3 py-1 rounded ${currentPage === number ? 'bg-blue-500 text-white font-semibold' : 'hover:bg-gray-100'}`}>
-                    {number}
-                </button>
-            ))}
+            {paginationItems.map((item, index) =>
+                item === '...' ? (
+                    <span key={`dots-${index}`} className="px-2 py-1 text-gray-500">...</span>
+                ) : (
+                    <button key={`page-${item}`} onClick={() => onPageChange(item)} className={`px-3 py-1 rounded ${currentPage === item ? 'bg-blue-500 text-white font-semibold' : 'hover:bg-gray-100'}`}>
+                        {item}
+                    </button>
+                )
+            )}
             <button onClick={() => onPageChange(currentPage + 1)} disabled={currentPage === totalPages} className="px-2 py-1 rounded hover:bg-gray-100 disabled:opacity-50">&gt;</button>
+            </div>
         </nav>
     );
 };
