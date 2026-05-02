@@ -150,7 +150,7 @@ const HelpIcon = () => (
     ></path>{" "}
   </svg>
 );
-const RequestionsIcon = () => (
+const RequisitionsIcon = () => (
   <svg
     className="w-5 h-5"
     fill="none"
@@ -212,7 +212,7 @@ export default function Sidebar({ role, openSettings }) {
       case "Admin":
         return [
           { name: "Admin Dashboard", path: "/admin/dashboard", icon: <DashboardIcon /> },
-          { name: "Requestions", path: "/admin/requestions", icon: <RequestionsIcon /> },
+          { name: "Requisitions", path: "/admin/requisitions", icon: <RequisitionsIcon /> },
           { name: "Employees", path: "/admin/employees", icon: <EmployeesIcon /> },
           { 
             name: "Patient Records", 
@@ -228,7 +228,7 @@ export default function Sidebar({ role, openSettings }) {
       case "Midwife":
         return [
           { name: "Midwife Dashboard", path: "/midwife/dashboard", icon: <DashboardIcon /> },
-          { name: "Requestions", path: "/midwife/requestions", icon: <RequestionsIcon /> },
+          { name: "Requisitions", path: "/midwife/requisitions", icon: <RequisitionsIcon /> },
           { 
             name: "Patient Records", 
             icon: <MaternityIcon />,

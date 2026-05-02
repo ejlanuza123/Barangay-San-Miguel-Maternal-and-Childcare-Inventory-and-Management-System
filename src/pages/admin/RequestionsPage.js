@@ -1,4 +1,4 @@
-//src\pages\admin\RequestionsPage.js
+//src\pages\admin\RequisitionsPage.js
 import React, { useState, useEffect, useCallback } from "react";
 import { supabase } from "../../services/supabase";
 import { useNotification } from "../../context/NotificationContext";
@@ -193,13 +193,13 @@ const RequestTypeBadge = ({ type, table }) => {
 };
 
 // --- Main Page Component ---
-export default function RequestionsPage() {
+export default function RequisitionsPage() {
   const { profile } = useAuth();
   const isMidwife = profile?.role === "Midwife";
   const visibleRoleTabs = isMidwife ? ["BHW", "BNS", "Admin"] : ["BHW", "BNS"];
   const [activeTab, setActiveTab] = useState("BHW");
   const [statusFilter, setStatusFilter] = useState("Pending");
-  const [requestions, setRequestions] = useState([]);
+  const [requisitions, setRequisitions] = useState([]);
   const [loading, setLoading] = useState(true);
   const { addNotification } = useNotification();
 
@@ -209,7 +209,7 @@ export default function RequestionsPage() {
     }
   }, [activeTab, visibleRoleTabs]);
 
-  const fetchRequestions = useCallback(async () => {
+  const fetchRequisitions = useCallback(async () => {
     setLoading(true);
     const roleFilter = activeTab;
 
@@ -229,16 +229,16 @@ export default function RequestionsPage() {
     });
 
     if (error) {
-      addNotification(`Error fetching requestions: ${error.message}`, "error");
+      addNotification(`Error fetching requisitions: ${error.message}`, "error");
     } else {
-      setRequestions(data || []);
+      setRequisitions(data || []);
     }
     setLoading(false);
   }, [activeTab, statusFilter, addNotification]);
 
   useEffect(() => {
-    fetchRequestions();
-  }, [fetchRequestions]);
+    fetchRequisitions();
+  }, [fetchRequisitions]);
 
   const handleApprove = async (request) => {
     let actionError = null;
@@ -290,7 +290,7 @@ export default function RequestionsPage() {
         request.worker_id
       );
     }
-    fetchRequestions();
+    fetchRequisitions();
   };
 
   const handleDeny = async (request) => {
@@ -307,10 +307,10 @@ export default function RequestionsPage() {
         `Denied ${request.request_type} for record ID ${request.target_record_id}`
       );
     }
-    fetchRequestions();
+    fetchRequisitions();
   };
 
-  const filteredRequests = requestions.filter(req => 
+  const filteredRequests = requisitions.filter(req =>
     statusFilter === "All" ? true : req.status === statusFilter
   );
 
@@ -329,8 +329,8 @@ export default function RequestionsPage() {
             </svg>
           </div>
           <div>
-            <h1 className="text-3xl font-bold text-teal-900">Requests Management</h1>
-            <p className="text-teal-600">Review and manage worker requests</p>
+            <h1 className="text-3xl font-bold text-teal-900">Requisitions Management</h1>
+            <p className="text-teal-600">Review and manage worker requisits</p>
           </div>
         </div>
         <div className="h-1 w-24 bg-gradient-to-r from-teal-400 to-teal-200 rounded-full mt-2"></div>
@@ -339,13 +339,13 @@ export default function RequestionsPage() {
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <div className="bg-gradient-to-br from-teal-400 to-teal-500 text-white p-5 rounded-2xl shadow-lg">
-          <div className="text-sm text-teal-100 mb-1">Total Requests</div>
-          <div className="text-3xl font-bold">{requestions.length}</div>
+          <div className="text-sm text-teal-100 mb-1">Total Requisitions</div>
+          <div className="text-3xl font-bold">{requisitions.length}</div>
         </div>
         <div className="bg-white/80 backdrop-blur-sm p-5 rounded-2xl shadow-lg border border-teal-100">
           <div className="text-sm text-teal-600 mb-1">Pending</div>
           <div className="text-2xl font-bold text-amber-500">
-            {requestions.filter(r => r.status === "Pending").length}
+            {requisitions.filter(r => r.status === "Pending").length}
           </div>
         </div>
         <div className="bg-white/80 backdrop-blur-sm p-5 rounded-2xl shadow-lg border border-teal-100">
@@ -573,7 +573,7 @@ export default function RequestionsPage() {
           <div className="bg-teal-50/80 border-t border-teal-100 p-4 flex justify-between items-center">
             <div className="text-sm text-teal-600">
               Showing <span className="font-semibold text-teal-800">{filteredRequests.length}</span> of{" "}
-              <span className="font-semibold text-teal-800">{requestions.length}</span> requests
+              <span className="font-semibold text-teal-800">{requisitions.length}</span> requests
             </div>
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
@@ -600,7 +600,7 @@ export default function RequestionsPage() {
             <div>
               <div className="text-sm text-amber-700 mb-1">Awaiting Review</div>
               <div className="text-2xl font-bold text-amber-800">
-                {requestions.filter(r => r.status === "Pending").length}
+                {requisitions.filter(r => r.status === "Pending").length}
               </div>
             </div>
             <div className="text-amber-400 text-2xl">⏳</div>
@@ -611,7 +611,7 @@ export default function RequestionsPage() {
             <div>
               <div className="text-sm text-emerald-700 mb-1">Processed Today</div>
               <div className="text-2xl font-bold text-emerald-800">
-                {requestions.filter(r => {
+                {requisitions.filter(r => {
                   // Only count processed requests
                   if (r.status !== "Approved" && r.status !== "Denied") return false;
                   

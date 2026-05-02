@@ -16,7 +16,7 @@ import RoleGuard from "./components/auth/RoleGuard";
 
 // Pages
 import AdminDashboard from "./pages/admin/AdminDashboard";
-import RequestionsPage from "./pages/admin/RequestionsPage";
+import RequisitionsPage from "./pages/admin/RequestionsPage";
 import EmployeesPage from "./pages/admin/EmployeesPage";
 import PatientRecordsPage from "./pages/admin/PatientRecordsPage";
 import AdminInventoryPage from "./pages/admin/InventoryPage";
@@ -66,7 +66,7 @@ function App() {
               {/* 1. ADMIN ROUTES */}
               <Route element={<RoleGuard allowedRoles={['Admin']} />}>
                 <Route path="admin/dashboard" element={<AdminDashboard />} />
-                <Route path="admin/requestions" element={<RequestionsPage />} />
+                <Route path="admin/requisitions" element={<RequisitionsPage />} />
                 <Route path="admin/employees" element={<EmployeesPage />} />
                 <Route path="admin/maternity-records" element={<PatientRecordsPage />} />
                 <Route path="admin/child-records" element={<PatientRecordsPage />} />
@@ -77,7 +77,7 @@ function App() {
               {/* 2. MIDWIFE ROUTES (NEW) */}
               <Route element={<RoleGuard allowedRoles={['Midwife']} />}>
                 <Route path="midwife/dashboard" element={<MidwifeDashboard />} />
-                <Route path="midwife/requestions" element={<RequestionsPage />} /> 
+                <Route path="midwife/requisitions" element={<RequisitionsPage />} />
                 <Route path="midwife/maternity-records" element={<MidwifeMaternityManagement />} />
                 <Route path="midwife/child-records" element={<MidwifeChildHealthRecords />} />
                 <Route path="midwife/inventory" element={<AdminInventoryPage />} />

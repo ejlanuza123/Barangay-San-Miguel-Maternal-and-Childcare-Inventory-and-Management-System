@@ -338,7 +338,7 @@ export default function Header() {
   const handleNotificationClick = (notification) => {
     // --- NEW: Logic for Admin's user request notifications ---
     if (profile.role === "Admin" && notification.type === "user_request") {
-      navigate("/admin/requestions");
+      navigate("/admin/requisitions");
     } else {
       // Original logic for other notification types
       const rolePath = profile.role.toLowerCase().split("/")[0];

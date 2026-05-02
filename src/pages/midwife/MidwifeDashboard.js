@@ -314,7 +314,7 @@ const FollowUpVisitsWidget = () => {
   );
 };
 
-const RequestionsWidget = ({ requestions }) => (
+const RequisitionsWidget = ({ requisitions }) => (
   <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100 h-full">
     <div className="flex items-center justify-between mb-6">
       <div className="flex items-center gap-3">
@@ -326,13 +326,13 @@ const RequestionsWidget = ({ requestions }) => (
           <p className="text-sm text-gray-500">Latest inventory and data requests</p>
         </div>
       </div>
-      <Link to="/midwife/requestions" className="text-sm font-semibold text-purple-600 hover:text-purple-700 hover:underline">
+      <Link to="/midwife/requisitions" className="text-sm font-semibold text-purple-600 hover:text-purple-700 hover:underline">
         View All →
       </Link>
     </div>
     
     <div className="space-y-3">
-      {requestions.map((req, index) => (
+      {requisitions.map((req, index) => (
         <motion.div
           key={req.id}
           initial={{ opacity: 0, x: -20 }}
@@ -377,7 +377,7 @@ const RequestionsWidget = ({ requestions }) => (
         </motion.div>
       ))}
       
-      {requestions.length === 0 && (
+      {requisitions.length === 0 && (
         <div className="text-center py-6">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-100 mb-3">
             <ActivityIcon />
@@ -508,7 +508,7 @@ export default function MidwifeDashboard() {
     totalPatients: 0, 
     totalChildren: 0 
   });
-  const [requestions, setRequestions] = useState([]);
+  const [requisitions, setRequisitions] = useState([]);
   const [chartData, setChartData] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -599,7 +599,7 @@ export default function MidwifeDashboard() {
       }
 
       setChartData(chartData);
-      if (requestionsRes.data) setRequestions(requestionsRes.data);
+      if (requestionsRes.data) setRequisitions(requestionsRes.data);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {
@@ -698,7 +698,7 @@ export default function MidwifeDashboard() {
 
         {/* Bottom Row - Takes full width */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <RequestionsWidget requestions={requestions} />
+          <RequisitionsWidget requisitions={requisitions} />
           <WeeklyScheduleWidget />
         </div>
 
@@ -741,7 +741,7 @@ export default function MidwifeDashboard() {
                 </div>
                 <div>
                   <p className="font-medium text-gray-900">Pending Requests</p>
-                  <p className="text-2xl font-bold text-gray-800">{requestions.filter(r => r.status === 'Pending').length}</p>
+                  <p className="text-2xl font-bold text-gray-800">{requisitions.filter(r => r.status === 'Pending').length}</p>
                 </div>
               </div>
             </div>

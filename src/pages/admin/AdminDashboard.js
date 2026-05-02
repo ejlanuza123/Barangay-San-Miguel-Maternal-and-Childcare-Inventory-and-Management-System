@@ -313,7 +313,7 @@ const QuickAccessWidget = ({ onReportsClick }) => (
     </motion.div>
 );
 
-const RequestionsWidget = ({ requestions, onViewDetails }) => (
+const RequisitionsWidget = ({ requisitions, onViewDetails }) => (
     <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -328,13 +328,13 @@ const RequestionsWidget = ({ requestions, onViewDetails }) => (
                 </div>
                 <h3 className="font-bold text-gray-800 text-lg">Pending Requests</h3>
             </div>
-            <Link to="/admin/requestions" className="text-sm font-semibold text-blue-600 hover:text-blue-800 hover:underline">
+            <Link to="/admin/requisitions" className="text-sm font-semibold text-blue-600 hover:text-blue-800 hover:underline">
                 View All →
             </Link>
         </div>
         
         <div className="space-y-3">
-            {requestions.slice(0, 3).map(req => (
+            {requisitions.slice(0, 3).map(req => (
                 <motion.div 
                     key={req.id}
                     initial={{ opacity: 0, x: -10 }}
@@ -606,7 +606,7 @@ export default function AdminDashboard() {
         processedToday: 0
     });
     const [stockItems, setStockItems] = useState([]);
-    const [requestions, setRequestions] = useState([]);
+    const [requisitions, setRequisitions] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isStockModalOpen, setIsStockModalOpen] = useState(false);
     const [selectedRequest, setSelectedRequest] = useState(null);
@@ -677,7 +677,7 @@ export default function AdminDashboard() {
             setStockItems(allInventory);
 
             if (requestionsRes.data) {
-                setRequestions(requestionsRes.data);
+                setRequisitions(requestionsRes.data);
             }
 
         } catch (error) {
@@ -789,8 +789,8 @@ export default function AdminDashboard() {
                             items={stockItems} 
                             onSeeAll={() => setIsStockModalOpen(true)} 
                         />
-                        <RequestionsWidget 
-                            requestions={requestions}
+                        <RequisitionsWidget 
+                            requisitions={requisitions}
                             onViewDetails={setSelectedRequest}
                         />
                     </div>

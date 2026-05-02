@@ -17,120 +17,291 @@ const ProfileIcon = () => (
   </svg>
 );
 
-const InventoryInput = ({ label, fieldName, value, onChange, inventoryCategory, inventoryItems, onAddToQueue, amountFieldName, amountValue, amountMax = null, autoSelectPattern = null }) => {
+const buildFormSignature = (source) => {
+  const normalizeValue = (value) => {
+    if (value === null || value === undefined) return "";
+    if (Array.isArray(value)) return value.map(normalizeValue);
+    if (typeof value === "object") {
+      return Object.keys(value)
+        .sort()
+        .reduce((acc, key) => {
+          acc[key] = normalizeValue(value[key]);
+          return acc;
+        }, {});
+    }
+    return String(value);
+  };
+
+  return JSON.stringify(
+    Object.keys(source || {})
+      .sort()
+      .reduce((acc, key) => {
+        acc[key] = normalizeValue(source[key]);
+        return acc;
+      }, {})
+  );
+};
+
+const InventoryInput = ({
+  label,
+  fieldName,
+  value,
+  onChange,
+  inventoryCategory,
+  inventoryItems,
+  onAddToQueue,
+  amountFieldName,
+  amountValue,
+  amountMax = null,
+  autoSelectPattern = null,
+  suppressAutoQueue = false,
+  autoQueueOnAutoSelect = true,
+}) => {
   const [selectedItemId, setSelectedItemId] = useState("");
-  
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [isChanging, setIsChanging] = useState(false);
+
   const filteredItems = inventoryItems.filter(
-    item => item.category === inventoryCategory && item.quantity > 0
+    (item) => item.category === inventoryCategory && item.quantity > 0
   );
 
-  // Auto-select item when date is set and a pattern is provided (e.g., for Vitamin A)
+  const variantItems = autoSelectPattern
+    ? filteredItems.filter((item) =>
+        item.item_name.toLowerCase().includes(autoSelectPattern.toLowerCase())
+      )
+    : [];
+
   useEffect(() => {
     if (value && autoSelectPattern && !selectedItemId) {
-      const matchingItem = filteredItems.find(item => 
+      const matchingItem = filteredItems.find((item) =>
         item.item_name.toLowerCase().includes(autoSelectPattern.toLowerCase())
       );
       if (matchingItem) {
         setSelectedItemId(matchingItem.id);
-        
-        // Auto-queue the deduction
-        const qtyToDeduct = amountMax ? 1 : (parseInt(amountValue) || 1);
-        onAddToQueue({
+        setSearchTerm(matchingItem.item_name);
+
+        if (!suppressAutoQueue && autoQueueOnAutoSelect) {
+          const qtyToDeduct = amountMax ? 1 : parseInt(amountValue) || 1;
+          onAddToQueue({
             itemId: matchingItem.id,
             itemName: matchingItem.item_name,
-            deductQty: qtyToDeduct, 
+            deductQty: qtyToDeduct,
             category: inventoryCategory,
-            dateGiven: value, 
-            fieldName: fieldName
-        });
+            dateGiven: value,
+            fieldName: fieldName,
+          });
+        }
       }
     }
-  }, [value, autoSelectPattern, selectedItemId, filteredItems, amountMax, amountValue, onAddToQueue, fieldName, inventoryCategory]);
+  }, [
+    value,
+    autoSelectPattern,
+    selectedItemId,
+    filteredItems,
+    amountMax,
+    amountValue,
+    onAddToQueue,
+    fieldName,
+    inventoryCategory,
+    suppressAutoQueue,
+    autoQueueOnAutoSelect,
+  ]);
+
+  const searchedItems = searchTerm
+    ? filteredItems.filter((item) =>
+        item.item_name.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    : filteredItems;
 
   const handleDateSet = (dateVal) => {
     onChange({ target: { name: fieldName, value: dateVal } });
   };
 
   const handleSetToday = () => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date().toISOString().split("T")[0];
     handleDateSet(today);
   };
 
-  const handleItemSelect = (e) => {
-    const itemId = e.target.value;
-    setSelectedItemId(itemId);
-    
-    const item = filteredItems.find(i => i.id === itemId);
-    // For dosage fields (amountMax is set), always deduct 1 unit
-    // For non-dosage fields, use the amountValue as quantity
-    const qtyToDeduct = amountMax ? 1 : (parseInt(amountValue) || 1);
+  const handleItemSelect = (item) => {
+    setSelectedItemId(item.id);
+    setSearchTerm(item.item_name);
+    setShowDropdown(false);
+    setIsChanging(false);
 
-    if (item) {
-        onAddToQueue({
-            itemId: item.id,
-            itemName: item.item_name,
-            deductQty: qtyToDeduct, 
-            category: inventoryCategory,
-            dateGiven: value, 
-            fieldName: fieldName
-        });
-    }
+    const qtyToDeduct = amountMax ? 1 : parseInt(amountValue) || 1;
+
+    onAddToQueue({
+      itemId: item.id,
+      itemName: item.item_name,
+      deductQty: qtyToDeduct,
+      category: inventoryCategory,
+      dateGiven: value,
+      fieldName: fieldName,
+    });
+  };
+
+  const handleStartChanging = () => {
+    setIsChanging(true);
+    setShowDropdown(true);
+  };
+
+  const handleSearchChange = (e) => {
+    setSearchTerm(e.target.value);
+    setSelectedItemId("");
+    setShowDropdown(true);
+  };
+
+  const handleSearchFocus = () => {
+    setShowDropdown(true);
+  };
+
+  const handleSearchBlur = () => {
+    setTimeout(() => setShowDropdown(false), 200);
   };
 
   return (
     <div className="border p-2 rounded-md bg-gray-50 mb-2">
-        <label className="block text-xs font-bold text-gray-700 mb-1">{label}</label>
-        
-        <div className="flex gap-2 mb-2">
-            <input 
-                type="date" 
-                name={fieldName}
-                value={value || ''} 
-                onChange={(e) => handleDateSet(e.target.value)}
-                className="w-full p-1 border rounded text-xs" 
-            />
-            <button 
-                type="button" 
-                onClick={handleSetToday}
-                className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs hover:bg-blue-200"
-            >
-                Today
-            </button>
+      <label className="block text-xs font-bold text-gray-700 mb-1">{label}</label>
+
+      <div className="flex gap-2 mb-2">
+        <input
+          type="date"
+          name={fieldName}
+          value={value || ""}
+          onChange={(e) => handleDateSet(e.target.value)}
+          className="w-full p-1 border rounded text-xs"
+        />
+        <button
+          type="button"
+          onClick={handleSetToday}
+          className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs hover:bg-blue-200 whitespace-nowrap"
+        >
+          Today
+        </button>
+      </div>
+
+      {amountFieldName && (
+        <div className="mb-2">
+          <label className="block text-[10px] text-gray-500 mb-0.5">Amount Given</label>
+          <input
+            type="text"
+            inputMode={amountMax ? "numeric" : undefined}
+            pattern={amountMax ? "[0-9]*" : undefined}
+            name={amountFieldName}
+            value={amountValue || ""}
+            onChange={(e) => {
+              const nextValue = amountMax
+                ? e.target.value.replace(/[^0-9]/g, "")
+                : e.target.value;
+              onChange({ target: { name: amountFieldName, value: nextValue } });
+            }}
+            placeholder={amountMax ? "e.g. 200000" : "e.g. 1 cap"}
+            className="w-full p-1 border rounded text-xs"
+          />
+          {amountMax && (
+            <p className="text-[10px] text-gray-500 mt-0.5">
+              Maximum allowed: {amountMax.toLocaleString()} IU
+            </p>
+          )}
         </div>
+      )}
 
-        {amountFieldName && (
-            <div className="mb-2">
-                <label className="block text-[10px] text-gray-500 mb-0.5">Amount Given</label>
-                <input 
-                    type="text" 
-                    name={amountFieldName}
-                    value={amountValue || ''} 
-                    onChange={onChange}
-                    placeholder="e.g. 1 cap"
-                    className="w-full p-1 border rounded text-xs" 
-                />
-            </div>
-        )}
-
-        {value && (
-            <div>
-                <select 
-                    className="w-full p-1 border rounded text-xs bg-white"
-                    value={selectedItemId}
-                    onChange={handleItemSelect}
+      {value && (
+        <div className="relative">
+          <label className="block text-[10px] text-gray-500 mb-0.5">Item Selected</label>
+          {selectedItemId && !isChanging ? (
+            <div className="w-full p-2 border-2 border-green-500 rounded text-xs bg-green-50 flex items-center justify-between">
+              <div className="flex-1">
+                <div className="font-bold text-green-800">{searchTerm}</div>
+                <div className="text-[10px] text-green-700">✓ Item locked in</div>
+              </div>
+              {autoSelectPattern && variantItems.length > 1 && (
+                <button
+                  type="button"
+                  onClick={handleStartChanging}
+                  className="ml-2 px-2 py-1 text-[10px] bg-green-200 hover:bg-green-300 text-green-800 rounded whitespace-nowrap font-semibold"
                 >
-                    <option value="">-- Select Item to Deduct --</option>
-                    {filteredItems.map(item => (
-                        <option key={item.id} value={item.id}>
-                            {item.item_name} (Qty: {item.quantity})
-                        </option>
-                    ))}
-                </select>
-                <p className="text-[10px] text-gray-500 mt-1">
-                    Selecting an item will auto-deduct from inventory upon save.
-                </p>
+                  Change
+                </button>
+              )}
             </div>
-        )}
+          ) : isChanging && autoSelectPattern ? (
+            <div className="relative">
+              <label className="block text-[10px] text-gray-500 mb-1">Select a variant:</label>
+              <div className="absolute z-10 w-full bg-white border-2 border-blue-400 rounded-md shadow-lg max-h-40 overflow-y-auto">
+                {variantItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className={`p-2 cursor-pointer text-xs border-b border-gray-100 last:border-b-0 ${
+                      item.id === selectedItemId
+                        ? "bg-blue-100"
+                        : "hover:bg-gray-100"
+                    }`}
+                    onClick={() => handleItemSelect(item)}
+                  >
+                    <div className="font-medium">{item.item_name}</div>
+                    <div className="text-gray-500">Qty: {item.quantity}</div>
+                  </div>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsChanging(false)}
+                className="mt-1 w-full px-2 py-1 text-[10px] bg-gray-300 hover:bg-gray-400 text-gray-800 rounded font-semibold"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <>
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={handleSearchChange}
+                onFocus={handleSearchFocus}
+                onBlur={handleSearchBlur}
+                placeholder="Type to search item..."
+                className="w-full p-1 border rounded text-xs bg-white"
+              />
+              {showDropdown && searchedItems.length > 0 && (
+                <div className="absolute z-10 w-full bg-white border border-gray-300 rounded-b-md shadow-lg max-h-40 overflow-y-auto">
+                  {searchedItems.map((item) => (
+                    <div
+                      key={item.id}
+                      className="p-2 hover:bg-gray-100 cursor-pointer text-xs border-b border-gray-100 last:border-b-0"
+                      onClick={() => handleItemSelect(item)}
+                    >
+                      <div className="font-medium">{item.item_name}</div>
+                      <div className="text-gray-500">Qty: {item.quantity}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {showDropdown && searchedItems.length === 0 && searchTerm && (
+                <div className="absolute z-10 w-full bg-white border border-gray-300 rounded-b-md shadow-lg p-2 text-xs text-gray-500">
+                  No items found matching "{searchTerm}"
+                </div>
+              )}
+              {showDropdown && searchedItems.length === 0 && !searchTerm && filteredItems.length > 0 && (
+                <div className="absolute z-10 w-full bg-white border border-gray-300 rounded-b-md shadow-lg p-2 text-xs text-gray-500">
+                  Start typing to search items...
+                </div>
+              )}
+              {filteredItems.length === 0 && (
+                <p className="text-[10px] text-orange-600 mt-1">
+                  No {inventoryCategory.toLowerCase()} items available in inventory. Please add items to the Inventory first.
+                </p>
+              )}
+              {filteredItems.length > 0 && (
+                <p className="text-[10px] text-gray-500 mt-1">
+                  Selecting an item will auto-deduct from inventory upon save.
+                </p>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 };
@@ -427,7 +598,13 @@ const Step1 = ({ formData, handleChange, handleDobChange, newPatientId }) => (
 );
 
 // REFACTORED: Use props for pregnancyRows, addRow, and removeRow
-const Step2 = ({ formData, handleChange, pregnancyRows, addRow, removeRow }) => {
+const Step2 = ({
+  formData,
+  handleChange,
+  pregnancyRows,
+  addRow,
+  removeRow,
+}) => {
   return (
     <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
       <div className="md:col-span-3">
@@ -549,6 +726,7 @@ const Step2 = ({ formData, handleChange, pregnancyRows, addRow, removeRow }) => 
             <div>
               <label className="text-xs text-gray-500">
                 Last Menstrual Period (LMP)
+                <span className="text-red-600"> *</span>
               </label>
               <input
                 type="date"
@@ -560,7 +738,10 @@ const Step2 = ({ formData, handleChange, pregnancyRows, addRow, removeRow }) => 
             </div>
 
             <div>
-              <label className="text-xs text-gray-500">Risk Level</label>
+              <label className="text-xs text-gray-500">
+                Risk Level
+                <span className="text-red-600"> *</span>
+              </label>
               <select
                 name="risk_level"
                 value={formData.risk_level || ""}
@@ -576,6 +757,7 @@ const Step2 = ({ formData, handleChange, pregnancyRows, addRow, removeRow }) => 
             <div>
               <label className="text-xs text-gray-500">
                 Expected Date of Confinement (EDC)
+                <span className="text-red-600"> *</span>
               </label>
               <input
                 type="date"
@@ -586,7 +768,10 @@ const Step2 = ({ formData, handleChange, pregnancyRows, addRow, removeRow }) => 
               />
             </div>
             <div>
-              <label className="text-xs text-gray-500">Age of First Period</label>
+              <label className="text-xs text-gray-500">
+                Age of First Period
+                <span className="text-red-600"> *</span>
+              </label>
               <input
                 type="number"
                 name="age_first_period"
@@ -603,7 +788,10 @@ const Step2 = ({ formData, handleChange, pregnancyRows, addRow, removeRow }) => 
           <h3 className="font-semibold text-gray-700 mb-2">OB History</h3>
           <div className="space-y-2">
             <div>
-              <label className="text-xs text-gray-500">Age of Menarche</label>
+              <label className="text-xs text-gray-500">
+                Age of Menarche
+                <span className="text-red-600"> *</span>
+              </label>
               <input
                 type="number"
                 name="age_of_menarche"
@@ -615,7 +803,10 @@ const Step2 = ({ formData, handleChange, pregnancyRows, addRow, removeRow }) => 
               />
             </div>
             <div>
-              <label className="text-xs text-gray-500">Amount of Bleeding</label>
+              <label className="text-xs text-gray-500">
+                Amount of Bleeding
+                <span className="text-red-600"> *</span>
+              </label>
               <select
                 name="bleeding_amount"
                 value={formData.bleeding_amount || ""}
@@ -631,6 +822,7 @@ const Step2 = ({ formData, handleChange, pregnancyRows, addRow, removeRow }) => 
             <div>
               <label className="text-xs text-gray-500">
                 Duration of Menstruation (days)
+                <span className="text-red-600"> *</span>
               </label>
               <input
                 type="number"
@@ -649,7 +841,13 @@ const Step2 = ({ formData, handleChange, pregnancyRows, addRow, removeRow }) => 
   );
 };
 
-const Step3 = ({ formData, handleChange, inventoryItems, onAddToQueue }) => (
+const Step3 = ({
+  formData,
+  handleChange,
+  inventoryItems,
+  onAddToQueue,
+  suppressAutoQueue,
+}) => (
   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
     <div className="lg:col-span-1 space-y-4">
       <div>
@@ -666,6 +864,7 @@ const Step3 = ({ formData, handleChange, inventoryItems, onAddToQueue }) => (
                     inventoryCategory="Vaccines" 
                     inventoryItems={inventoryItems}
                     onAddToQueue={onAddToQueue}
+                  suppressAutoQueue={suppressAutoQueue}
                 />
             ))}
         </div>
@@ -789,7 +988,10 @@ const Step4 = ({
   outcomeRows, 
   setOutcomeRows, 
   addTreatmentRow, 
-  addOutcomeRow 
+  addOutcomeRow,
+  suppressAutoQueue,
+  autoQueueOnAutoSelectIron,
+  autoQueueOnAutoSelectVitaminA,
 }) => {
   const treatmentHeaders = [
     { key: 'date', label: 'Date', type: 'date' },
@@ -1130,8 +1332,11 @@ const Step4 = ({
                 inventoryCategory="Medicines"
                 inventoryItems={inventoryItems}
                 onAddToQueue={onAddToQueue}
+              suppressAutoQueue={suppressAutoQueue}
+              autoQueueOnAutoSelect={autoQueueOnAutoSelectIron}
                 amountFieldName="iron_supp_amount"
                 amountValue={formData.iron_supp_amount}
+              autoSelectPattern="iron"
             />
              <InventoryInput 
                 label="Vitamin A (200,000 IU)"
@@ -1141,6 +1346,8 @@ const Step4 = ({
                 inventoryCategory="Medicines"
                 inventoryItems={inventoryItems}
                 onAddToQueue={onAddToQueue}
+              suppressAutoQueue={suppressAutoQueue}
+              autoQueueOnAutoSelect={autoQueueOnAutoSelectVitaminA}
                 amountFieldName="vitamin_a_amount"
                 amountValue={formData.vitamin_a_amount}
                 amountMax={200000}
@@ -1167,10 +1374,16 @@ export default function AddPatientModal({
   const { profile } = useAuth();
 
   const [formData, setFormData] = useState({});
+  const [initialFormSignature, setInitialFormSignature] = useState("");
+  const [initialFormData, setInitialFormData] = useState({});
   const [patientId, setPatientId] = useState("Loading...");
   const [inventoryItems, setInventoryItems] = useState([]);
   const [deductionQueue, setDeductionQueue] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
+  const [isInitializing, setIsInitializing] = useState(false);
+  const [dataLoaded, setDataLoaded] = useState(false);
+  const [inventoryLoaded, setInventoryLoaded] = useState(false);
+  const initialDataId = initialData?.id;
 
   // REFACTORED: Moved state to the parent component
   const [pregnancyRows, setPregnancyRows] = useState([{ gravida: 1 }]);
@@ -1187,13 +1400,18 @@ export default function AddPatientModal({
 
   useEffect(() => {
     const fetchInventory = async () => {
-      const { data, error } = await supabase
-        .from('inventory')
-        .select('id, item_name, quantity, category')
-        .gt('quantity', 0);
-      
-      if (!error) {
-        setInventoryItems(data || []);
+      setInventoryLoaded(false);
+      try {
+        const { data, error } = await supabase
+          .from('inventory')
+          .select('id, item_name, quantity, category')
+          .gt('quantity', 0);
+        
+        if (!error) {
+          setInventoryItems(data || []);
+        }
+      } finally {
+        setInventoryLoaded(true);
       }
     };
     fetchInventory();
@@ -1206,6 +1424,7 @@ export default function AddPatientModal({
   }, []);
 
   const handleAddToQueue = (itemData) => {
+    let shouldNotify = false;
     setDeductionQueue(prev => {
       const existingIndex = prev.findIndex(item => 
         item.itemId === itemData.itemId && item.fieldName === itemData.fieldName
@@ -1215,16 +1434,30 @@ export default function AddPatientModal({
         const newQueue = [...prev];
         newQueue[existingIndex] = itemData;
         return newQueue;
-      } else {
-        return [...prev, itemData];
       }
+
+      shouldNotify = true;
+      return [...prev, itemData];
     });
-    
-    addNotification(`Added ${itemData.itemName} to deduction queue.`, 'info');
+
+    if (shouldNotify) {
+      addNotification(`Added ${itemData.itemName} to deduction queue.`, 'info');
+    }
   };
 
   useEffect(() => {
+    if (mode === "edit") {
+      setIsInitializing(!(dataLoaded && inventoryLoaded));
+    } else {
+      setIsInitializing(false);
+    }
+  }, [mode, dataLoaded, inventoryLoaded]);
+
+  useEffect(() => {
     if (mode === "edit" && initialData) {
+      setDeductionQueue([]);
+      setDataLoaded(false);
+      setInitialFormSignature("");
       const loadPatientData = async () => {
         try {
           setLoading(true);
@@ -1414,7 +1647,10 @@ export default function AddPatientModal({
 
           // Set all state updates together to avoid timing issues
           setFormData(baseData);
+          setInitialFormData(baseData);
           setPatientId(initialData.patient_id);
+          setInitialFormSignature(buildFormSignature(baseData));
+          setDataLoaded(true);
           
         } catch (error) {
           console.error("Error loading patient data for edit:", error);
@@ -1426,9 +1662,14 @@ export default function AddPatientModal({
 
       loadPatientData();
     } else {
-      setFormData({
+      const baseData = {
         sms_notifications_enabled: true,
-      });
+      };
+      setDeductionQueue([]);
+      setFormData(baseData);
+      setInitialFormData(baseData);
+      setInitialFormSignature(buildFormSignature(baseData));
+      setDataLoaded(true);
       const generateNewId = async () => {
         const { count, error } = await supabase
           .from("mother_records")
@@ -1442,7 +1683,7 @@ export default function AddPatientModal({
       };
       generateNewId();
     }
-  }, [mode, initialData, addNotification]);
+  }, [mode, initialDataId]);
 
   const calculateAge = (dobString) => {
     if (!dobString) return "";
@@ -1482,10 +1723,63 @@ export default function AddPatientModal({
     }));
   };
 
-  const nextStep = () => setStep((prev) => prev + 1);
+  const nextStep = () => {
+    if (step === 2 && !isStep2Valid) {
+      return;
+    }
+    setStep((prev) => prev + 1);
+  };
   const prevStep = () => setStep((prev) => prev - 1);
 
+  const isEditModeDirty =
+    mode !== "edit" ||
+    (initialFormSignature !== "" &&
+      buildFormSignature(formData) !== initialFormSignature);
+
+  const hasValue = (value) =>
+    value !== null && value !== undefined && String(value).trim() !== "";
+
+  const requiredStep2Fields = [
+    { name: "lmp", label: "Last Menstrual Period (LMP)" },
+    { name: "risk_level", label: "Risk Level" },
+    { name: "edc", label: "Expected Date of Confinement (EDC)" },
+    { name: "age_first_period", label: "Age of First Period" },
+    { name: "age_of_menarche", label: "Age of Menarche" },
+    { name: "bleeding_amount", label: "Amount of Bleeding" },
+    { name: "menstruation_duration", label: "Duration of Menstruation" },
+  ];
+
+  const missingStep2Fields = requiredStep2Fields.filter(
+    (field) => !hasValue(formData[field.name])
+  );
+  const isStep2Valid = missingStep2Fields.length === 0;
+
+  const getComparableValue = (value) => {
+    if (value === null || value === undefined) return "";
+    return String(value);
+  };
+
+  const hasFieldChanged = (fieldName) =>
+    getComparableValue(formData[fieldName]) !==
+    getComparableValue(initialFormData[fieldName]);
+
+  const autoQueueOnAutoSelectIron =
+    mode !== "edit" ||
+    (dataLoaded &&
+      (hasFieldChanged("iron_supp_date") || hasFieldChanged("iron_supp_amount")));
+
+  const autoQueueOnAutoSelectVitaminA =
+    mode !== "edit" ||
+    (dataLoaded &&
+      (hasFieldChanged("vitamin_a_date") ||
+        hasFieldChanged("vitamin_a_amount")));
+
   const handleSave = async () => {
+    if (mode === "edit" && !isEditModeDirty) {
+      addNotification("No changes to save.", "info");
+      return;
+    }
+
     setLoading(true);
     setError("");
     
@@ -1913,6 +2207,7 @@ export default function AddPatientModal({
                 handleChange={handleChange}
                 inventoryItems={inventoryItems}
                 onAddToQueue={handleAddToQueue}
+                suppressAutoQueue={isInitializing}
               />
             )}
             {step === 4 && (
@@ -1927,6 +2222,9 @@ export default function AddPatientModal({
                 setOutcomeRows={setOutcomeRows}
                 addTreatmentRow={addTreatmentRow}
                 addOutcomeRow={addOutcomeRow}
+                suppressAutoQueue={isInitializing}
+                autoQueueOnAutoSelectIron={autoQueueOnAutoSelectIron}
+                autoQueueOnAutoSelectVitaminA={autoQueueOnAutoSelectVitaminA}
               />
             )}
           </div>
@@ -1943,7 +2241,8 @@ export default function AddPatientModal({
             {step < 4 && (
               <button
                 onClick={nextStep}
-                className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-semibold"
+                disabled={step === 2 && !isStep2Valid}
+                className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 font-semibold"
               >
                 Next Page
               </button>
@@ -1951,7 +2250,7 @@ export default function AddPatientModal({
             {step === 4 && (
               <button
                 onClick={handleSave}
-                disabled={loading}
+                disabled={loading || (mode === "edit" && !isEditModeDirty)}
                 className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 font-semibold flex items-center justify-center"
               >
                 {loading ? (
@@ -1978,7 +2277,7 @@ export default function AddPatientModal({
                     Saving...
                   </>
                 ) : (
-                  "Submit"
+                  mode === "edit" && !isEditModeDirty ? "No Changes" : "Submit"
                 )}
               </button>
             )}
